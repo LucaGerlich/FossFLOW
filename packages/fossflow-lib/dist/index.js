@@ -7491,7 +7491,7 @@ var __webpack_exports__ = {};
     const external_chroma_js_namespaceObject = require("chroma-js");
     var external_chroma_js_default = /*#__PURE__*/ __webpack_require__.n(external_chroma_js_namespaceObject);
     const external_uuid_namespaceObject = require("uuid");
-    const generateId = ()=>(0, external_uuid_namespaceObject.v4)();
+    const common_generateId = ()=>(0, external_uuid_namespaceObject.v4)();
     const clamp = (num, min, max)=>Math.max(Math.min(num, max), min);
     const roundToTwoDecimalPlaces = (num)=>Math.round(100 * num) / 100;
     const getColorVariant = (color, variant, { alpha = 1, grade = 1 })=>{
@@ -8971,21 +8971,21 @@ var __webpack_exports__ = {};
     const migrateLegacyLabels = (connector)=>{
         const labels = [];
         if (connector.startLabel) labels.push({
-            id: generateId(),
+            id: common_generateId(),
             text: connector.startLabel,
             position: 10,
             height: connector.startLabelHeight,
             line: '1'
         });
         if (connector.description) labels.push({
-            id: generateId(),
+            id: common_generateId(),
             text: connector.description,
             position: 50,
             height: connector.centerLabelHeight,
             line: '1'
         });
         if (connector.endLabel) labels.push({
-            id: generateId(),
+            id: common_generateId(),
             text: connector.endLabel,
             position: 90,
             height: connector.endLabelHeight,
@@ -9468,6 +9468,390 @@ var __webpack_exports__ = {};
             };
         }
     }
+    const defaultConfig = {
+        enabled: false,
+        dataSources: [],
+        nodeBindings: [],
+        defaultRefreshIntervalMs: 30000,
+        showStatusIndicators: true,
+        showMiniMetrics: true,
+        animateStatusChanges: true
+    };
+    const defaultState = {
+        config: defaultConfig,
+        nodeStates: new Map(),
+        initialized: false,
+        connected: false
+    };
+    const createInitialState = ()=>{
+        const state = {
+            ...defaultState
+        };
+        const eventHandlersRef = {
+            current: {}
+        };
+        const refreshIntervalsRef = {
+            current: new Map()
+        };
+        const computeOverallStatus = (metrics)=>{
+            const statuses = Object.values(metrics).map((m)=>m.status);
+            if (statuses.some((s)=>'critical' === s)) return 'critical';
+            if (statuses.some((s)=>'offline' === s)) return 'offline';
+            if (statuses.some((s)=>'warning' === s)) return 'warning';
+            if (statuses.every((s)=>'healthy' === s)) return 'healthy';
+            return 'unknown';
+        };
+        const computeStatusFromThreshold = (value, thresholds)=>{
+            const { healthy, warning, critical, operator } = thresholds;
+            switch(operator){
+                case 'lt':
+                case 'lte':
+                    if (value >= critical) return 'critical';
+                    if (value >= warning) return 'warning';
+                    return 'healthy';
+                case 'gt':
+                case 'gte':
+                    if (value <= critical) return 'critical';
+                    if (value <= warning) return 'warning';
+                    return 'healthy';
+                default:
+                    return 'unknown';
+            }
+        };
+        const fetchFromDataSource = async (dataSource, binding)=>{
+            const timestamp = new Date();
+            try {
+                switch(dataSource.type){
+                    case 'static':
+                        return {
+                            value: dataSource.value,
+                            timestamp,
+                            status: dataSource.status,
+                            loading: false
+                        };
+                    case 'rest_api':
+                        {
+                            const response = await fetch(dataSource.url, {
+                                method: dataSource.method,
+                                headers: dataSource.headers,
+                                body: 'POST' === dataSource.method && dataSource.body ? JSON.stringify(dataSource.body) : void 0,
+                                signal: AbortSignal.timeout(dataSource.timeout || 10000)
+                            });
+                            if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                            const data = await response.json();
+                            const value = dataSource.valuePath ? extractJsonPath(data, dataSource.valuePath) : data;
+                            const numericValue = 'number' == typeof value ? value : parseFloat(value);
+                            const status = binding.thresholds && !isNaN(numericValue) ? computeStatusFromThreshold(numericValue, binding.thresholds) : 'unknown';
+                            return {
+                                value: isNaN(numericValue) ? value : numericValue,
+                                timestamp,
+                                status,
+                                loading: false
+                            };
+                        }
+                    case 'prometheus':
+                        {
+                            const queryUrl = new URL(`${dataSource.url}/api/v1/query`);
+                            queryUrl.searchParams.set('query', dataSource.query);
+                            const response = await fetch(queryUrl.toString(), {
+                                signal: AbortSignal.timeout(dataSource.timeout || 10000)
+                            });
+                            if (!response.ok) throw new Error(`Prometheus query failed: ${response.status}`);
+                            const data = await response.json();
+                            if ('success' !== data.status || !data.data?.result?.[0]?.value) throw new Error('No data returned from Prometheus');
+                            const rawValue = data.data.result[0].value[1];
+                            const numericValue = parseFloat(rawValue);
+                            const status = binding.thresholds && !isNaN(numericValue) ? computeStatusFromThreshold(numericValue, binding.thresholds) : 'unknown';
+                            return {
+                                value: numericValue,
+                                timestamp,
+                                status,
+                                loading: false
+                            };
+                        }
+                    case 'grafana':
+                        console.warn('Grafana data source queries not yet fully implemented');
+                        return {
+                            value: null,
+                            timestamp,
+                            status: 'unknown',
+                            loading: false,
+                            error: 'Grafana queries require API key configuration'
+                        };
+                    case 'webhook':
+                        return {
+                            value: null,
+                            timestamp,
+                            status: 'unknown',
+                            loading: false
+                        };
+                    default:
+                        return {
+                            value: null,
+                            timestamp,
+                            status: 'unknown',
+                            loading: false,
+                            error: 'Unknown data source type'
+                        };
+                }
+            } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+                eventHandlersRef.current.onError?.(new Error(errorMessage), `Fetching from ${dataSource.name}`);
+                return {
+                    value: null,
+                    timestamp,
+                    status: 'offline',
+                    loading: false,
+                    error: errorMessage
+                };
+            }
+        };
+        const extractJsonPath = (data, path)=>{
+            const parts = path.replace(/^\$\.?/, '').split('.');
+            let current = data;
+            for (const part of parts){
+                if (null == current) return;
+                const arrayMatch = part.match(/^(\w+)\[(\d+)\]$/);
+                if (arrayMatch) {
+                    const [, key, index] = arrayMatch;
+                    current = current[key];
+                    current = current?.[parseInt(index, 10)];
+                } else current = current[part];
+            }
+            return current;
+        };
+        const refreshNodeData = async (nodeId)=>{
+            const binding = state.config.nodeBindings.find((b)=>b.nodeId === nodeId);
+            if (!binding || 0 === binding.metrics.length) return;
+            const currentState = state.nodeStates.get(nodeId);
+            const newMetrics = {
+                ...currentState?.metrics
+            };
+            for (const metricBinding of binding.metrics){
+                const dataSource = state.config.dataSources.find((ds)=>ds.id === metricBinding.dataSourceId);
+                if (!dataSource || !dataSource.enabled) continue;
+                const previousValue = newMetrics[metricBinding.id];
+                const newValue = await fetchFromDataSource(dataSource, metricBinding);
+                newMetrics[metricBinding.id] = newValue;
+                eventHandlersRef.current.onMetricUpdate?.({
+                    nodeId,
+                    metricId: metricBinding.id,
+                    value: newValue,
+                    previousValue
+                });
+            }
+            const newOverallStatus = binding.statusOverride || computeOverallStatus(newMetrics);
+            const previousStatus = currentState?.overallStatus || 'unknown';
+            const newNodeState = {
+                nodeId,
+                overallStatus: newOverallStatus,
+                metrics: newMetrics,
+                lastUpdated: new Date(),
+                loading: false,
+                connected: true
+            };
+            state.nodeStates.set(nodeId, newNodeState);
+            if (previousStatus !== newOverallStatus) eventHandlersRef.current.onStatusChange?.({
+                nodeId,
+                newStatus: newOverallStatus,
+                previousStatus,
+                reason: 'Metric update'
+            });
+        };
+        const setupRefreshIntervals = ()=>{
+            refreshIntervalsRef.current.forEach((interval)=>clearInterval(interval));
+            refreshIntervalsRef.current.clear();
+            if (!state.config.enabled) return;
+            for (const binding of state.config.nodeBindings){
+                let refreshInterval = state.config.defaultRefreshIntervalMs;
+                for (const metricBinding of binding.metrics){
+                    const dataSource = state.config.dataSources.find((ds)=>ds.id === metricBinding.dataSourceId);
+                    if (dataSource && dataSource.refreshIntervalMs < refreshInterval) refreshInterval = dataSource.refreshIntervalMs;
+                }
+                refreshNodeData(binding.nodeId);
+                const interval = setInterval(()=>{
+                    refreshNodeData(binding.nodeId);
+                }, refreshInterval);
+                refreshIntervalsRef.current.set(binding.nodeId, interval);
+            }
+        };
+        const actions = {
+            initialize: (config)=>{
+                state.config = {
+                    ...defaultConfig,
+                    ...config
+                };
+                state.initialized = true;
+                setupRefreshIntervals();
+            },
+            updateConfig: (updates)=>{
+                state.config = {
+                    ...state.config,
+                    ...updates
+                };
+                setupRefreshIntervals();
+            },
+            addDataSource: (dataSource)=>{
+                state.config.dataSources = [
+                    ...state.config.dataSources,
+                    dataSource
+                ];
+            },
+            removeDataSource: (dataSourceId)=>{
+                state.config.dataSources = state.config.dataSources.filter((ds)=>ds.id !== dataSourceId);
+                state.config.nodeBindings = state.config.nodeBindings.map((binding)=>({
+                        ...binding,
+                        metrics: binding.metrics.filter((m)=>m.dataSourceId !== dataSourceId)
+                    }));
+            },
+            updateDataSource: (dataSourceId, updates)=>{
+                state.config.dataSources = state.config.dataSources.map((ds)=>ds.id === dataSourceId ? {
+                        ...ds,
+                        ...updates
+                    } : ds);
+            },
+            bindNodeMetrics: (nodeId, metrics)=>{
+                const existingIndex = state.config.nodeBindings.findIndex((b)=>b.nodeId === nodeId);
+                if (existingIndex >= 0) state.config.nodeBindings[existingIndex] = {
+                    ...state.config.nodeBindings[existingIndex],
+                    metrics
+                };
+                else state.config.nodeBindings.push({
+                    nodeId,
+                    metrics
+                });
+                setupRefreshIntervals();
+            },
+            unbindNodeMetrics: (nodeId)=>{
+                state.config.nodeBindings = state.config.nodeBindings.filter((b)=>b.nodeId !== nodeId);
+                state.nodeStates.delete(nodeId);
+                const interval = refreshIntervalsRef.current.get(nodeId);
+                if (interval) {
+                    clearInterval(interval);
+                    refreshIntervalsRef.current.delete(nodeId);
+                }
+            },
+            getNodeMetrics: (nodeId)=>state.nodeStates.get(nodeId),
+            getNodeStatus: (nodeId)=>state.nodeStates.get(nodeId)?.overallStatus || 'unknown',
+            refreshAll: ()=>{
+                for (const binding of state.config.nodeBindings)refreshNodeData(binding.nodeId);
+            },
+            refreshNode: (nodeId)=>{
+                refreshNodeData(nodeId);
+            },
+            setEventHandlers: (handlers)=>{
+                eventHandlersRef.current = handlers;
+            },
+            setEnabled: (enabled)=>{
+                state.config.enabled = enabled;
+                setupRefreshIntervals();
+                eventHandlersRef.current.onConnectionChange?.(enabled);
+            },
+            cleanup: ()=>{
+                refreshIntervalsRef.current.forEach((interval)=>clearInterval(interval));
+                refreshIntervalsRef.current.clear();
+                state.nodeStates.clear();
+                state.initialized = false;
+                state.connected = false;
+            }
+        };
+        return {
+            ...state,
+            actions
+        };
+    };
+    const LiveAnalyticsContext = /*#__PURE__*/ (0, external_react_namespaceObject.createContext)(null);
+    const LiveAnalyticsProvider = ({ children, initialConfig, eventHandlers })=>{
+        const storeRef = (0, external_react_namespaceObject.useRef)(null);
+        const [, forceUpdate] = (0, external_react_namespaceObject.useState)({});
+        if (!storeRef.current) storeRef.current = createInitialState();
+        (0, external_react_namespaceObject.useEffect)(()=>{
+            if (initialConfig) {
+                storeRef.current?.actions.initialize({
+                    ...defaultConfig,
+                    ...initialConfig
+                });
+                forceUpdate({});
+            }
+        }, []);
+        (0, external_react_namespaceObject.useEffect)(()=>{
+            if (eventHandlers) storeRef.current?.actions.setEventHandlers(eventHandlers);
+        }, [
+            eventHandlers
+        ]);
+        (0, external_react_namespaceObject.useEffect)(()=>()=>{
+                storeRef.current?.actions.cleanup();
+            }, []);
+        return /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(LiveAnalyticsContext.Provider, {
+            value: storeRef.current,
+            children: children
+        });
+    };
+    const useLiveAnalyticsStore = ()=>{
+        const store = (0, external_react_namespaceObject.useContext)(LiveAnalyticsContext);
+        if (!store) throw new Error('useLiveAnalyticsStore must be used within a LiveAnalyticsProvider');
+        return store;
+    };
+    const useNodeLiveData = (nodeId)=>{
+        const store = useLiveAnalyticsStore();
+        const [nodeState, setNodeState] = (0, external_react_namespaceObject.useState)(store.actions.getNodeMetrics(nodeId));
+        (0, external_react_namespaceObject.useEffect)(()=>{
+            const interval = setInterval(()=>{
+                const newState = store.actions.getNodeMetrics(nodeId);
+                setNodeState(newState);
+            }, 1000);
+            return ()=>clearInterval(interval);
+        }, [
+            nodeId,
+            store.actions
+        ]);
+        return {
+            state: nodeState,
+            status: nodeState?.overallStatus || 'unknown',
+            metrics: nodeState?.metrics || {},
+            loading: nodeState?.loading || false,
+            connected: nodeState?.connected || false,
+            lastUpdated: nodeState?.lastUpdated || null,
+            refresh: (0, external_react_namespaceObject.useCallback)(()=>store.actions.refreshNode(nodeId), [
+                store.actions,
+                nodeId
+            ])
+        };
+    };
+    const useDataSources = ()=>{
+        const store = useLiveAnalyticsStore();
+        return {
+            dataSources: store.config.dataSources,
+            addDataSource: store.actions.addDataSource,
+            removeDataSource: store.actions.removeDataSource,
+            updateDataSource: store.actions.updateDataSource
+        };
+    };
+    const useNodeMetricBindings = (nodeId)=>{
+        const store = useLiveAnalyticsStore();
+        const binding = store.config.nodeBindings.find((b)=>b.nodeId === nodeId);
+        return {
+            metrics: binding?.metrics || [],
+            bindMetrics: (0, external_react_namespaceObject.useCallback)((metrics)=>store.actions.bindNodeMetrics(nodeId, metrics), [
+                store.actions,
+                nodeId
+            ]),
+            unbindMetrics: (0, external_react_namespaceObject.useCallback)(()=>store.actions.unbindNodeMetrics(nodeId), [
+                store.actions,
+                nodeId
+            ])
+        };
+    };
+    const useLiveAnalyticsConfig = ()=>{
+        const store = useLiveAnalyticsStore();
+        return {
+            config: store.config,
+            enabled: store.config.enabled,
+            setEnabled: store.actions.setEnabled,
+            updateConfig: store.actions.updateConfig,
+            refreshAll: store.actions.refreshAll
+        };
+    };
     require("react-quill-new/dist/quill.snow.css");
     const GlobalStyles = ()=>/*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.GlobalStyles, {
             styles: {
@@ -9522,6 +9906,7 @@ var __webpack_exports__ = {};
                 connectorInteractionMode: 'click',
                 expandLabels: false,
                 iconPackManager: null,
+                liveAnalyticsEnabled: false,
                 actions: {
                     setView: (view)=>{
                         set({
@@ -9654,6 +10039,11 @@ var __webpack_exports__ = {};
                     setIconPackManager: (iconPackManager)=>{
                         set({
                             iconPackManager
+                        });
+                    },
+                    setLiveAnalyticsEnabled: (liveAnalyticsEnabled)=>{
+                        set({
+                            liveAnalyticsEnabled
                         });
                     }
                 }
@@ -10657,7 +11047,7 @@ var __webpack_exports__ = {};
         const anchor = getAnchorAtTile(tile, connector.anchors);
         if (!anchor) {
             const newAnchor = {
-                id: generateId(),
+                id: common_generateId(),
                 ref: {
                     tile
                 }
@@ -10875,7 +11265,7 @@ var __webpack_exports__ = {};
         },
         mousedown: ({ uiState, scene, isRendererInteraction })=>{
             if ('RECTANGLE.DRAW' !== uiState.mode.type || !isRendererInteraction) return;
-            const newRectangleId = generateId();
+            const newRectangleId = common_generateId();
             scene.createRectangle({
                 id: newRectangleId,
                 color: scene.colors[0].id,
@@ -10961,7 +11351,7 @@ var __webpack_exports__ = {};
                 if (itemAtTile?.type === 'ITEM') {
                     const newConnector = (0, external_immer_namespaceObject.produce)(connectorItem, (draft)=>{
                         draft.anchors[1] = {
-                            id: generateId(),
+                            id: common_generateId(),
                             ref: {
                                 item: itemAtTile.id
                             }
@@ -10971,7 +11361,7 @@ var __webpack_exports__ = {};
                 } else {
                     const newConnector = (0, external_immer_namespaceObject.produce)(connectorItem, (draft)=>{
                         draft.anchors[1] = {
-                            id: generateId(),
+                            id: common_generateId(),
                             ref: {
                                 tile: uiState.mouse.position.tile
                             }
@@ -11000,13 +11390,13 @@ var __webpack_exports__ = {};
                     });
                     const newConnector = (0, external_immer_namespaceObject.produce)(connector, (draft)=>{
                         if (itemAtTile?.type === 'ITEM') draft.anchors[1] = {
-                            id: generateId(),
+                            id: common_generateId(),
                             ref: {
                                 item: itemAtTile.id
                             }
                         };
                         else draft.anchors[1] = {
-                            id: generateId(),
+                            id: common_generateId(),
                             ref: {
                                 tile: uiState.mouse.position.tile
                             }
@@ -11028,19 +11418,19 @@ var __webpack_exports__ = {};
                     tile: uiState.mouse.position.tile
                 };
                 const newConnector = {
-                    id: generateId(),
+                    id: common_generateId(),
                     color: scene.colors[0].id,
                     anchors: []
                 };
                 if (itemAtTile && 'ITEM' === itemAtTile.type) newConnector.anchors = [
                     {
-                        id: generateId(),
+                        id: common_generateId(),
                         ref: {
                             item: itemAtTile.id
                         }
                     },
                     {
-                        id: generateId(),
+                        id: common_generateId(),
                         ref: {
                             item: itemAtTile.id
                         }
@@ -11048,13 +11438,13 @@ var __webpack_exports__ = {};
                 ];
                 else newConnector.anchors = [
                     {
-                        id: generateId(),
+                        id: common_generateId(),
                         ref: {
                             tile: uiState.mouse.position.tile
                         }
                     },
                     {
-                        id: generateId(),
+                        id: common_generateId(),
                         ref: {
                             tile: uiState.mouse.position.tile
                         }
@@ -11071,19 +11461,19 @@ var __webpack_exports__ = {};
             }
             else {
                 const newConnector = {
-                    id: generateId(),
+                    id: common_generateId(),
                     color: scene.colors[0].id,
                     anchors: []
                 };
                 if (itemAtTile && 'ITEM' === itemAtTile.type) newConnector.anchors = [
                     {
-                        id: generateId(),
+                        id: common_generateId(),
                         ref: {
                             item: itemAtTile.id
                         }
                     },
                     {
-                        id: generateId(),
+                        id: common_generateId(),
                         ref: {
                             item: itemAtTile.id
                         }
@@ -11091,13 +11481,13 @@ var __webpack_exports__ = {};
                 ];
                 else newConnector.anchors = [
                     {
-                        id: generateId(),
+                        id: common_generateId(),
                         ref: {
                             tile: uiState.mouse.position.tile
                         }
                     },
                     {
-                        id: generateId(),
+                        id: common_generateId(),
                         ref: {
                             tile: uiState.mouse.position.tile
                         }
@@ -11167,7 +11557,7 @@ var __webpack_exports__ = {};
             if (null !== uiState.mode.id) {
                 const targetTile = findNearestUnoccupiedTile(uiState.mouse.position.tile, scene);
                 if (targetTile) {
-                    const modelItemId = generateId();
+                    const modelItemId = common_generateId();
                     scene.placeIcon({
                         modelItem: {
                             id: modelItemId,
@@ -11697,7 +12087,7 @@ var __webpack_exports__ = {};
                     });
                 } else if (hotkeyMapping.text && key === hotkeyMapping.text) {
                     e.preventDefault();
-                    const textBoxId = generateId();
+                    const textBoxId = common_generateId();
                     createTextBox({
                         ...TEXTBOX_DEFAULTS,
                         id: textBoxId,
@@ -13828,7 +14218,7 @@ var __webpack_exports__ = {};
                     reader.readAsDataURL(file);
                 });
                 newIcons.push({
-                    id: generateId(),
+                    id: common_generateId(),
                     name: finalName,
                     url: dataUrl,
                     collection: 'imported',
@@ -13977,6 +14367,8 @@ var __webpack_exports__ = {};
             ]
         });
     };
+    const MonitorHeart_namespaceObject = require("@mui/icons-material/MonitorHeart");
+    var MonitorHeart_default = /*#__PURE__*/ __webpack_require__.n(MonitorHeart_namespaceObject);
     const DeleteButton = ({ onClick })=>/*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Button, {
             color: "error",
             size: "small",
@@ -13987,10 +14379,681 @@ var __webpack_exports__ = {};
             onClick: onClick,
             children: "Delete"
         });
-    const NodeSettings = ({ node, onModelItemUpdated, onViewItemUpdated, onDeleted })=>{
+    const Add_namespaceObject = require("@mui/icons-material/Add");
+    var Add_default = /*#__PURE__*/ __webpack_require__.n(Add_namespaceObject);
+    const Delete_namespaceObject = require("@mui/icons-material/Delete");
+    var Delete_default = /*#__PURE__*/ __webpack_require__.n(Delete_namespaceObject);
+    const Edit_namespaceObject = require("@mui/icons-material/Edit");
+    var Edit_default = /*#__PURE__*/ __webpack_require__.n(Edit_namespaceObject);
+    const Info_namespaceObject = require("@mui/icons-material/Info");
+    var Info_default = /*#__PURE__*/ __webpack_require__.n(Info_namespaceObject);
+    const pulseAnimation = (0, material_namespaceObject.keyframes)`
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+`;
+    const glowAnimation = (0, material_namespaceObject.keyframes)`
+  0% {
+    box-shadow: 0 0 2px 1px currentColor;
+  }
+  50% {
+    box-shadow: 0 0 8px 3px currentColor;
+  }
+  100% {
+    box-shadow: 0 0 2px 1px currentColor;
+  }
+`;
+    const statusColors = {
+        healthy: '#22c55e',
+        warning: '#f59e0b',
+        critical: '#ef4444',
+        unknown: '#6b7280',
+        offline: '#374151'
+    };
+    const statusLabels = {
+        healthy: 'Healthy',
+        warning: 'Warning',
+        critical: 'Critical',
+        unknown: 'Unknown',
+        offline: 'Offline'
+    };
+    const StatusIndicator = ({ status, size = 12, animated = true, glow = false, sx, onClick, interactive = false })=>{
+        const color = statusColors[status];
+        const label = statusLabels[status];
+        const shouldAnimate = animated && ('critical' === status || 'warning' === status);
+        const indicatorStyles = (0, external_react_namespaceObject.useMemo)(()=>({
+                width: size,
+                height: size,
+                borderRadius: '50%',
+                backgroundColor: color,
+                color: color,
+                transition: 'all 0.3s ease-in-out',
+                cursor: interactive || onClick ? 'pointer' : 'default',
+                ...shouldAnimate && {
+                    animation: `${pulseAnimation} 2s ease-in-out infinite`
+                },
+                ...glow && {
+                    animation: `${glowAnimation} 2s ease-in-out infinite`
+                },
+                ...interactive && {
+                    '&:hover': {
+                        transform: 'scale(1.2)',
+                        boxShadow: `0 0 8px 2px ${color}`
+                    }
+                },
+                ...sx
+            }), [
+            size,
+            color,
+            shouldAnimate,
+            glow,
+            interactive,
+            onClick,
+            sx
+        ]);
+        return /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Box, {
+            component: "span",
+            role: "status",
+            "aria-label": `Status: ${label}`,
+            title: label,
+            onClick: onClick,
+            sx: indicatorStyles
+        });
+    };
+    const defaultMetricFormState = {
+        id: '',
+        dataSourceId: '',
+        displayName: '',
+        unit: '',
+        showOnNode: true,
+        showInTooltip: true,
+        format: '',
+        useThresholds: true,
+        thresholdOperator: 'lt',
+        thresholdHealthy: '70',
+        thresholdWarning: '85',
+        thresholdCritical: '95'
+    };
+    const operatorLabels = {
+        lt: 'Less than (alert when HIGH)',
+        gt: 'Greater than (alert when LOW)',
+        lte: 'Less than or equal',
+        gte: 'Greater than or equal'
+    };
+    const NodeDataBindingDialog = ({ open, onClose, nodeId, nodeName })=>{
+        const { dataSources } = useDataSources();
+        const { metrics, bindMetrics, unbindMetrics } = useNodeMetricBindings(nodeId);
+        const { state: liveData, status } = useNodeLiveData(nodeId);
+        const [showForm, setShowForm] = (0, external_react_namespaceObject.useState)(false);
+        const [editingIndex, setEditingIndex] = (0, external_react_namespaceObject.useState)(null);
+        const [formState, setFormState] = (0, external_react_namespaceObject.useState)(defaultMetricFormState);
+        const [localMetrics, setLocalMetrics] = (0, external_react_namespaceObject.useState)([]);
+        (0, external_react_namespaceObject.useEffect)(()=>{
+            setLocalMetrics(metrics);
+        }, [
+            metrics,
+            open
+        ]);
+        const generateId = ()=>`mb_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const handleInputChange = (field)=>(event)=>{
+                setFormState((prev)=>({
+                        ...prev,
+                        [field]: event.target.value
+                    }));
+            };
+        const handleSwitchChange = (field)=>(event)=>{
+                setFormState((prev)=>({
+                        ...prev,
+                        [field]: event.target.checked
+                    }));
+            };
+        const buildMetricBinding = ()=>{
+            const binding = {
+                id: formState.id || generateId(),
+                dataSourceId: formState.dataSourceId,
+                displayName: formState.displayName,
+                unit: formState.unit || void 0,
+                showOnNode: formState.showOnNode,
+                showInTooltip: formState.showInTooltip,
+                format: formState.format || void 0
+            };
+            if (formState.useThresholds) binding.thresholds = {
+                operator: formState.thresholdOperator,
+                healthy: parseFloat(formState.thresholdHealthy) || 70,
+                warning: parseFloat(formState.thresholdWarning) || 85,
+                critical: parseFloat(formState.thresholdCritical) || 95
+            };
+            return binding;
+        };
+        const handleSaveMetric = ()=>{
+            const binding = buildMetricBinding();
+            if (null !== editingIndex) {
+                const updated = [
+                    ...localMetrics
+                ];
+                updated[editingIndex] = binding;
+                setLocalMetrics(updated);
+            } else setLocalMetrics((prev)=>[
+                    ...prev,
+                    binding
+                ]);
+            setShowForm(false);
+            setEditingIndex(null);
+            setFormState(defaultMetricFormState);
+        };
+        const handleEditMetric = (index)=>{
+            const metric = localMetrics[index];
+            setFormState({
+                id: metric.id,
+                dataSourceId: metric.dataSourceId,
+                displayName: metric.displayName,
+                unit: metric.unit || '',
+                showOnNode: metric.showOnNode,
+                showInTooltip: metric.showInTooltip,
+                format: metric.format || '',
+                useThresholds: !!metric.thresholds,
+                thresholdOperator: metric.thresholds?.operator || 'lt',
+                thresholdHealthy: metric.thresholds?.healthy?.toString() || '70',
+                thresholdWarning: metric.thresholds?.warning?.toString() || '85',
+                thresholdCritical: metric.thresholds?.critical?.toString() || '95'
+            });
+            setEditingIndex(index);
+            setShowForm(true);
+        };
+        const handleDeleteMetric = (index)=>{
+            setLocalMetrics((prev)=>prev.filter((_, i)=>i !== index));
+        };
+        const handleApply = ()=>{
+            bindMetrics(localMetrics);
+            onClose();
+        };
+        const handleRemoveAllBindings = ()=>{
+            if (window.confirm('Remove all metric bindings from this node?')) {
+                unbindMetrics();
+                setLocalMetrics([]);
+            }
+        };
+        const getDataSourceName = (dataSourceId)=>dataSources.find((ds)=>ds.id === dataSourceId)?.name || 'Unknown';
+        const getMetricCurrentValue = (metricId)=>liveData?.metrics[metricId];
+        const renderMetricList = ()=>/*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(jsx_runtime_namespaceObject.Fragment, {
+                children: 0 === localMetrics.length ? /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(material_namespaceObject.Box, {
+                    sx: {
+                        textAlign: 'center',
+                        py: 4
+                    },
+                    children: [
+                        /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Typography, {
+                            color: "text.secondary",
+                            gutterBottom: true,
+                            children: "No metrics bound to this node"
+                        }),
+                        0 === dataSources.length ? /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Typography, {
+                            variant: "caption",
+                            color: "error",
+                            children: "Add data sources first in Settings → Data Sources"
+                        }) : /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Button, {
+                            variant: "outlined",
+                            startIcon: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(Add_default(), {}),
+                            onClick: ()=>setShowForm(true),
+                            children: "Add Metric Binding"
+                        })
+                    ]
+                }) : /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(jsx_runtime_namespaceObject.Fragment, {
+                    children: [
+                        /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.List, {
+                            dense: true,
+                            children: localMetrics.map((metric, index)=>{
+                                const currentValue = getMetricCurrentValue(metric.id);
+                                return /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(external_react_default().Fragment, {
+                                    children: [
+                                        /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(material_namespaceObject.ListItem, {
+                                            children: [
+                                                /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Box, {
+                                                    sx: {
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        mr: 2
+                                                    },
+                                                    children: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(StatusIndicator, {
+                                                        status: currentValue?.status || 'unknown',
+                                                        size: 10,
+                                                        animated: false
+                                                    })
+                                                }),
+                                                /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.ListItemText, {
+                                                    primary: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(material_namespaceObject.Box, {
+                                                        sx: {
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: 1
+                                                        },
+                                                        children: [
+                                                            /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Typography, {
+                                                                variant: "body2",
+                                                                fontWeight: 500,
+                                                                children: metric.displayName
+                                                            }),
+                                                            metric.unit && /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(material_namespaceObject.Typography, {
+                                                                variant: "caption",
+                                                                color: "text.secondary",
+                                                                children: [
+                                                                    "(",
+                                                                    metric.unit,
+                                                                    ")"
+                                                                ]
+                                                            })
+                                                        ]
+                                                    }),
+                                                    secondary: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(material_namespaceObject.Box, {
+                                                        sx: {
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: 1,
+                                                            mt: 0.5
+                                                        },
+                                                        children: [
+                                                            /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Chip, {
+                                                                label: getDataSourceName(metric.dataSourceId),
+                                                                size: "small",
+                                                                variant: "outlined"
+                                                            }),
+                                                            metric.showOnNode && /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Chip, {
+                                                                label: "On Node",
+                                                                size: "small",
+                                                                color: "primary",
+                                                                variant: "outlined"
+                                                            }),
+                                                            currentValue?.value != null && /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(material_namespaceObject.Typography, {
+                                                                variant: "caption",
+                                                                sx: {
+                                                                    fontWeight: 600
+                                                                },
+                                                                children: [
+                                                                    "Current: ",
+                                                                    currentValue.value,
+                                                                    metric.unit || ''
+                                                                ]
+                                                            })
+                                                        ]
+                                                    })
+                                                }),
+                                                /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(material_namespaceObject.ListItemSecondaryAction, {
+                                                    children: [
+                                                        /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.IconButton, {
+                                                            edge: "end",
+                                                            "aria-label": "edit",
+                                                            onClick: ()=>handleEditMetric(index),
+                                                            size: "small",
+                                                            sx: {
+                                                                mr: 0.5
+                                                            },
+                                                            children: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(Edit_default(), {
+                                                                fontSize: "small"
+                                                            })
+                                                        }),
+                                                        /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.IconButton, {
+                                                            edge: "end",
+                                                            "aria-label": "delete",
+                                                            onClick: ()=>handleDeleteMetric(index),
+                                                            size: "small",
+                                                            children: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(Delete_default(), {
+                                                                fontSize: "small"
+                                                            })
+                                                        })
+                                                    ]
+                                                })
+                                            ]
+                                        }),
+                                        /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Divider, {})
+                                    ]
+                                }, metric.id);
+                            })
+                        }),
+                        /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(material_namespaceObject.Box, {
+                            sx: {
+                                mt: 2,
+                                display: 'flex',
+                                gap: 1,
+                                justifyContent: 'center'
+                            },
+                            children: [
+                                /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Button, {
+                                    variant: "outlined",
+                                    startIcon: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(Add_default(), {}),
+                                    onClick: ()=>setShowForm(true),
+                                    disabled: 0 === dataSources.length,
+                                    children: "Add Metric"
+                                }),
+                                /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Button, {
+                                    variant: "outlined",
+                                    color: "error",
+                                    onClick: handleRemoveAllBindings,
+                                    children: "Remove All"
+                                })
+                            ]
+                        })
+                    ]
+                })
+            });
+        const renderMetricForm = ()=>/*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(material_namespaceObject.Box, {
+                sx: {
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 2
+                },
+                children: [
+                    /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(material_namespaceObject.FormControl, {
+                        fullWidth: true,
+                        size: "small",
+                        required: true,
+                        children: [
+                            /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.InputLabel, {
+                                children: "Data Source"
+                            }),
+                            /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Select, {
+                                value: formState.dataSourceId,
+                                label: "Data Source",
+                                onChange: (e)=>setFormState((prev)=>({
+                                            ...prev,
+                                            dataSourceId: e.target.value
+                                        })),
+                                children: dataSources.map((ds)=>/*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(material_namespaceObject.MenuItem, {
+                                        value: ds.id,
+                                        disabled: !ds.enabled,
+                                        children: [
+                                            ds.name,
+                                            !ds.enabled && ' (disabled)'
+                                        ]
+                                    }, ds.id))
+                            })
+                        ]
+                    }),
+                    /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.TextField, {
+                        fullWidth: true,
+                        label: "Display Name",
+                        value: formState.displayName,
+                        onChange: handleInputChange('displayName'),
+                        size: "small",
+                        required: true,
+                        placeholder: "e.g., CPU Usage"
+                    }),
+                    /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(material_namespaceObject.Grid, {
+                        container: true,
+                        spacing: 2,
+                        children: [
+                            /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Grid, {
+                                item: true,
+                                xs: 6,
+                                children: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.TextField, {
+                                    fullWidth: true,
+                                    label: "Unit",
+                                    value: formState.unit,
+                                    onChange: handleInputChange('unit'),
+                                    size: "small",
+                                    placeholder: "%, ms, req/s"
+                                })
+                            }),
+                            /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Grid, {
+                                item: true,
+                                xs: 6,
+                                children: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.TextField, {
+                                    fullWidth: true,
+                                    label: "Format",
+                                    value: formState.format,
+                                    onChange: handleInputChange('format'),
+                                    size: "small",
+                                    placeholder: "0.00 or 0%",
+                                    helperText: "Number format"
+                                })
+                            })
+                        ]
+                    }),
+                    /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(material_namespaceObject.Box, {
+                        sx: {
+                            display: 'flex',
+                            gap: 2
+                        },
+                        children: [
+                            /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.FormControlLabel, {
+                                control: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Switch, {
+                                    checked: formState.showOnNode,
+                                    onChange: handleSwitchChange('showOnNode'),
+                                    size: "small"
+                                }),
+                                label: "Show on Node"
+                            }),
+                            /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.FormControlLabel, {
+                                control: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Switch, {
+                                    checked: formState.showInTooltip,
+                                    onChange: handleSwitchChange('showInTooltip'),
+                                    size: "small"
+                                }),
+                                label: "Show in Tooltip"
+                            })
+                        ]
+                    }),
+                    /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Divider, {}),
+                    /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.FormControlLabel, {
+                        control: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Switch, {
+                            checked: formState.useThresholds,
+                            onChange: handleSwitchChange('useThresholds')
+                        }),
+                        label: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(material_namespaceObject.Box, {
+                            sx: {
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 0.5
+                            },
+                            children: [
+                                /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Typography, {
+                                    children: "Use Thresholds for Status"
+                                }),
+                                /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Tooltip, {
+                                    title: "Define value ranges for healthy, warning, and critical states",
+                                    children: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(Info_default(), {
+                                        fontSize: "small",
+                                        color: "action"
+                                    })
+                                })
+                            ]
+                        })
+                    }),
+                    formState.useThresholds && /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(material_namespaceObject.Paper, {
+                        variant: "outlined",
+                        sx: {
+                            p: 2
+                        },
+                        children: [
+                            /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(material_namespaceObject.FormControl, {
+                                fullWidth: true,
+                                size: "small",
+                                sx: {
+                                    mb: 2
+                                },
+                                children: [
+                                    /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.InputLabel, {
+                                        children: "Comparison"
+                                    }),
+                                    /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Select, {
+                                        value: formState.thresholdOperator,
+                                        label: "Comparison",
+                                        onChange: (e)=>setFormState((prev)=>({
+                                                    ...prev,
+                                                    thresholdOperator: e.target.value
+                                                })),
+                                        children: Object.entries(operatorLabels).map(([key, label])=>/*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.MenuItem, {
+                                                value: key,
+                                                children: label
+                                            }, key))
+                                    })
+                                ]
+                            }),
+                            /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(material_namespaceObject.Grid, {
+                                container: true,
+                                spacing: 2,
+                                children: [
+                                    /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Grid, {
+                                        item: true,
+                                        xs: 4,
+                                        children: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.TextField, {
+                                            fullWidth: true,
+                                            label: "Healthy",
+                                            type: "number",
+                                            value: formState.thresholdHealthy,
+                                            onChange: handleInputChange('thresholdHealthy'),
+                                            size: "small",
+                                            InputProps: {
+                                                startAdornment: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(StatusIndicator, {
+                                                    status: "healthy",
+                                                    size: 8,
+                                                    animated: false
+                                                })
+                                            }
+                                        })
+                                    }),
+                                    /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Grid, {
+                                        item: true,
+                                        xs: 4,
+                                        children: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.TextField, {
+                                            fullWidth: true,
+                                            label: "Warning",
+                                            type: "number",
+                                            value: formState.thresholdWarning,
+                                            onChange: handleInputChange('thresholdWarning'),
+                                            size: "small",
+                                            InputProps: {
+                                                startAdornment: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(StatusIndicator, {
+                                                    status: "warning",
+                                                    size: 8,
+                                                    animated: false
+                                                })
+                                            }
+                                        })
+                                    }),
+                                    /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Grid, {
+                                        item: true,
+                                        xs: 4,
+                                        children: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.TextField, {
+                                            fullWidth: true,
+                                            label: "Critical",
+                                            type: "number",
+                                            value: formState.thresholdCritical,
+                                            onChange: handleInputChange('thresholdCritical'),
+                                            size: "small",
+                                            InputProps: {
+                                                startAdornment: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(StatusIndicator, {
+                                                    status: "critical",
+                                                    size: 8,
+                                                    animated: false
+                                                })
+                                            }
+                                        })
+                                    })
+                                ]
+                            }),
+                            /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Typography, {
+                                variant: "caption",
+                                color: "text.secondary",
+                                sx: {
+                                    mt: 1,
+                                    display: 'block'
+                                },
+                                children: 'lt' === formState.thresholdOperator || 'lte' === formState.thresholdOperator ? `Values ≥ ${formState.thresholdCritical} = Critical, ≥ ${formState.thresholdWarning} = Warning, < ${formState.thresholdHealthy} = Healthy` : `Values ≤ ${formState.thresholdCritical} = Critical, ≤ ${formState.thresholdWarning} = Warning, > ${formState.thresholdHealthy} = Healthy`
+                            })
+                        ]
+                    })
+                ]
+            });
+        return /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(material_namespaceObject.Dialog, {
+            open: open,
+            onClose: onClose,
+            maxWidth: "sm",
+            fullWidth: true,
+            children: [
+                /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.DialogTitle, {
+                    children: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(material_namespaceObject.Box, {
+                        sx: {
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 1
+                        },
+                        children: [
+                            /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(StatusIndicator, {
+                                status: status,
+                                size: 12,
+                                animated: false
+                            }),
+                            /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Typography, {
+                                variant: "h6",
+                                children: showForm ? null !== editingIndex ? 'Edit Metric Binding' : 'Add Metric Binding' : `Live Data: ${nodeName || nodeId}`
+                            })
+                        ]
+                    })
+                }),
+                /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.DialogContent, {
+                    dividers: true,
+                    children: showForm ? renderMetricForm() : /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(jsx_runtime_namespaceObject.Fragment, {
+                        children: [
+                            0 === dataSources.length && /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Alert, {
+                                severity: "info",
+                                sx: {
+                                    mb: 2
+                                },
+                                children: "No data sources configured. Add data sources in the settings to bind live metrics to this node."
+                            }),
+                            renderMetricList()
+                        ]
+                    })
+                }),
+                /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.DialogActions, {
+                    children: showForm ? /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(jsx_runtime_namespaceObject.Fragment, {
+                        children: [
+                            /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Button, {
+                                onClick: ()=>{
+                                    setShowForm(false);
+                                    setEditingIndex(null);
+                                    setFormState(defaultMetricFormState);
+                                },
+                                children: "Cancel"
+                            }),
+                            /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Button, {
+                                onClick: handleSaveMetric,
+                                variant: "contained",
+                                disabled: !formState.dataSourceId || !formState.displayName,
+                                children: null !== editingIndex ? 'Update' : 'Add'
+                            })
+                        ]
+                    }) : /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(jsx_runtime_namespaceObject.Fragment, {
+                        children: [
+                            /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Button, {
+                                onClick: onClose,
+                                children: "Cancel"
+                            }),
+                            /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Button, {
+                                onClick: handleApply,
+                                variant: "contained",
+                                children: "Apply Changes"
+                            })
+                        ]
+                    })
+                })
+            ]
+        });
+    };
+    const NodeSettings = ({ node, onModelItemUpdated, onViewItemUpdated, onDeleted, showLiveDataConfig = false })=>{
         const modelItem = useModelItem(node.id);
         const modelActions = useModelStore((state)=>state.actions);
         const icons = useModelStore((state)=>state.icons);
+        const [showLiveDataDialog, setShowLiveDataDialog] = (0, external_react_namespaceObject.useState)(false);
         const currentIcon = icons.find((icon)=>icon.id === modelItem?.icon);
         const [localScale, setLocalScale] = (0, external_react_namespaceObject.useState)(currentIcon?.scale || 1);
         const debounceRef = (0, external_react_namespaceObject.useRef)(void 0);
@@ -14077,6 +15140,25 @@ var __webpack_exports__ = {};
                         value: localScale,
                         onChange: handleScaleChange
                     })
+                }),
+                showLiveDataConfig && /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(Section, {
+                    title: "Live Analytics",
+                    children: [
+                        /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Button, {
+                            variant: "outlined",
+                            startIcon: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(MonitorHeart_default(), {}),
+                            onClick: ()=>setShowLiveDataDialog(true),
+                            fullWidth: true,
+                            size: "small",
+                            children: "Configure Live Data"
+                        }),
+                        /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(NodeDataBindingDialog, {
+                            open: showLiveDataDialog,
+                            onClose: ()=>setShowLiveDataDialog(false),
+                            nodeId: node.id,
+                            nodeName: modelItem.name
+                        })
+                    ]
                 }),
                 /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(Section, {
                     children: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Box, {
@@ -14537,7 +15619,7 @@ var __webpack_exports__ = {};
         const handleAddLabel = ()=>{
             if (labels.length >= 256) return;
             const newLabel = {
-                id: generateId(),
+                id: common_generateId(),
                 text: '',
                 position: 50,
                 height: 0,
@@ -15167,7 +16249,7 @@ var __webpack_exports__ = {};
             redo
         ]);
         const createTextBoxProxy = (0, external_react_namespaceObject.useCallback)(()=>{
-            const textBoxId = generateId();
+            const textBoxId = common_generateId();
             createTextBox({
                 ...TEXTBOX_DEFAULTS,
                 id: textBoxId,
@@ -15381,7 +16463,7 @@ var __webpack_exports__ = {};
                             model: initialData,
                             scene: INITIAL_SCENE_STATE
                         },
-                        viewId: generateId()
+                        viewId: common_generateId()
                     }
                 });
                 Object.assign(initialData, updates.model);
@@ -15853,7 +16935,7 @@ var __webpack_exports__ = {};
                     onClick: ()=>{
                         if (!contextMenu) return;
                         if (model.icons.length > 0) {
-                            const modelItemId = generateId();
+                            const modelItemId = common_generateId();
                             const firstIcon = model.icons[0];
                             const targetTile = findNearestUnoccupiedTile(contextMenu.tile, scene) || contextMenu.tile;
                             scene.placeIcon({
@@ -15877,7 +16959,7 @@ var __webpack_exports__ = {};
                     onClick: ()=>{
                         if (!contextMenu) return;
                         if (model.colors.length > 0) scene.createRectangle({
-                            id: generateId(),
+                            id: common_generateId(),
                             color: model.colors[0].id,
                             from: contextMenu.tile,
                             to: contextMenu.tile
@@ -17546,7 +18628,987 @@ var __webpack_exports__ = {};
             ]
         });
     };
-    const SettingsDialog = ({ iconPackManager })=>{
+    const Settings_namespaceObject = require("@mui/icons-material/Settings");
+    var Settings_default = /*#__PURE__*/ __webpack_require__.n(Settings_namespaceObject);
+    const Refresh_namespaceObject = require("@mui/icons-material/Refresh");
+    var Refresh_default = /*#__PURE__*/ __webpack_require__.n(Refresh_namespaceObject);
+    const Storage_namespaceObject = require("@mui/icons-material/Storage");
+    var Storage_default = /*#__PURE__*/ __webpack_require__.n(Storage_namespaceObject);
+    const ExpandMore_namespaceObject = require("@mui/icons-material/ExpandMore");
+    var ExpandMore_default = /*#__PURE__*/ __webpack_require__.n(ExpandMore_namespaceObject);
+    const ExpandLess_namespaceObject = require("@mui/icons-material/ExpandLess");
+    var ExpandLess_default = /*#__PURE__*/ __webpack_require__.n(ExpandLess_namespaceObject);
+    const dataSourceTypeLabels = {
+        grafana: 'Grafana',
+        prometheus: 'Prometheus',
+        rest_api: 'REST API',
+        webhook: 'Webhook (Push)',
+        static: 'Static Value (Demo)'
+    };
+    const dataSourceTypeDescriptions = {
+        grafana: 'Connect to Grafana dashboards and panels for live metrics',
+        prometheus: 'Query Prometheus directly using PromQL',
+        rest_api: 'Fetch data from any REST API endpoint',
+        webhook: 'Receive push updates via webhook endpoint',
+        static: 'Use fixed values for testing and demos'
+    };
+    const defaultFormState = {
+        type: 'rest_api',
+        name: '',
+        enabled: true,
+        refreshIntervalMs: 30000,
+        grafanaUrl: '',
+        grafanaApiKey: '',
+        grafanaDashboardUid: '',
+        grafanaPanelId: '',
+        grafanaQuery: '',
+        prometheusUrl: '',
+        prometheusQuery: '',
+        restApiUrl: '',
+        restApiMethod: 'GET',
+        restApiHeaders: '{}',
+        restApiBody: '',
+        restApiValuePath: '$.value',
+        staticValue: '0',
+        staticStatus: 'healthy'
+    };
+    const DataSourceConfigDialog = ({ open, onClose })=>{
+        const { dataSources, addDataSource, removeDataSource, updateDataSource } = useDataSources();
+        const [showForm, setShowForm] = (0, external_react_namespaceObject.useState)(false);
+        const [editingId, setEditingId] = (0, external_react_namespaceObject.useState)(null);
+        const [formState, setFormState] = (0, external_react_namespaceObject.useState)(defaultFormState);
+        const [expandedSection, setExpandedSection] = (0, external_react_namespaceObject.useState)('type');
+        const [testResult, setTestResult] = (0, external_react_namespaceObject.useState)(null);
+        const generateId = ()=>`ds_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const handleInputChange = (field)=>(event)=>{
+                setFormState((prev)=>({
+                        ...prev,
+                        [field]: event.target.value
+                    }));
+            };
+        const handleSwitchChange = (field)=>(event)=>{
+                setFormState((prev)=>({
+                        ...prev,
+                        [field]: event.target.checked
+                    }));
+            };
+        const buildDataSourceConfig = ()=>{
+            const baseConfig = {
+                id: editingId || generateId(),
+                name: formState.name,
+                enabled: formState.enabled,
+                refreshIntervalMs: formState.refreshIntervalMs
+            };
+            switch(formState.type){
+                case 'grafana':
+                    return {
+                        ...baseConfig,
+                        type: 'grafana',
+                        url: formState.grafanaUrl,
+                        apiKey: formState.grafanaApiKey || void 0,
+                        dashboardUid: formState.grafanaDashboardUid || void 0,
+                        panelId: formState.grafanaPanelId ? parseInt(formState.grafanaPanelId) : void 0,
+                        query: formState.grafanaQuery || void 0
+                    };
+                case 'prometheus':
+                    return {
+                        ...baseConfig,
+                        type: 'prometheus',
+                        url: formState.prometheusUrl,
+                        query: formState.prometheusQuery
+                    };
+                case 'rest_api':
+                    return {
+                        ...baseConfig,
+                        type: 'rest_api',
+                        url: formState.restApiUrl,
+                        method: formState.restApiMethod,
+                        headers: formState.restApiHeaders ? JSON.parse(formState.restApiHeaders) : void 0,
+                        body: formState.restApiBody || void 0,
+                        valuePath: formState.restApiValuePath || void 0
+                    };
+                case 'static':
+                    return {
+                        ...baseConfig,
+                        type: 'static',
+                        value: isNaN(Number(formState.staticValue)) ? formState.staticValue : Number(formState.staticValue),
+                        status: formState.staticStatus
+                    };
+                default:
+                    throw new Error(`Unsupported data source type: ${formState.type}`);
+            }
+        };
+        const handleSave = ()=>{
+            try {
+                const config = buildDataSourceConfig();
+                if (editingId) updateDataSource(editingId, config);
+                else addDataSource(config);
+                setShowForm(false);
+                setEditingId(null);
+                setFormState(defaultFormState);
+                setTestResult(null);
+            } catch (error) {
+                setTestResult({
+                    success: false,
+                    message: error instanceof Error ? error.message : 'Failed to save data source'
+                });
+            }
+        };
+        const handleEdit = (dataSource)=>{
+            setEditingId(dataSource.id);
+            const newState = {
+                ...defaultFormState,
+                type: dataSource.type,
+                name: dataSource.name,
+                enabled: dataSource.enabled,
+                refreshIntervalMs: dataSource.refreshIntervalMs
+            };
+            switch(dataSource.type){
+                case 'grafana':
+                    newState.grafanaUrl = dataSource.url;
+                    newState.grafanaApiKey = dataSource.apiKey || '';
+                    newState.grafanaDashboardUid = dataSource.dashboardUid || '';
+                    newState.grafanaPanelId = dataSource.panelId?.toString() || '';
+                    newState.grafanaQuery = dataSource.query || '';
+                    break;
+                case 'prometheus':
+                    newState.prometheusUrl = dataSource.url;
+                    newState.prometheusQuery = dataSource.query;
+                    break;
+                case 'rest_api':
+                    newState.restApiUrl = dataSource.url;
+                    newState.restApiMethod = dataSource.method;
+                    newState.restApiHeaders = JSON.stringify(dataSource.headers || {});
+                    newState.restApiBody = 'string' == typeof dataSource.body ? dataSource.body : JSON.stringify(dataSource.body || '');
+                    newState.restApiValuePath = dataSource.valuePath || '';
+                    break;
+                case 'static':
+                    newState.staticValue = dataSource.value.toString();
+                    newState.staticStatus = dataSource.status;
+                    break;
+            }
+            setFormState(newState);
+            setShowForm(true);
+        };
+        const handleDelete = (id)=>{
+            if (window.confirm('Are you sure you want to delete this data source?')) removeDataSource(id);
+        };
+        const handleTestConnection = async ()=>{
+            setTestResult({
+                success: false,
+                message: 'Testing...'
+            });
+            try {
+                const config = buildDataSourceConfig();
+                if ('rest_api' === config.type || 'prometheus' === config.type || 'grafana' === config.type) {
+                    const testUrl = 'prometheus' === config.type ? `${config.url}/api/v1/status/runtimeinfo` : 'grafana' === config.type ? `${config.url}/api/health` : config.url;
+                    const response = await fetch(testUrl, {
+                        method: 'GET',
+                        signal: AbortSignal.timeout(5000)
+                    });
+                    response.ok ? setTestResult({
+                        success: true,
+                        message: 'Connection successful!'
+                    }) : setTestResult({
+                        success: false,
+                        message: `Connection failed: HTTP ${response.status}`
+                    });
+                } else 'static' === config.type ? setTestResult({
+                    success: true,
+                    message: 'Static data source - always available'
+                }) : setTestResult({
+                    success: true,
+                    message: 'Webhook endpoint will be available when saved'
+                });
+            } catch (error) {
+                setTestResult({
+                    success: false,
+                    message: error instanceof Error ? error.message : 'Connection test failed'
+                });
+            }
+        };
+        const toggleSection = (section)=>{
+            setExpandedSection((prev)=>prev === section ? null : section);
+        };
+        const renderFormSection = (title, sectionKey, children)=>/*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(material_namespaceObject.Box, {
+                sx: {
+                    mb: 2
+                },
+                children: [
+                    /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(material_namespaceObject.Box, {
+                        onClick: ()=>toggleSection(sectionKey),
+                        sx: {
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            cursor: 'pointer',
+                            py: 1,
+                            px: 1,
+                            borderRadius: 1,
+                            '&:hover': {
+                                backgroundColor: 'action.hover'
+                            }
+                        },
+                        children: [
+                            /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Typography, {
+                                variant: "subtitle2",
+                                fontWeight: 600,
+                                children: title
+                            }),
+                            expandedSection === sectionKey ? /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(ExpandLess_default(), {}) : /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(ExpandMore_default(), {})
+                        ]
+                    }),
+                    /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Collapse, {
+                        in: expandedSection === sectionKey,
+                        children: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Box, {
+                            sx: {
+                                px: 1,
+                                py: 1
+                            },
+                            children: children
+                        })
+                    })
+                ]
+            });
+        const renderTypeSpecificFields = ()=>{
+            switch(formState.type){
+                case 'grafana':
+                    return /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(jsx_runtime_namespaceObject.Fragment, {
+                        children: [
+                            /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.TextField, {
+                                fullWidth: true,
+                                label: "Grafana URL",
+                                placeholder: "https://grafana.example.com",
+                                value: formState.grafanaUrl,
+                                onChange: handleInputChange('grafanaUrl'),
+                                margin: "dense",
+                                size: "small"
+                            }),
+                            /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.TextField, {
+                                fullWidth: true,
+                                label: "API Key (optional)",
+                                type: "password",
+                                value: formState.grafanaApiKey,
+                                onChange: handleInputChange('grafanaApiKey'),
+                                margin: "dense",
+                                size: "small",
+                                helperText: "Required for authenticated access"
+                            }),
+                            /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.TextField, {
+                                fullWidth: true,
+                                label: "Dashboard UID",
+                                value: formState.grafanaDashboardUid,
+                                onChange: handleInputChange('grafanaDashboardUid'),
+                                margin: "dense",
+                                size: "small"
+                            }),
+                            /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.TextField, {
+                                fullWidth: true,
+                                label: "Panel ID",
+                                type: "number",
+                                value: formState.grafanaPanelId,
+                                onChange: handleInputChange('grafanaPanelId'),
+                                margin: "dense",
+                                size: "small"
+                            }),
+                            /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.TextField, {
+                                fullWidth: true,
+                                label: "Query (PromQL)",
+                                multiline: true,
+                                rows: 2,
+                                value: formState.grafanaQuery,
+                                onChange: handleInputChange('grafanaQuery'),
+                                margin: "dense",
+                                size: "small",
+                                placeholder: "e.g., rate(http_requests_total[5m])"
+                            })
+                        ]
+                    });
+                case 'prometheus':
+                    return /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(jsx_runtime_namespaceObject.Fragment, {
+                        children: [
+                            /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.TextField, {
+                                fullWidth: true,
+                                label: "Prometheus URL",
+                                placeholder: "https://prometheus.example.com",
+                                value: formState.prometheusUrl,
+                                onChange: handleInputChange('prometheusUrl'),
+                                margin: "dense",
+                                size: "small"
+                            }),
+                            /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.TextField, {
+                                fullWidth: true,
+                                label: "PromQL Query",
+                                multiline: true,
+                                rows: 3,
+                                value: formState.prometheusQuery,
+                                onChange: handleInputChange('prometheusQuery'),
+                                margin: "dense",
+                                size: "small",
+                                placeholder: "e.g., node_cpu_seconds_total{mode='idle'}"
+                            })
+                        ]
+                    });
+                case 'rest_api':
+                    return /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(jsx_runtime_namespaceObject.Fragment, {
+                        children: [
+                            /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.TextField, {
+                                fullWidth: true,
+                                label: "API URL",
+                                placeholder: "https://api.example.com/metrics",
+                                value: formState.restApiUrl,
+                                onChange: handleInputChange('restApiUrl'),
+                                margin: "dense",
+                                size: "small"
+                            }),
+                            /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(material_namespaceObject.FormControl, {
+                                fullWidth: true,
+                                margin: "dense",
+                                size: "small",
+                                children: [
+                                    /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.InputLabel, {
+                                        children: "Method"
+                                    }),
+                                    /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(material_namespaceObject.Select, {
+                                        value: formState.restApiMethod,
+                                        label: "Method",
+                                        onChange: (e)=>setFormState((prev)=>({
+                                                    ...prev,
+                                                    restApiMethod: e.target.value
+                                                })),
+                                        children: [
+                                            /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.MenuItem, {
+                                                value: "GET",
+                                                children: "GET"
+                                            }),
+                                            /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.MenuItem, {
+                                                value: "POST",
+                                                children: "POST"
+                                            })
+                                        ]
+                                    })
+                                ]
+                            }),
+                            /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.TextField, {
+                                fullWidth: true,
+                                label: "Headers (JSON)",
+                                multiline: true,
+                                rows: 2,
+                                value: formState.restApiHeaders,
+                                onChange: handleInputChange('restApiHeaders'),
+                                margin: "dense",
+                                size: "small",
+                                placeholder: '{"Authorization": "Bearer token"}'
+                            }),
+                            'POST' === formState.restApiMethod && /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.TextField, {
+                                fullWidth: true,
+                                label: "Request Body",
+                                multiline: true,
+                                rows: 2,
+                                value: formState.restApiBody,
+                                onChange: handleInputChange('restApiBody'),
+                                margin: "dense",
+                                size: "small"
+                            }),
+                            /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.TextField, {
+                                fullWidth: true,
+                                label: "Value JSONPath",
+                                value: formState.restApiValuePath,
+                                onChange: handleInputChange('restApiValuePath'),
+                                margin: "dense",
+                                size: "small",
+                                placeholder: "$.data.value",
+                                helperText: "JSONPath expression to extract the metric value"
+                            })
+                        ]
+                    });
+                case 'static':
+                    return /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(jsx_runtime_namespaceObject.Fragment, {
+                        children: [
+                            /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.TextField, {
+                                fullWidth: true,
+                                label: "Value",
+                                value: formState.staticValue,
+                                onChange: handleInputChange('staticValue'),
+                                margin: "dense",
+                                size: "small"
+                            }),
+                            /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(material_namespaceObject.FormControl, {
+                                fullWidth: true,
+                                margin: "dense",
+                                size: "small",
+                                children: [
+                                    /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.InputLabel, {
+                                        children: "Status"
+                                    }),
+                                    /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(material_namespaceObject.Select, {
+                                        value: formState.staticStatus,
+                                        label: "Status",
+                                        onChange: (e)=>setFormState((prev)=>({
+                                                    ...prev,
+                                                    staticStatus: e.target.value
+                                                })),
+                                        children: [
+                                            /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.MenuItem, {
+                                                value: "healthy",
+                                                children: "Healthy"
+                                            }),
+                                            /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.MenuItem, {
+                                                value: "warning",
+                                                children: "Warning"
+                                            }),
+                                            /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.MenuItem, {
+                                                value: "critical",
+                                                children: "Critical"
+                                            }),
+                                            /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.MenuItem, {
+                                                value: "unknown",
+                                                children: "Unknown"
+                                            }),
+                                            /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.MenuItem, {
+                                                value: "offline",
+                                                children: "Offline"
+                                            })
+                                        ]
+                                    })
+                                ]
+                            })
+                        ]
+                    });
+                default:
+                    return /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Typography, {
+                        color: "text.secondary",
+                        children: "Webhook configuration will be available after creating the data source."
+                    });
+            }
+        };
+        return /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(material_namespaceObject.Dialog, {
+            open: open,
+            onClose: onClose,
+            maxWidth: "sm",
+            fullWidth: true,
+            children: [
+                /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.DialogTitle, {
+                    children: showForm ? editingId ? 'Edit Data Source' : 'Add Data Source' : 'Data Source Configuration'
+                }),
+                /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.DialogContent, {
+                    children: showForm ? /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(jsx_runtime_namespaceObject.Fragment, {
+                        children: [
+                            renderFormSection('Data Source Type', 'type', /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(jsx_runtime_namespaceObject.Fragment, {
+                                children: [
+                                    /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(material_namespaceObject.FormControl, {
+                                        fullWidth: true,
+                                        margin: "dense",
+                                        size: "small",
+                                        children: [
+                                            /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.InputLabel, {
+                                                children: "Type"
+                                            }),
+                                            /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Select, {
+                                                value: formState.type,
+                                                label: "Type",
+                                                onChange: (e)=>setFormState((prev)=>({
+                                                            ...prev,
+                                                            type: e.target.value
+                                                        })),
+                                                children: Object.entries(dataSourceTypeLabels).map(([type, label])=>/*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.MenuItem, {
+                                                        value: type,
+                                                        children: label
+                                                    }, type))
+                                            })
+                                        ]
+                                    }),
+                                    /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Typography, {
+                                        variant: "caption",
+                                        color: "text.secondary",
+                                        sx: {
+                                            mt: 1,
+                                            display: 'block'
+                                        },
+                                        children: dataSourceTypeDescriptions[formState.type]
+                                    })
+                                ]
+                            })),
+                            renderFormSection('Basic Settings', 'basic', /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(jsx_runtime_namespaceObject.Fragment, {
+                                children: [
+                                    /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.TextField, {
+                                        fullWidth: true,
+                                        label: "Name",
+                                        value: formState.name,
+                                        onChange: handleInputChange('name'),
+                                        margin: "dense",
+                                        size: "small",
+                                        required: true
+                                    }),
+                                    /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.FormControlLabel, {
+                                        control: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Switch, {
+                                            checked: formState.enabled,
+                                            onChange: handleSwitchChange('enabled')
+                                        }),
+                                        label: "Enabled"
+                                    }),
+                                    /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.TextField, {
+                                        fullWidth: true,
+                                        label: "Refresh Interval (ms)",
+                                        type: "number",
+                                        value: formState.refreshIntervalMs,
+                                        onChange: handleInputChange('refreshIntervalMs'),
+                                        margin: "dense",
+                                        size: "small",
+                                        inputProps: {
+                                            min: 1000,
+                                            max: 3600000,
+                                            step: 1000
+                                        },
+                                        helperText: "Minimum 1000ms (1 second)"
+                                    })
+                                ]
+                            })),
+                            renderFormSection('Connection Settings', 'connection', renderTypeSpecificFields()),
+                            testResult && /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Alert, {
+                                severity: testResult.success ? 'success' : 'error',
+                                sx: {
+                                    mt: 2
+                                },
+                                children: testResult.message
+                            })
+                        ]
+                    }) : /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(jsx_runtime_namespaceObject.Fragment, {
+                        children: [
+                            /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Box, {
+                                sx: {
+                                    mb: 2
+                                },
+                                children: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Typography, {
+                                    variant: "body2",
+                                    color: "text.secondary",
+                                    children: "Configure data sources to provide live metrics to your diagram nodes."
+                                })
+                            }),
+                            0 === dataSources.length ? /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(material_namespaceObject.Box, {
+                                sx: {
+                                    textAlign: 'center',
+                                    py: 4
+                                },
+                                children: [
+                                    /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Typography, {
+                                        color: "text.secondary",
+                                        gutterBottom: true,
+                                        children: "No data sources configured"
+                                    }),
+                                    /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Button, {
+                                        variant: "outlined",
+                                        startIcon: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(Add_default(), {}),
+                                        onClick: ()=>setShowForm(true),
+                                        children: "Add Data Source"
+                                    })
+                                ]
+                            }) : /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(jsx_runtime_namespaceObject.Fragment, {
+                                children: [
+                                    /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.List, {
+                                        children: dataSources.map((ds)=>/*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(external_react_default().Fragment, {
+                                                children: [
+                                                    /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(material_namespaceObject.ListItem, {
+                                                        children: [
+                                                            /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.ListItemText, {
+                                                                primary: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(material_namespaceObject.Box, {
+                                                                    sx: {
+                                                                        display: 'flex',
+                                                                        alignItems: 'center',
+                                                                        gap: 1
+                                                                    },
+                                                                    children: [
+                                                                        /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Typography, {
+                                                                            children: ds.name
+                                                                        }),
+                                                                        /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Chip, {
+                                                                            label: dataSourceTypeLabels[ds.type],
+                                                                            size: "small",
+                                                                            variant: "outlined"
+                                                                        }),
+                                                                        !ds.enabled && /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Chip, {
+                                                                            label: "Disabled",
+                                                                            size: "small",
+                                                                            color: "default"
+                                                                        })
+                                                                    ]
+                                                                }),
+                                                                secondary: `Refresh: ${ds.refreshIntervalMs / 1000}s`
+                                                            }),
+                                                            /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(material_namespaceObject.ListItemSecondaryAction, {
+                                                                children: [
+                                                                    /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.IconButton, {
+                                                                        edge: "end",
+                                                                        "aria-label": "edit",
+                                                                        onClick: ()=>handleEdit(ds),
+                                                                        sx: {
+                                                                            mr: 1
+                                                                        },
+                                                                        children: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(Edit_default(), {})
+                                                                    }),
+                                                                    /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.IconButton, {
+                                                                        edge: "end",
+                                                                        "aria-label": "delete",
+                                                                        onClick: ()=>handleDelete(ds.id),
+                                                                        children: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(Delete_default(), {})
+                                                                    })
+                                                                ]
+                                                            })
+                                                        ]
+                                                    }),
+                                                    /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Divider, {})
+                                                ]
+                                            }, ds.id))
+                                    }),
+                                    /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Box, {
+                                        sx: {
+                                            mt: 2,
+                                            textAlign: 'center'
+                                        },
+                                        children: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Button, {
+                                            variant: "outlined",
+                                            startIcon: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(Add_default(), {}),
+                                            onClick: ()=>setShowForm(true),
+                                            children: "Add Data Source"
+                                        })
+                                    })
+                                ]
+                            })
+                        ]
+                    })
+                }),
+                /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.DialogActions, {
+                    children: showForm ? /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(jsx_runtime_namespaceObject.Fragment, {
+                        children: [
+                            /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Button, {
+                                onClick: handleTestConnection,
+                                color: "info",
+                                children: "Test Connection"
+                            }),
+                            /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Box, {
+                                sx: {
+                                    flex: 1
+                                }
+                            }),
+                            /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Button, {
+                                onClick: ()=>{
+                                    setShowForm(false);
+                                    setEditingId(null);
+                                    setFormState(defaultFormState);
+                                    setTestResult(null);
+                                },
+                                children: "Cancel"
+                            }),
+                            /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Button, {
+                                onClick: handleSave,
+                                variant: "contained",
+                                disabled: !formState.name,
+                                children: editingId ? 'Update' : 'Add'
+                            })
+                        ]
+                    }) : /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Button, {
+                        onClick: onClose,
+                        children: "Close"
+                    })
+                })
+            ]
+        });
+    };
+    const LiveAnalyticsSettings = ({ onClose })=>{
+        const { config, enabled, setEnabled, updateConfig, refreshAll } = useLiveAnalyticsConfig();
+        const { dataSources } = useDataSources();
+        const [showDataSourceDialog, setShowDataSourceDialog] = (0, external_react_namespaceObject.useState)(false);
+        const handleRefreshIntervalChange = (_event, newValue)=>{
+            updateConfig({
+                defaultRefreshIntervalMs: 1000 * newValue
+            });
+        };
+        const enabledDataSources = dataSources.filter((ds)=>ds.enabled).length;
+        const totalDataSources = dataSources.length;
+        const boundNodes = config.nodeBindings.length;
+        return /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(material_namespaceObject.Box, {
+            sx: {
+                p: 2
+            },
+            children: [
+                /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Typography, {
+                    variant: "h6",
+                    gutterBottom: true,
+                    children: "Live Analytics"
+                }),
+                /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Typography, {
+                    variant: "body2",
+                    color: "text.secondary",
+                    sx: {
+                        mb: 3
+                    },
+                    children: "Connect your diagram nodes to live data sources like Grafana, Prometheus, and REST APIs to monitor your infrastructure in real-time."
+                }),
+                /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Paper, {
+                    variant: "outlined",
+                    sx: {
+                        p: 2,
+                        mb: 3
+                    },
+                    children: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.FormControlLabel, {
+                        control: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Switch, {
+                            checked: enabled,
+                            onChange: (e)=>setEnabled(e.target.checked),
+                            color: "primary"
+                        }),
+                        label: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(material_namespaceObject.Box, {
+                            children: [
+                                /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Typography, {
+                                    fontWeight: 500,
+                                    children: "Enable Live Analytics"
+                                }),
+                                /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Typography, {
+                                    variant: "caption",
+                                    color: "text.secondary",
+                                    children: "When enabled, nodes will display real-time metrics and status indicators"
+                                })
+                            ]
+                        }),
+                        sx: {
+                            m: 0,
+                            width: '100%',
+                            justifyContent: 'space-between'
+                        },
+                        labelPlacement: "start"
+                    })
+                }),
+                /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(material_namespaceObject.Paper, {
+                    variant: "outlined",
+                    sx: {
+                        p: 2,
+                        mb: 3
+                    },
+                    children: [
+                        /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(material_namespaceObject.Box, {
+                            sx: {
+                                display: 'flex',
+                                alignItems: 'center',
+                                mb: 2
+                            },
+                            children: [
+                                /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(Storage_default(), {
+                                    sx: {
+                                        mr: 1,
+                                        color: 'action.active'
+                                    }
+                                }),
+                                /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Typography, {
+                                    fontWeight: 500,
+                                    children: "Status Overview"
+                                })
+                            ]
+                        }),
+                        /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(material_namespaceObject.Stack, {
+                            direction: "row",
+                            spacing: 2,
+                            children: [
+                                /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Chip, {
+                                    icon: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(StatusIndicator, {
+                                        status: enabled ? 'healthy' : 'offline',
+                                        size: 8,
+                                        animated: false
+                                    }),
+                                    label: enabled ? 'Active' : 'Disabled',
+                                    variant: "outlined",
+                                    size: "small"
+                                }),
+                                /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Chip, {
+                                    label: `${enabledDataSources}/${totalDataSources} Data Sources`,
+                                    variant: "outlined",
+                                    size: "small"
+                                }),
+                                /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Chip, {
+                                    label: `${boundNodes} Nodes Monitored`,
+                                    variant: "outlined",
+                                    size: "small"
+                                })
+                            ]
+                        }),
+                        /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(material_namespaceObject.Box, {
+                            sx: {
+                                mt: 2,
+                                display: 'flex',
+                                gap: 1
+                            },
+                            children: [
+                                /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Button, {
+                                    variant: "outlined",
+                                    size: "small",
+                                    startIcon: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(Settings_default(), {}),
+                                    onClick: ()=>setShowDataSourceDialog(true),
+                                    children: "Configure Data Sources"
+                                }),
+                                /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Tooltip, {
+                                    title: "Refresh all metric values now",
+                                    children: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.IconButton, {
+                                        onClick: refreshAll,
+                                        size: "small",
+                                        disabled: !enabled,
+                                        children: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(Refresh_default(), {})
+                                    })
+                                })
+                            ]
+                        })
+                    ]
+                }),
+                /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(material_namespaceObject.Paper, {
+                    variant: "outlined",
+                    sx: {
+                        p: 2,
+                        mb: 3
+                    },
+                    children: [
+                        /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Typography, {
+                            fontWeight: 500,
+                            gutterBottom: true,
+                            children: "Display Options"
+                        }),
+                        /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.FormControlLabel, {
+                            control: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Switch, {
+                                checked: config.showStatusIndicators,
+                                onChange: (e)=>updateConfig({
+                                        showStatusIndicators: e.target.checked
+                                    }),
+                                disabled: !enabled,
+                                size: "small"
+                            }),
+                            label: "Show status indicators on nodes"
+                        }),
+                        /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.FormControlLabel, {
+                            control: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Switch, {
+                                checked: config.showMiniMetrics,
+                                onChange: (e)=>updateConfig({
+                                        showMiniMetrics: e.target.checked
+                                    }),
+                                disabled: !enabled,
+                                size: "small"
+                            }),
+                            label: "Show mini metrics on nodes"
+                        }),
+                        /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.FormControlLabel, {
+                            control: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Switch, {
+                                checked: config.animateStatusChanges,
+                                onChange: (e)=>updateConfig({
+                                        animateStatusChanges: e.target.checked
+                                    }),
+                                disabled: !enabled,
+                                size: "small"
+                            }),
+                            label: "Animate status changes"
+                        })
+                    ]
+                }),
+                /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(material_namespaceObject.Paper, {
+                    variant: "outlined",
+                    sx: {
+                        p: 2,
+                        mb: 3
+                    },
+                    children: [
+                        /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(material_namespaceObject.Box, {
+                            sx: {
+                                display: 'flex',
+                                alignItems: 'center',
+                                mb: 1
+                            },
+                            children: [
+                                /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Typography, {
+                                    fontWeight: 500,
+                                    children: "Default Refresh Interval"
+                                }),
+                                /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Tooltip, {
+                                    title: "How often to fetch new data from sources. Individual data sources can override this.",
+                                    children: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.IconButton, {
+                                        size: "small",
+                                        children: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(Info_default(), {
+                                            fontSize: "small"
+                                        })
+                                    })
+                                })
+                            ]
+                        }),
+                        /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Slider, {
+                            value: config.defaultRefreshIntervalMs / 1000,
+                            onChange: handleRefreshIntervalChange,
+                            min: 5,
+                            max: 300,
+                            step: 5,
+                            marks: [
+                                {
+                                    value: 5,
+                                    label: '5s'
+                                },
+                                {
+                                    value: 30,
+                                    label: '30s'
+                                },
+                                {
+                                    value: 60,
+                                    label: '1m'
+                                },
+                                {
+                                    value: 120,
+                                    label: '2m'
+                                },
+                                {
+                                    value: 300,
+                                    label: '5m'
+                                }
+                            ],
+                            valueLabelDisplay: "auto",
+                            valueLabelFormat: (v)=>`${v}s`,
+                            disabled: !enabled
+                        })
+                    ]
+                }),
+                /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(material_namespaceObject.Alert, {
+                    severity: "info",
+                    icon: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(Info_default(), {}),
+                    children: [
+                        /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Typography, {
+                            variant: "body2",
+                            fontWeight: 500,
+                            children: "How to use Live Analytics:"
+                        }),
+                        /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Typography, {
+                            variant: "body2",
+                            component: "div",
+                            children: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)("ol", {
+                                style: {
+                                    margin: '8px 0',
+                                    paddingLeft: 20
+                                },
+                                children: [
+                                    /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)("li", {
+                                        children: "Configure data sources (Grafana, Prometheus, REST API)"
+                                    }),
+                                    /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)("li", {
+                                        children: 'Right-click on a node and select "Configure Live Data"'
+                                    }),
+                                    /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)("li", {
+                                        children: "Bind metrics from your data sources to the node"
+                                    }),
+                                    /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)("li", {
+                                        children: "Set thresholds to control status colors"
+                                    })
+                                ]
+                            })
+                        })
+                    ]
+                }),
+                /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(DataSourceConfigDialog, {
+                    open: showDataSourceDialog,
+                    onClose: ()=>setShowDataSourceDialog(false)
+                })
+            ]
+        });
+    };
+    const SettingsDialog = ({ iconPackManager, showLiveAnalytics = false })=>{
         const dialog = useUiStateStore((state)=>state.dialog);
         const setDialog = useUiStateStore((state)=>state.actions.setDialog);
         const [tabValue, setTabValue] = (0, external_react_namespaceObject.useState)(0);
@@ -17558,6 +19620,44 @@ var __webpack_exports__ = {};
         const handleTabChange = (event, newValue)=>{
             setTabValue(newValue);
         };
+        const tabs = [
+            {
+                label: t('settings.hotkeys.title'),
+                component: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(HotkeySettings, {})
+            },
+            {
+                label: t('settings.pan.title'),
+                component: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(PanSettings, {})
+            },
+            {
+                label: 'Zoom',
+                component: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(ZoomSettings, {})
+            },
+            {
+                label: 'Labels',
+                component: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(LabelSettings, {})
+            },
+            {
+                label: t('settings.connector.title'),
+                component: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(ConnectorSettings, {})
+            }
+        ];
+        if (iconPackManager) tabs.push({
+            label: t('settings.iconPacks.title'),
+            component: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(IconPackSettings, {
+                lazyLoadingEnabled: iconPackManager.lazyLoadingEnabled,
+                onToggleLazyLoading: iconPackManager.onToggleLazyLoading,
+                packInfo: iconPackManager.packInfo,
+                enabledPacks: iconPackManager.enabledPacks,
+                onTogglePack: iconPackManager.onTogglePack
+            })
+        });
+        if (showLiveAnalytics) tabs.push({
+            label: 'Live Analytics',
+            component: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(LiveAnalyticsSettings, {
+                onClose: handleClose
+            })
+        });
         return /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(material_namespaceObject.Dialog, {
             open: isOpen,
             onClose: handleClose,
@@ -17583,52 +19683,22 @@ var __webpack_exports__ = {};
                 /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(material_namespaceObject.DialogContent, {
                     dividers: true,
                     children: [
-                        /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(material_namespaceObject.Tabs, {
+                        /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Tabs, {
                             value: tabValue,
                             onChange: handleTabChange,
                             sx: {
                                 borderBottom: 1,
                                 borderColor: 'divider'
                             },
-                            children: [
-                                /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Tab, {
-                                    label: t('settings.hotkeys.title')
-                                }),
-                                /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Tab, {
-                                    label: t('settings.pan.title')
-                                }),
-                                /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Tab, {
-                                    label: "Zoom"
-                                }),
-                                /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Tab, {
-                                    label: "Labels"
-                                }),
-                                /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Tab, {
-                                    label: t('settings.connector.title')
-                                }),
-                                iconPackManager && /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Tab, {
-                                    label: t('settings.iconPacks.title')
-                                })
-                            ]
+                            children: tabs.map((tab, index)=>/*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Tab, {
+                                    label: tab.label
+                                }, index))
                         }),
-                        /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(material_namespaceObject.Box, {
+                        /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(material_namespaceObject.Box, {
                             sx: {
                                 mt: 2
                             },
-                            children: [
-                                0 === tabValue && /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(HotkeySettings, {}),
-                                1 === tabValue && /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(PanSettings, {}),
-                                2 === tabValue && /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(ZoomSettings, {}),
-                                3 === tabValue && /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(LabelSettings, {}),
-                                4 === tabValue && /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(ConnectorSettings, {}),
-                                5 === tabValue && iconPackManager && /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(IconPackSettings, {
-                                    lazyLoadingEnabled: iconPackManager.lazyLoadingEnabled,
-                                    onToggleLazyLoading: iconPackManager.onToggleLazyLoading,
-                                    packInfo: iconPackManager.packInfo,
-                                    enabledPacks: iconPackManager.enabledPacks,
-                                    onTogglePack: iconPackManager.onTogglePack
-                                })
-                            ]
+                            children: tabs[tabValue]?.component
                         })
                     ]
                 }),
@@ -20406,7 +22476,7 @@ var __webpack_exports__ = {};
     };
     const i18n = locales;
     const version = "1.10.0";
-    const App = ({ initialData, mainMenuOptions = MAIN_MENU_OPTIONS, width = '100%', height = '100%', onModelUpdated, enableDebugTools = false, editorMode = 'EDITABLE', renderer, locale = en_US, iconPackManager })=>{
+    const App = ({ initialData, mainMenuOptions = MAIN_MENU_OPTIONS, width = '100%', height = '100%', onModelUpdated, enableDebugTools = false, editorMode = 'EDITABLE', renderer, locale = en_US, iconPackManager, liveAnalytics })=>{
         const uiStateActions = useUiStateStore((state)=>state.actions);
         const initialDataManager = useInitialDataManager();
         const model = useModelStore((state)=>modelFromModelStore(state));
@@ -20457,6 +22527,12 @@ var __webpack_exports__ = {};
             iconPackManager,
             uiStateActions
         ]);
+        (0, external_react_namespaceObject.useEffect)(()=>{
+            uiStateActions.setLiveAnalyticsEnabled(liveAnalytics?.enabled || false);
+        }, [
+            liveAnalytics?.enabled,
+            uiStateActions
+        ]);
         if (!initialDataManager.isReady) return null;
         return /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsxs)(jsx_runtime_namespaceObject.Fragment, {
             children: [
@@ -20479,21 +22555,33 @@ var __webpack_exports__ = {};
             ]
         });
     };
-    const Isoflow = (props)=>/*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(styles_namespaceObject.ThemeProvider, {
+    const Isoflow = (props)=>{
+        const liveAnalyticsConfig = props.liveAnalytics?.initialConfig ? {
+            ...props.liveAnalytics.initialConfig,
+            enabled: props.liveAnalytics.enabled ?? false
+        } : {
+            enabled: props.liveAnalytics?.enabled ?? false
+        };
+        return /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(styles_namespaceObject.ThemeProvider, {
             theme: theme_theme,
             children: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(LocaleProvider, {
                 locale: props.locale || en_US,
                 children: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(ModelProvider, {
                     children: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(SceneProvider, {
                         children: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(UiStateProvider, {
-                            children: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(App, {
-                                ...props
+                            children: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(LiveAnalyticsProvider, {
+                                initialConfig: liveAnalyticsConfig,
+                                eventHandlers: props.liveAnalytics?.eventHandlers,
+                                children: /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(App, {
+                                    ...props
+                                })
                             })
                         })
                     })
                 })
             })
         });
+    };
     const useIsoflow = ()=>{
         const rendererEl = useUiStateStore((state)=>state.rendererEl);
         const ModelActions = useModelStore((state)=>state.actions);

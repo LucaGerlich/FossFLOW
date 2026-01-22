@@ -8,6 +8,7 @@ interface Props {
     onModelItemUpdated: (updates: Partial<ModelItem>) => void;
     onViewItemUpdated: (updates: Partial<ViewItem>) => void;
     onDeleted: () => void;
+    showLiveDataConfig?: boolean;
 }
-export declare const NodeSettings: ({ node, onModelItemUpdated, onViewItemUpdated, onDeleted }: Props) => import("react/jsx-runtime").JSX.Element | null;
+export declare const NodeSettings: ({ node, onModelItemUpdated, onViewItemUpdated, onDeleted, showLiveDataConfig }: Props) => import("react/jsx-runtime").JSX.Element | null;
 export {};

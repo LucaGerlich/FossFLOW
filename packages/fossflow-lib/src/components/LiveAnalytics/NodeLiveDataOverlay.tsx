@@ -10,7 +10,17 @@ import { StatusIndicator } from './StatusIndicator';
 import { MiniMetricsDisplay } from './MiniMetricsDisplay';
 import { useNodeLiveData } from 'src/stores/liveAnalyticsStore';
 import { useLiveAnalyticsStore } from 'src/stores/liveAnalyticsStore';
-import type { NodeHealthStatus } from 'src/types/liveAnalytics';
+import type { NodeHealthStatus, MetricValue } from 'src/types/liveAnalytics';
+
+/**
+ * Default metric value when no data is available
+ */
+const createDefaultMetricValue = (): MetricValue => ({
+  value: null,
+  timestamp: new Date(),
+  status: 'unknown' as NodeHealthStatus,
+  loading: true
+});
 
 export interface NodeLiveDataOverlayProps {
   /** The node ID to display live data for */
@@ -79,12 +89,7 @@ export const NodeLiveDataOverlay: React.FC<NodeLiveDataOverlayProps> = ({
       .map(metricBinding => ({
         id: metricBinding.id,
         name: metricBinding.displayName,
-        value: state.metrics[metricBinding.id] || {
-          value: null,
-          timestamp: new Date(),
-          status: 'unknown' as NodeHealthStatus,
-          loading: true
-        },
+        value: state.metrics[metricBinding.id] || createDefaultMetricValue(),
         unit: metricBinding.unit,
         format: metricBinding.format
       }))

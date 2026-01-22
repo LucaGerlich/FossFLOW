@@ -185,6 +185,7 @@ export interface UiState {
   connectorInteractionMode: ConnectorInteractionMode;
   expandLabels: boolean;
   iconPackManager: IconPackManagerProps | null;
+  liveAnalyticsEnabled: boolean;
 
 }
 
@@ -213,6 +214,7 @@ export interface UiStateActions {
   setConnectorInteractionMode: (mode: ConnectorInteractionMode) => void;
   setExpandLabels: (expand: boolean) => void;
   setIconPackManager: (iconPackManager: IconPackManagerProps | null) => void;
+  setLiveAnalyticsEnabled: (enabled: boolean) => void;
 
 }
 

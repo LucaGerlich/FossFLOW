@@ -7,6 +7,7 @@ import { setWindowCursor, modelFromModelStore } from 'src/utils';
 import { useModelStore, ModelProvider } from 'src/stores/modelStore';
 import { SceneProvider } from 'src/stores/sceneStore';
 import { LocaleProvider } from 'src/stores/localeStore';
+import { LiveAnalyticsProvider } from 'src/stores/liveAnalyticsStore';
 import { GlobalStyles } from 'src/styles/GlobalStyles';
 import { Renderer } from 'src/components/Renderer/Renderer';
 import { UiOverlay } from 'src/components/UiOverlay/UiOverlay';
@@ -26,6 +27,7 @@ const App = ({
   renderer,
   locale = enUS,
   iconPackManager,
+  liveAnalytics,
 }: IsoflowProps) => {
   const uiStateActions = useUiStateStore((state) => {
     return state.actions;
@@ -72,6 +74,10 @@ const App = ({
     uiStateActions.setIconPackManager(iconPackManager || null);
   }, [iconPackManager, uiStateActions]);
 
+  useEffect(() => {
+    uiStateActions.setLiveAnalyticsEnabled(liveAnalytics?.enabled || false);
+  }, [liveAnalytics?.enabled, uiStateActions]);
+
   if (!initialDataManager.isReady) return null;
 
   return (
@@ -94,13 +100,22 @@ const App = ({
 };
 
 export const Isoflow = (props: IsoflowProps) => {
+  const liveAnalyticsConfig = props.liveAnalytics?.initialConfig 
+    ? { ...props.liveAnalytics.initialConfig, enabled: props.liveAnalytics.enabled ?? false }
+    : { enabled: props.liveAnalytics?.enabled ?? false };
+
   return (
     <ThemeProvider theme={theme}>
       <LocaleProvider locale={props.locale || enUS}>
         <ModelProvider>
           <SceneProvider>
             <UiStateProvider>
-              <App {...props} />
+              <LiveAnalyticsProvider
+                initialConfig={liveAnalyticsConfig}
+                eventHandlers={props.liveAnalytics?.eventHandlers}
+              >
+                <App {...props} />
+              </LiveAnalyticsProvider>
             </UiStateProvider>
           </SceneProvider>
         </ModelProvider>
