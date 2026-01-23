@@ -1,11 +1,13 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { Slider, Box, TextField } from '@mui/material';
+import { Slider, Box, TextField, Button } from '@mui/material';
+import MonitorHeartIcon from '@mui/icons-material/MonitorHeart';
 import { ModelItem, ViewItem } from 'src/types';
 import { RichTextEditor } from 'src/components/RichTextEditor/RichTextEditor';
 import { useModelItem } from 'src/hooks/useModelItem';
 import { useModelStore } from 'src/stores/modelStore';
 import { DeleteButton } from '../../components/DeleteButton';
 import { Section } from '../../components/Section';
+import { NodeDataBindingDialog } from 'src/components/LiveAnalytics/NodeDataBindingDialog';
 
 export type NodeUpdates = {
   model: Partial<ModelItem>;
@@ -17,17 +19,20 @@ interface Props {
   onModelItemUpdated: (updates: Partial<ModelItem>) => void;
   onViewItemUpdated: (updates: Partial<ViewItem>) => void;
   onDeleted: () => void;
+  showLiveDataConfig?: boolean;
 }
 
 export const NodeSettings = ({
   node,
   onModelItemUpdated,
   onViewItemUpdated,
-  onDeleted
+  onDeleted,
+  showLiveDataConfig = false
 }: Props) => {
   const modelItem = useModelItem(node.id);
   const modelActions = useModelStore((state) => state.actions);
   const icons = useModelStore((state) => state.icons);
+  const [showLiveDataDialog, setShowLiveDataDialog] = useState(false);
   
   // Local state for smooth slider interaction
   const currentIcon = icons.find(icon => icon.id === modelItem?.icon);
@@ -121,6 +126,27 @@ export const NodeSettings = ({
           onChange={handleScaleChange}
         />
       </Section>
+
+      {showLiveDataConfig && (
+        <Section title="Live Analytics">
+          <Button
+            variant="outlined"
+            startIcon={<MonitorHeartIcon />}
+            onClick={() => setShowLiveDataDialog(true)}
+            fullWidth
+            size="small"
+          >
+            Configure Live Data
+          </Button>
+          <NodeDataBindingDialog
+            open={showLiveDataDialog}
+            onClose={() => setShowLiveDataDialog(false)}
+            nodeId={node.id}
+            nodeName={modelItem.name}
+          />
+        </Section>
+      )}
+
       <Section>
         <Box>
           <DeleteButton onClick={onDeleted} />

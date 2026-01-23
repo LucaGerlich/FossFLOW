@@ -213,6 +213,15 @@ export interface IconPackManagerProps {
   onTogglePack: (packName: string, enabled: boolean) => void;
 }
 
+export interface LiveAnalyticsProps {
+  /** Enable live analytics feature */
+  enabled?: boolean;
+  /** Initial configuration for live analytics */
+  initialConfig?: import('./liveAnalytics').LiveAnalyticsConfig;
+  /** Event handlers for live analytics events */
+  eventHandlers?: import('../stores/liveAnalyticsStore').LiveAnalyticsEventHandlers;
+}
+
 export interface IsoflowProps {
   initialData?: InitialData;
   mainMenuOptions?: MainMenuOptions;
@@ -224,4 +233,6 @@ export interface IsoflowProps {
   renderer?: RendererProps;
   locale?: LocaleProps;
   iconPackManager?: IconPackManagerProps;
+  /** Live analytics configuration */
+  liveAnalytics?: LiveAnalyticsProps;
 }

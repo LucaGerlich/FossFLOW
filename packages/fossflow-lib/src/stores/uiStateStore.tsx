@@ -41,6 +41,7 @@ const initialState = () => {
       connectorInteractionMode: 'click', // Default to click mode
       expandLabels: false, // Default to collapsed labels
       iconPackManager: null, // Will be set by Isoflow if provided
+      liveAnalyticsEnabled: false, // Live analytics disabled by default
 
       actions: {
         setView: (view) => {
@@ -124,6 +125,9 @@ const initialState = () => {
         },
         setIconPackManager: (iconPackManager) => {
           set({ iconPackManager });
+        },
+        setLiveAnalyticsEnabled: (liveAnalyticsEnabled) => {
+          set({ liveAnalyticsEnabled });
         }
       }
     };

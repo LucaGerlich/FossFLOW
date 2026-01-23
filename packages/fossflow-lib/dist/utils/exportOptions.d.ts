@@ -15,3 +15,4 @@ export declare const transformFromCompactFormat: (compactModel: any) => Model;
 export declare const exportAsJSON: (model: Model) => void;
 export declare const exportAsCompactJSON: (model: Model) => void;
 export declare const exportAsImage: (el: HTMLDivElement, size?: Size, scale?: number, bgcolor?: string) => Promise<string>;
+export declare const exportAsSVG: (el: HTMLDivElement, size?: Size, bgcolor?: string) => Promise<string>;

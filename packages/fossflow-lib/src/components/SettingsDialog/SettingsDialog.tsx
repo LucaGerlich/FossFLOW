@@ -18,6 +18,7 @@ import { ZoomSettings } from '../ZoomSettings/ZoomSettings';
 import { LabelSettings } from '../LabelSettings/LabelSettings';
 import { ConnectorSettings } from '../ConnectorSettings/ConnectorSettings';
 import { IconPackSettings } from '../IconPackSettings/IconPackSettings';
+import { LiveAnalyticsSettings } from '../LiveAnalytics/LiveAnalyticsSettings';
 import { useTranslation } from 'src/stores/localeStore';
 
 export interface SettingsDialogProps {
@@ -35,9 +36,10 @@ export interface SettingsDialogProps {
     enabledPacks: string[];
     onTogglePack: (packName: string, enabled: boolean) => void;
   };
+  showLiveAnalytics?: boolean;
 }
 
-export const SettingsDialog = ({ iconPackManager }: SettingsDialogProps) => {
+export const SettingsDialog = ({ iconPackManager, showLiveAnalytics = false }: SettingsDialogProps) => {
   const dialog = useUiStateStore((state) => state.dialog);
   const setDialog = useUiStateStore((state) => state.actions.setDialog);
   const [tabValue, setTabValue] = useState(0);
@@ -52,6 +54,37 @@ export const SettingsDialog = ({ iconPackManager }: SettingsDialogProps) => {
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
   };
+
+  // Build tab list dynamically
+  const tabs = [
+    { label: t('settings.hotkeys.title'), component: <HotkeySettings /> },
+    { label: t('settings.pan.title'), component: <PanSettings /> },
+    { label: 'Zoom', component: <ZoomSettings /> },
+    { label: 'Labels', component: <LabelSettings /> },
+    { label: t('settings.connector.title'), component: <ConnectorSettings /> }
+  ];
+
+  if (iconPackManager) {
+    tabs.push({
+      label: t('settings.iconPacks.title'),
+      component: (
+        <IconPackSettings
+          lazyLoadingEnabled={iconPackManager.lazyLoadingEnabled}
+          onToggleLazyLoading={iconPackManager.onToggleLazyLoading}
+          packInfo={iconPackManager.packInfo}
+          enabledPacks={iconPackManager.enabledPacks}
+          onTogglePack={iconPackManager.onTogglePack}
+        />
+      )
+    });
+  }
+
+  if (showLiveAnalytics) {
+    tabs.push({
+      label: 'Live Analytics',
+      component: <LiveAnalyticsSettings onClose={handleClose} />
+    });
+  }
 
   return (
     <Dialog
@@ -77,29 +110,13 @@ export const SettingsDialog = ({ iconPackManager }: SettingsDialogProps) => {
       </DialogTitle>
       <DialogContent dividers>
         <Tabs value={tabValue} onChange={handleTabChange} sx={{ borderBottom: 1, borderColor: 'divider' }}>
-          <Tab label={t('settings.hotkeys.title')} />
-          <Tab label={t('settings.pan.title')} />
-          <Tab label="Zoom" />
-          <Tab label="Labels" />
-          <Tab label={t('settings.connector.title')} />
-          {iconPackManager && <Tab label={t('settings.iconPacks.title')} />}
+          {tabs.map((tab, index) => (
+            <Tab key={index} label={tab.label} />
+          ))}
         </Tabs>
 
         <Box sx={{ mt: 2 }}>
-          {tabValue === 0 && <HotkeySettings />}
-          {tabValue === 1 && <PanSettings />}
-          {tabValue === 2 && <ZoomSettings />}
-          {tabValue === 3 && <LabelSettings />}
-          {tabValue === 4 && <ConnectorSettings />}
-          {tabValue === 5 && iconPackManager && (
-            <IconPackSettings
-              lazyLoadingEnabled={iconPackManager.lazyLoadingEnabled}
-              onToggleLazyLoading={iconPackManager.onToggleLazyLoading}
-              packInfo={iconPackManager.packInfo}
-              enabledPacks={iconPackManager.enabledPacks}
-              onTogglePack={iconPackManager.onTogglePack}
-            />
-          )}
+          {tabs[tabValue]?.component}
         </Box>
       </DialogContent>
       <DialogActions>

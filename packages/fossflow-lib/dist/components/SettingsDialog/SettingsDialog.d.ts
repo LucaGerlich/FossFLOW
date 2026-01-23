@@ -13,5 +13,6 @@ export interface SettingsDialogProps {
         enabledPacks: string[];
         onTogglePack: (packName: string, enabled: boolean) => void;
     };
+    showLiveAnalytics?: boolean;
 }
-export declare const SettingsDialog: ({ iconPackManager }: SettingsDialogProps) => import("react/jsx-runtime").JSX.Element;
+export declare const SettingsDialog: ({ iconPackManager, showLiveAnalytics }: SettingsDialogProps) => import("react/jsx-runtime").JSX.Element;

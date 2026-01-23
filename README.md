@@ -57,6 +57,15 @@ FossFLOW is a powerful, open-source Progressive Web App (PWA) for creating beaut
 - **Mode Selection** - Switch between click and drag modes in Settings → Connectors tab
 - **Better Reliability** - Click mode provides more predictable connection creation
 
+### Live Analytics (NEW)
+Transform your infrastructure diagrams into real-time monitoring dashboards:
+- **Multiple Data Sources** - Connect to Grafana, Prometheus, REST APIs, and webhooks
+- **Real-Time Status Indicators** - Color-coded health indicators (green/yellow/red) on nodes
+- **Mini Metrics Display** - Show live metric values directly on diagram nodes
+- **Threshold Configuration** - Set custom alert thresholds for each metric
+- **Grafana Panel Embedding** - View detailed dashboards in node tooltips
+- **See [Live Analytics Documentation](docs/LIVE_ANALYTICS.md)** for detailed setup instructions
+
 
 ## 🐳 Quick Deploy with Docker
 
