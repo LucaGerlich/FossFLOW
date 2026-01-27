@@ -20388,6 +20388,7 @@ var __webpack_exports__ = {};
         ],
         [EditorModeEnum.EXPLORABLE_READONLY]: [
             'ZOOM_CONTROLS',
+            'MAIN_MENU',
             'VIEW_TITLE'
         ],
         [EditorModeEnum.NON_INTERACTIVE]: []
