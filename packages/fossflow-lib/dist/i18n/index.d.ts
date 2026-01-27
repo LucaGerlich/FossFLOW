@@ -10,5 +10,6 @@ declare const locales: {
     'pl-PL': import("../types").LocaleProps;
     'id-ID': import("../types").LocaleProps;
     'it-IT': import("../types").LocaleProps;
+    'tr-TR': import("../types").LocaleProps;
 };
 export default locales;
