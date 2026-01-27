@@ -20547,7 +20547,8 @@ var __webpack_exports__ = {};
                 }),
                 dialog === DialogTypeEnum.HELP && /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(HelpDialog, {}),
                 dialog === DialogTypeEnum.SETTINGS && /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(SettingsDialog, {
-                    iconPackManager: iconPackManager || void 0
+                    iconPackManager: iconPackManager || void 0,
+                    showLiveAnalytics: true
                 }),
                 editorMode === EditorModeEnum.EDITABLE && /*#__PURE__*/ (0, jsx_runtime_namespaceObject.jsx)(ConnectorHintTooltip, {
                     toolMenuRef: toolMenuRef
