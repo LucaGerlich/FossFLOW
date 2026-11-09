@@ -31,6 +31,17 @@ FossFLOW is a powerful, open-source Progressive Web App (PWA) for creating beaut
 
 ---------
 
+## 🛰️ Live landscape (optional)
+
+Map your systems by hand as always, or connect a [Beszel](https://github.com/henrygd/beszel) hub. The map then discovers your servers and the Docker containers running on them, and shows live status and server vitals:
+- Colour appears only when something needs attention.
+- Stopped containers stay on the map as dimmed ghosts.
+- Selecting a server opens a vitals card with recent history.
+
+It reads Beszel with a read-only user, credentials stay on the server, and the Docker image keeps live data off unless HTTP Basic Auth is configured. A new **hairline** icon pack (server, container, database, cache, queue, gateway, clients, cloud) is available for hand-drawn diagrams too.
+
+Setup, security notes and troubleshooting: **[docs/LIVE.md](docs/LIVE.md)**.
+
 ## 🐳 Quick Deploy with Docker
 
 ```bash

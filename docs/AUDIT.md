@@ -6,6 +6,13 @@ Newest entries first.
 
 ---
 
+## 2026-11-09 — Docs: live landscape guide
+
+- **What:** New `docs/LIVE.md` covering what live data shows, how it works, Beszel read-only user setup (role `readonly`, **verified** on, server sharing or `SHARE_ALL_SYSTEMS`), environment variables, security notes, troubleshooting and the development workflow with the fake hub. Added a README section linking to it.
+- **Why:** Teams need to be able to set it up without reading code; the security trade-offs must be explicit.
+- **Security:** Documents the auth requirement, same-origin-only API, localhost binding, the read-only user and the risk of publishing port 3001.
+- **Verified:** Proofread against the implementation (variable names, defaults, log line, error messages, Beszel's `verified=true` auth rule from its collection snapshot).
+
 ## 2026-11-09 — App: live data polling and toolbar indicator
 
 - **What:**
