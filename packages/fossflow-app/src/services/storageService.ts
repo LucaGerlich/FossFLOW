@@ -24,10 +24,8 @@ class ServerStorage implements StorageService {
   private readonly AVAILABILITY_CACHE_MS = 60000; // Re-check every 60 seconds
 
   constructor(baseUrl: string = '') {
-    // In production (Docker), use relative paths (nginx proxy)
-    // In development, use localhost:3001
-    const isDevelopment = window.location.hostname === 'localhost' && window.location.port === '3000';
-    this.baseUrl = baseUrl || (isDevelopment ? 'http://localhost:3001' : '');
+    // Same origin everywhere: nginx proxies /api in Docker, the dev server in development.
+    this.baseUrl = baseUrl;
   }
 
   async isAvailable(): Promise<boolean> {
