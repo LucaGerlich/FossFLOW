@@ -5,6 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import rateLimit from 'express-rate-limit';
+import { setupLive } from './live/index.ts';
 
 dotenv.config();
 
@@ -31,8 +32,14 @@ function safeDiagramPath(id) {
 const readLimiter = rateLimit({ windowMs: 60_000, max: 200, standardHeaders: true, legacyHeaders: false });
 const writeLimiter = rateLimit({ windowMs: 60_000, max: 50, standardHeaders: true, legacyHeaders: false });
 
+// Behind the bundled nginx, use X-Forwarded-For so rate limits apply per client.
+app.set('trust proxy', 'loopback');
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
+
+// Optional live data (servers, containers, vitals). Disabled unless BESZEL_URL is set.
+const live = setupLive(process.env);
+app.use('/api/live', live.router);
 
 // Health check / Storage status endpoint
 app.get('/api/storage/status', (req, res) => {
@@ -234,6 +241,7 @@ if (STORAGE_ENABLED) {
 app.listen(PORT, HOST, () => {
   console.log(`FossFLOW Backend Server running on ${HOST}:${PORT}`);
   console.log(`Server storage: ${STORAGE_ENABLED ? 'ENABLED' : 'DISABLED'}`);
+  console.log(`Live data: ${live.summary}`);
   if (STORAGE_ENABLED) {
     console.log(`Storage path: ${STORAGE_PATH}`);
     console.log(`Git backup: ${ENABLE_GIT_BACKUP ? 'ENABLED' : 'DISABLED'}`);

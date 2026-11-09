@@ -6,6 +6,30 @@ Newest entries first.
 
 ---
 
+## 2026-11-09 — Backend: Beszel live source and `/api/live`
+
+- **What:**
+  - New `packages/fossflow-backend/live/` module in strict TypeScript, run directly by Node 24 (type stripping, no build step):
+    - `config.ts` validates the environment.
+    - `beszel.ts` is a read-only PocketBase client.
+    - `normalize.ts` holds the status rules and container kinds.
+    - `hub.ts` handles polling, the last good snapshot and 60 samples of history.
+    - `routes.ts` serves `GET /api/live/status` and `/snapshot`.
+    - `testing/fakeBeszel.ts` is a fake hub used by the tests and by `npm run dev:fake-beszel`.
+  - `server.js` mounts the router and sets `trust proxy` to `loopback`.
+  - Added `zod` (already in the monorepo), `@types/node` and `@types/express`; new `test`, `lint` and `dev:fake-beszel` scripts.
+- **Why:** The first live source for the map: servers, running containers and vitals from a team's existing Beszel hub, so nothing new has to be installed on servers.
+- **Security:**
+  - Credentials come only from the environment (`BESZEL_PASSWORD` or `BESZEL_PASSWORD_FILE` for Docker secrets) and never appear in logs, error messages or API responses (tested).
+  - The outbound URL is fixed by configuration, so requests can't be redirected to other hosts (no SSRF), and it is rejected if it embeds credentials.
+  - Every Beszel response is validated with zod; malformed records are skipped and counted.
+  - Requests time out after 10 s.
+  - `/api/live/*` is rate-limited (120/min), sends `Cache-Control: no-store` and sits behind the deployment's auth (nginx Basic Auth).
+  - `trust proxy: loopback` makes the new and existing rate limits count per client behind nginx instead of one shared bucket.
+  - The snapshot contains no hostnames or IPs of the Beszel hub or agents.
+  - Use a Beszel `readonly` user.
+- **Verified:** `tsc -p packages/fossflow-backend` is clean; 37/37 `node:test` tests pass (config validation, token reuse, re-login after 401, wrong credentials, unreachable hub, malformed records, pagination past 500, status rules, kind detection, stale containers, snapshot without secrets, last good snapshot kept during an outage, history). Smoke-tested the real `server.js` against the fake hub with `curl`; `/api/storage/status` is unchanged.
+
 ## 2026-11-09 — Remove browser-side Live Analytics
 
 - **What:** Deleted the Copilot-generated "Live Analytics" feature: `components/LiveAnalytics/`, `stores/liveAnalyticsStore.tsx`, `types/liveAnalytics.ts`, `schemas/liveAnalytics.ts` and `docs/LIVE_ANALYTICS.md`, about 3.5k lines. Restored the 10 files it had modified (`Isoflow.tsx`, `SettingsDialog.tsx`, `NodeSettings.tsx`, `UiOverlay.tsx`, `isoflowProps.ts`, `types/ui.ts`, `uiStateStore.tsx`, the index/export files and `README.md`) to their upstream versions; the fork had made no other changes to them. Separately fixed an upstream test teardown: the `EyeDropper` mock in `CustomColorInput.test.tsx` is now `configurable` so `delete` works in strict mode.
