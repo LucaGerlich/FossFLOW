@@ -6,6 +6,48 @@ Newest entries first.
 
 ---
 
+## 2026-11-09 — Platform phase 1, milestone 1: NestJS server with PostgreSQL
+
+- **What:** First step of the platform: n8n-style projects, users, server-stored landscapes and encrypted credentials. The design is in `docs/superpowers/specs/2026-11-09-platform-foundation-design.md`.
+  - **Server:**
+    - `packages/fossflow-backend` is rewritten as a NestJS 12 ESM app under `src/`, built with the Nest CLI and SWC with type checking on.
+    - Express `server.js` is removed.
+    - Configuration is validated with zod at startup (`DATABASE_URL`, `BACKEND_HOST`, `BACKEND_PORT`).
+    - PostgreSQL through Drizzle 0.45 and `pg`; SQL migrations live in `drizzle/` and are applied on boot before any request is served. The first table, `meta`, holds instance flags.
+    - `GET /api/health` is added, and the API answers under `/api`.
+    - A global rate limit of 120 requests per minute per client IP; health checks are exempt.
+  - **Live module:**
+    - Moved to `src/live`, behaviour unchanged.
+    - The Express router became a Nest controller with the same routes, the same `no-store` header and still no CORS headers.
+    - Still configured from `BESZEL_*` until milestone 5 moves it to credentials.
+  - **Tests:**
+    - The `node:test` suites moved to Vitest, the default for ESM Nest apps.
+    - New tests for configuration, CORS and the app against a real Postgres 18 started by Testcontainers (Docker required): health, migrations, a clean second start, and live routes.
+  - **Docker and dev setup:**
+    - The Dockerfile builds the server and installs only its production dependencies from the lockfile (`npm ci --omit=dev --workspace`) instead of an unlocked `npm install`.
+    - The entrypoint always starts the server.
+    - `compose.dev.yml` has a Postgres 18 service on 127.0.0.1:54320.
+    - `npm run dev:db`, and `packages/fossflow-backend/.env.example`.
+    - The dev proxy forwards all of `/api`, so the old storage client uses relative URLs.
+    - The root `build` includes the server.
+- **Why:** The platform needs a database, structure for many modules (auth, roles, projects, landscapes, credentials, connectors) and enforceable permissions. NestJS, PostgreSQL, Drizzle and better-auth were agreed as the stack.
+- **Temporary gap on this branch:** the old file-based "server storage" endpoints are gone. Landscapes return as proper server storage in milestone 4. The app falls back to session saving meanwhile.
+- **Security:**
+  - **Image leak:** `.dockerignore` excluded only the root `.env`. Building the image locally copied `packages/fossflow-backend/.env`, which holds the Beszel password, into the image. It now excludes `**/.env*` (except `.env.example`) and `**/node_modules`. The rebuilt image contains no `.env`.
+  - **zod:** the server moved to zod 4.6.7, because zod below 4.6.6 can exhaust memory when validating oversized collections (GHSA-mrhx-c7xc-m3w5). Adapted for zod 4: `z.ZodType<T, unknown>`, `.loose()`, and plain `z.number()`, which rejects infinite values in zod 4.
+  - **Config errors** name the variable, never its value. `DATABASE_URL` carries the database password.
+  - **Server production dependencies:** `npm audit --omit=dev` finds 0 vulnerabilities.
+  - **Pre-existing advisories, not from this change:** the app, lib and release tooling have their own (quill, i18next-http-backend, uuid, the lib's zod 3, undici through `@actions/*`). These are left for a separate clean-up.
+- **Packaging note:** npm kept installing drizzle-orm inside the backend workspace, where the hoisted drizzle-kit can't find it. Listing `drizzle-orm` in the root `devDependencies` hoists it to a single copy; the server still declares it as its own dependency.
+- **Verified:**
+  - Server `tsc` is clean, and the Vitest suite passes 51 of 51 against a real Postgres 18.
+  - Lib: 240 tests. The full `npm run build` (lib, app, server) and `npm run lint` pass.
+  - Dev: the new server on Postgres 18 applies migrations, `/api/health` is OK, and live data syncs from the real Beszel hub.
+  - The app works through the dev proxy: the live pill reads "Live · Beszel · no servers", and the console has no errors.
+  - Docker image: Node 24.22.2, 321 MB.
+    - With a database: the app is served, migrations run and health is OK; only port 80 is published.
+    - Without `DATABASE_URL`: the app is still served, the API returns 502, and the log says "DATABASE_URL is required".
+
 ## 2026-11-09 — Live pill shows the server count, and says so when there are none
 
 - **What:** The toolbar's live pill now reads "Live · Beszel · 3 servers". When the source is reachable but returns no servers, it turns amber, reads "Live · Beszel · no servers" and explains the fix in its tooltip: share the servers with the read-only user, or set `SHARE_ALL_SYSTEMS=true`. The new strings (`live.servers` with plural forms, `live.noServers`, `live.noServersHint`) are translated in all 13 app languages and mirrored in `src/i18n`. `docs/LIVE.md` gained a troubleshooting row.
