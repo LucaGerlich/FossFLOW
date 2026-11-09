@@ -6,6 +6,60 @@ Newest entries first.
 
 ---
 
+## 2026-11-10 — Platform phase 1, milestone 4: landscapes on the server
+
+- **What:**
+  - **Storage:** a `landscape` table: project, name, model (jsonb), an integer `version`, and who created and last saved it.
+  - **API:**
+    - `GET /api/landscapes` is the Overview across your projects.
+    - `GET`/`POST /api/projects/:id/landscapes` list, create and import.
+    - `GET`/`PUT`/`PATCH`/`DELETE /api/landscapes/:id` load, save, rename and delete.
+    - `POST /api/landscapes/:id/move` moves a landscape.
+  - **Access:** each route uses the milestone 3 guard on the landscape's project; it learned to look that project up from a landscape id. Viewers read, editors change, and only project admins and personal owners move. Moving also needs create rights in the target project.
+  - **Conflicts:** a save names the version it's based on. A stale save gets **409** with who saved last, so nothing is silently overwritten.
+  - **Model checks:** the server checks the outline of every model, bounds every collection, and requires every position to be a real number (see the bug below). Unknown fields are dropped, and built-in icon packs are never stored; the editor re-adds them on load, as the local save always did.
+  - **Deleting a team project:** `?transferTo=<project>` moves its landscapes to a project you can add landscapes to; otherwise they're deleted with it.
+  - **Legacy import:** diagrams from the old file storage (`<data dir>/diagrams/*.json`) are imported once into the owner's personal project, right after first-run setup or at startup. The run is claimed in `meta`, so it never happens twice. Unreadable files are skipped and logged, and the files themselves are never changed.
+  - **App:**
+    - **Lists:** the Overview and each project's Landscapes tab list landscapes, with project, last editor and time. Rename, move and delete appear only when your role allows. "New landscape" and "Import JSON" sit above the list.
+    - **Editor:** a full-screen editor with a slim bar showing the project, the name and the save status, plus Export JSON.
+      - **Autosave:** 1.5 s after the last change, one request at a time.
+      - **Conflicts:** a banner offers Reload or "Overwrite with mine".
+      - **Leaving the page:** a warning while changes are unsaved, and a last save on the way out.
+      - **Viewers:** see a read-only badge, and the canvas can be explored but not edited.
+    - **Shared defaults:** the core icon set, default colours and language lookup moved to `editorDefaults.ts`, shared by the local and platform editors.
+- **Why:** Milestone 4 of the platform plan: no more export and import to share landscapes.
+- **Bugs found and fixed while testing the editor with real mouse input:**
+  1. **Nodes dropped onto a new landscape got no position (lib).** When the editor loaded data before its canvas was measured, `getFitToViewParams` divided by a zero viewport and clamped zoom to **0**. Every mouse position became NaN, so dropped nodes were saved at `{x: null, y: null}` and the landscape could no longer be opened ("There is an error in your model"). The fit now keeps zoom 1 until the canvas has a size and never goes below `MIN_ZOOM`. A lib test fails on the old code. As a second safeguard, the server now refuses non-numeric positions, also with a test.
+  2. **Opening a landscape saved it.** The editor reports its tidied model on load (a default view, default colours). That counted as a change, so viewers with edit rights became "last editor", and two people opening a new landscape could get a false conflict. Until the first click or key press, the editor's model is now adopted as the baseline instead of saved. Verified: opening leaves version 1.
+- **Security:**
+  - Every landscape route is checked against the landscape's project. Landscapes you can't see answer 404.
+  - Models are validated and size-bounded.
+  - Moving requires rights on both projects.
+  - Import parsing never executes anything.
+- **Verified:**
+  - Server: **101** Vitest tests, including 11 landscape-flow tests against real Postgres:
+    - the legacy import, once only, skipping a broken file;
+    - create and import storing only imported icons;
+    - malformed, oversized and NaN-position models refused;
+    - lists and overview visibility;
+    - save, then stale save 409 with who saved, then overwrite;
+    - viewer and outsider limits;
+    - rename keeping the title in step;
+    - move rules;
+    - project delete with and without transfer;
+    - editor delete.
+  - Lib: **243** tests, including 3 new fit-to-view tests. Lint and app build pass; the app's `tsc` shows only the 13 earlier errors.
+  - **Editor with real input (Playwright, Chromium):**
+    - opening a new landscape doesn't save (version 1);
+    - dropping a node saves (version 2, real tile);
+    - a simulated colleague's save, then a second node, brings up the conflict banner;
+    - overwrite gives version 4 with 2 nodes;
+    - a reload shows both nodes with no model warning and 0 console errors.
+  - **Browser pane:** the Overview list and the editor bar look right. The dev database was reset afterwards.
+  - **Docker image:** with an old `diagrams/` folder mounted, setup imports it into the owner's space and the file stays untouched. Saving works, and a stale save is refused.
+- **Not yet:** the local-mode app still carries the old server-storage client and the `/display/:id` route. No server serves them any more, so they're cleanup for milestone 6.
+
 ## 2026-11-09 — Platform phase 1, milestone 3: projects and project roles
 
 - **What:**
