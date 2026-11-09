@@ -6,6 +6,55 @@ Newest entries first.
 
 ---
 
+## 2026-11-09 — Platform phase 1, milestone 3: projects and project roles
+
+- **What:**
+  - **Projects (n8n's model):** a `project` table, plus `project_relation` holding one role per member per project.
+    - **Personal projects:** everyone has exactly one. It's created with the account, and at startup for any account that predates projects. A partial unique index guarantees one per user, even when two requests race.
+    - **Team projects:** created only by owners and admins. The creator becomes project admin.
+  - **Roles and scopes:** project roles Admin, Editor and Viewer, plus `personalOwner` for your own space. Each maps to n8n-style scopes:
+    - Admin: every scope.
+    - Editor: content only (`landscape:*` and `credential:*`, including `credential:use`), but not members, settings or moving.
+    - Viewer: `project:read`, `landscape:read` and `credential:read` only, and can't use credentials.
+    - Personal owner: all content, but the project can't be renamed, deleted or shared.
+  - **Instance level:** a new `project:create` scope. Instance owners and admins get `project:manageAll`: they see every team project and hold full scopes in any project, like n8n's owner and admin.
+  - **Enforcement:** one guard, `@RequireProjectScope(scope)`, resolves your role for the project in the route and answers **404** for projects you can't see, so their existence doesn't leak, and 403 for missing scopes. Milestones 4 and 5 reuse it for landscapes and credentials.
+  - **API:**
+    - `GET /api/projects` returns yours (owners and admins also get every team project), each with your role and scopes.
+    - `POST`, `GET`, `PATCH` and `DELETE /api/projects/:id`.
+    - `GET /api/projects/:id/candidates`.
+    - `PUT` and `DELETE /api/projects/:id/members/:userId`.
+    - A team project always keeps at least one admin (409 otherwise).
+  - **App:**
+    - The sidebar shows Overview, Personal and Projects, with a "+" for owners and admins that opens a new-project dialog.
+    - The project page has n8n-style tabs: Landscapes, and Settings for project admins. Settings cover the name, members with role pickers, adding people, and deleting the project behind a confirmation step.
+- **Why:** Milestone 3 of the platform plan. Projects are the "multiple infrastructures" you asked for, and landscapes and credentials are stored inside them from milestone 4.
+- **Fixed during browser testing:** the project tabs used relative links. React Router 7 resolves those against the full URL inside a splat route, so "Landscapes" stayed highlighted on the Settings page. The tabs now use absolute paths.
+- **Security:**
+  - Projects you can't see answer 404.
+  - Editors and viewers can't touch settings or members (tested for every route).
+  - Personal projects can't be shared, renamed or deleted.
+  - Unknown roles are refused.
+  - Instance-level and project-level checks share one scope vocabulary, ready for custom roles.
+- **Verified:**
+  - Server `tsc` clean. **90** Vitest tests, including 9 project-flow tests against real Postgres:
+    - one personal project per account;
+    - privacy;
+    - who can create team projects;
+    - visibility for owners and admins;
+    - role scopes for editors and viewers;
+    - settings refused for non-admins;
+    - the last-admin protection;
+    - rename and delete rules;
+    - personal projects created at startup for older accounts.
+  - Plus 5 role-mapping tests.
+  - Lib 240 tests, lint and app build pass; the app's `tsc` shows only the 13 earlier errors.
+  - **Browser:**
+    - as owner: the project appears in the sidebar; the Settings tab works; a member added as Viewer is listed with role pickers.
+    - as that Viewer: only the Landscapes tab, no "+", and the settings URL redirects.
+    - The dev database was reset afterwards.
+  - **Docker image through nginx:** setup creates the personal project, and team project creation and listing work.
+
 ## 2026-11-09 — Platform phase 1, milestone 2: logins, owner setup and invitations
 
 - **What:**
