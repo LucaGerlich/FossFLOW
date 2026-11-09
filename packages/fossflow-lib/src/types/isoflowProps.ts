@@ -1,6 +1,7 @@
 import type { EditorModeEnum, MainMenuOptions } from './common';
 import type { Model } from './model';
 import type { RendererProps } from './rendererProps';
+import type { LiveSnapshot } from 'src/live/types';
 
 export type InitialData = Model & {
   fitToView?: boolean;
@@ -230,4 +231,10 @@ export interface IsoflowProps {
   renderer?: RendererProps;
   locale?: LocaleProps;
   iconPackManager?: IconPackManagerProps;
+  /**
+   * Optional live data (servers, containers, vitals). When set, newly
+   * discovered items are placed automatically (editable mode) and bound items
+   * show their live status. Omit for plain diagramming.
+   */
+  live?: LiveSnapshot;
 }

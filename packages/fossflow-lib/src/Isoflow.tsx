@@ -13,6 +13,7 @@ import { UiOverlay } from 'src/components/UiOverlay/UiOverlay';
 import { UiStateProvider, useUiStateStore } from 'src/stores/uiStateStore';
 import { INITIAL_DATA, MAIN_MENU_OPTIONS } from 'src/config';
 import { useInitialDataManager } from 'src/hooks/useInitialDataManager';
+import { LiveSync } from 'src/live/LiveSync';
 import enUS from 'src/i18n/en-US';
 
 const App = ({
@@ -26,6 +27,7 @@ const App = ({
   renderer,
   locale = enUS,
   iconPackManager,
+  live
 }: IsoflowProps) => {
   const uiStateActions = useUiStateStore((state) => {
     return state.actions;
@@ -90,6 +92,7 @@ const App = ({
         <Renderer {...renderer} />
         <UiOverlay />
       </Box>
+      {live && <LiveSync snapshot={live} />}
     </>
   );
 };

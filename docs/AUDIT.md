@@ -6,6 +6,21 @@ Newest entries first.
 
 ---
 
+## 2026-11-09 — Live bindings and automatic placement
+
+- **What:**
+  - Nodes and rectangles accept an optional `live: { key }` field (schema in `schemas/common.ts`, 1–300 characters).
+  - New `live/types.ts` (mirrors the backend contract), a pure `live/sync.ts` (`syncLiveInventory`) and `live/LiveSync.tsx`, mounted by a new optional `<Isoflow live={snapshot}>` prop.
+  - Pasted copies drop `live`. The compact export carries the key as an optional 4th field.
+  - `RECTANGLE_DEFAULTS` excludes `live`.
+- **Why:** Discovered servers and containers should appear on their own, and stay where people put them with their notes, across redeploys.
+  - New server: a light plate to the right of existing content, with the server node in the first slot and its containers in a 4-column grid two tiles apart.
+  - New container on a known server: the next free slot, growing the plate by one row when it's full.
+  - Never moves or deletes anything. If a person deletes a server's plate, its new containers aren't placed loose.
+  - Runs only in editable mode; read-only displays never change the diagram.
+- **Security:** Keys are length-limited by the schema. Placement goes through the existing reducers and view validation, and errors are caught and logged without breaking the editor.
+- **Verified:** Lib `tsc` is clean; 30/30 suites and 225/225 tests pass. New: 10 sync tests (first placement and model-schema validity, idempotence, next free slot, plate growth, hand-moved items kept, occupied slots skipped, deleted plate respected, multiple servers, unknown view) and 3 binding tests (schema, key limits, compact round-trip). Paste stripping is a two-line change in the clipboard hook, which has no test harness; it will be checked in the browser during end-to-end verification.
+
 ## 2026-11-09 — Hairline icon pack
 
 - **What:** New `packages/fossflow-lib/src/live/hairlineIcons.ts` with eight isometric icons (server, container, database, cache, queue, gateway, clients/globe, cloud service) in the design file's hairline-ink style. The SVGs are generated in code from shared geometry and use the renderer's own projection ratio (`TILE_PROJECTION_MULTIPLIERS`, true 30° isometric). They are exported from the lib as `HAIRLINE_ICONS`, `HAIRLINE_ICON_IDS` and `getHairlineStatusOffset`, and added to the app's core icons.

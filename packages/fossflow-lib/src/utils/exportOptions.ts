@@ -44,7 +44,9 @@ export const transformToCompactFormat = (model: Model) => {
   const compactItems = items.map((item, index) => [
     item.name.substring(0, 30), // Truncated name
     item.icon || 'block', // Icon reference only (no base64)
-    item.description?.substring(0, 100) || '' // Truncated description
+    item.description?.substring(0, 100) || '', // Truncated description
+    // Live binding, so re-imported diagrams don't get discovered items twice
+    ...(item.live ? [item.live.key] : [])
   ]);
 
   const compactViews = views.map((view) => {
@@ -78,7 +80,8 @@ export const transformFromCompactFormat = (compactModel: any): Model => {
     id: `item_${index}`,
     name: item[0],
     icon: item[1],
-    description: item[2] || '' // Restore description if available
+    description: item[2] || '', // Restore description if available
+    ...(typeof item[3] === 'string' && item[3] ? { live: { key: item[3] } } : {})
   }));
 
   // Resolve icons from the internal icon library
