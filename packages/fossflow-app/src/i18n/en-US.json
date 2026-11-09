@@ -66,5 +66,84 @@
         "servers_other": "{{count}} servers",
         "noServers": "no servers",
         "noServersHint": "Connected, but Beszel shares no servers with this user. Add the user to each server in Beszel's admin panel, or start the hub with SHARE_ALL_SYSTEMS=true."
+    },
+    "platform": {
+        "loading": "Loading…",
+        "setup": {
+            "title": "Set up FossFLOW",
+            "intro": "Create the owner account. You can invite your team right after.",
+            "submit": "Create owner account"
+        },
+        "signIn": {
+            "title": "Sign in",
+            "submit": "Sign in",
+            "forgot": "Forgot your password?",
+            "forgotSubmit": "Send reset link",
+            "forgotSent": "If an account exists for this email, a reset link is on its way.",
+            "backToSignIn": "Back to sign in",
+            "noMail": "Forgot your password? Ask an admin for a reset link."
+        },
+        "invite": {
+            "title": "Join FossFLOW",
+            "intro": "You were invited as {{role}} with {{email}}. Choose your name and a password.",
+            "submit": "Create account",
+            "invalid": "This invitation is invalid, expired or already used. Ask an admin for a new one."
+        },
+        "reset": {
+            "title": "Choose a new password",
+            "submit": "Save password",
+            "done": "Your password is changed. You can sign in now.",
+            "invalid": "This reset link is invalid or has expired. Ask for a new one."
+        },
+        "fields": {
+            "name": "Name",
+            "email": "Email",
+            "password": "Password",
+            "newPassword": "New password",
+            "role": "Role"
+        },
+        "passwordHint": "At least 8 characters, with a number and a capital letter.",
+        "nav": {
+            "label": "Main",
+            "overview": "Overview",
+            "settings": "Settings",
+            "users": "Users",
+            "signOut": "Sign out"
+        },
+        "roles": {
+            "owner": "Owner",
+            "admin": "Admin",
+            "member": "Member"
+        },
+        "home": {
+            "title": "Overview",
+            "empty": "No landscapes yet.",
+            "emptyHint": "Landscapes from your projects will appear here."
+        },
+        "users": {
+            "title": "Users",
+            "invite": "Invite",
+            "inviteTitle": "Invite someone",
+            "inviteSubmit": "Create invitation",
+            "cancel": "Cancel",
+            "done": "Done",
+            "linkTitle": "Invitation link",
+            "linkHint": "Send this link to {{email}}. It works once and expires in 7 days. It is shown only now.",
+            "emailedHint": "We emailed the link to {{email}}. You can also share it yourself; it is shown only now.",
+            "copy": "Copy link",
+            "copied": "Copied",
+            "pending": "Pending invitations",
+            "noPending": "No pending invitations.",
+            "expires": "Expires {{date}}",
+            "revoke": "Revoke",
+            "resetLink": "Reset link",
+            "resetTitle": "Password reset link",
+            "resetHint": "Give this link to {{name}}. It works once and expires in 1 hour.",
+            "you": "you",
+            "joined": "Joined {{date}}"
+        },
+        "errors": {
+            "generic": "Something went wrong. Please try again."
+        }
     }
 }
