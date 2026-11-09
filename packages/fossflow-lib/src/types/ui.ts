@@ -193,7 +193,6 @@ export interface UiState {
   expandLabels: boolean;
   iconPackManager: IconPackManagerProps | null;
   isAnythingCopied: boolean;
-  liveAnalyticsEnabled: boolean;
 }
 
 export interface UiStateActions {
@@ -222,7 +221,6 @@ export interface UiStateActions {
   setExpandLabels: (expand: boolean) => void;
   setIconPackManager: (iconPackManager: IconPackManagerProps | null) => void;
   setIsAnythingCopied: (isAnythingCopied: boolean) => void;
-  setLiveAnalyticsEnabled: (enabled: boolean) => void;
 }
 
 export type UiStateStore = UiState & {

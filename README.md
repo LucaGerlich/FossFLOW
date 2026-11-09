@@ -29,15 +29,6 @@ FossFLOW is a powerful, open-source Progressive Web App (PWA) for creating beaut
  
 <img width="100%" alt="FossFLOW-Isometric-Diagramming-Tool" src="https://github.com/user-attachments/assets/15956888-991a-4b5e-9849-dbd82d6f9308" />
 
-### Live Analytics (NEW)
-Transform your infrastructure diagrams into real-time monitoring dashboards:
-- **Multiple Data Sources** - Connect to Grafana, Prometheus, REST APIs, and webhooks
-- **Real-Time Status Indicators** - Color-coded health indicators (green/yellow/red) on nodes
-- **Mini Metrics Display** - Show live metric values directly on diagram nodes
-- **Threshold Configuration** - Set custom alert thresholds for each metric
-- **Grafana Panel Embedding** - View detailed dashboards in node tooltips
-- **See [Live Analytics Documentation](docs/LIVE_ANALYTICS.md)** for detailed setup instructions
-
 ---------
 
 ## 🐳 Quick Deploy with Docker

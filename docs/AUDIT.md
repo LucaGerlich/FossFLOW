@@ -6,6 +6,13 @@ Newest entries first.
 
 ---
 
+## 2026-11-09 — Remove browser-side Live Analytics
+
+- **What:** Deleted the Copilot-generated "Live Analytics" feature: `components/LiveAnalytics/`, `stores/liveAnalyticsStore.tsx`, `types/liveAnalytics.ts`, `schemas/liveAnalytics.ts` and `docs/LIVE_ANALYTICS.md`, about 3.5k lines. Restored the 10 files it had modified (`Isoflow.tsx`, `SettingsDialog.tsx`, `NodeSettings.tsx`, `UiOverlay.tsx`, `isoflowProps.ts`, `types/ui.ts`, `uiStateStore.tsx`, the index/export files and `README.md`) to their upstream versions; the fork had made no other changes to them. Separately fixed an upstream test teardown: the `EyeDropper` mock in `CustomColorInput.test.tsx` is now `configurable` so `delete` works in strict mode.
+- **Why:** The feature never worked. Its overlay was never mounted, its binding dialog couldn't be reached, its store didn't re-render, and Grafana and webhook sources were stubs. It is replaced by the server-side live layer.
+- **Security:** Removes code that fetched Grafana, Prometheus and REST endpoints directly from the browser with user-entered credentials and required those services to allow cross-origin requests.
+- **Verified:** `tsc --noEmit` passes; 27/27 suites and 209/209 tests pass; lib and app build. `git diff upstream/master -- packages README.md` is empty for every touched file.
+
 ## 2026-11-09 — Live landscape v1: setup
 
 - **What:** Created branch `feat/live-landscape` from `development`. Added the design spec at `docs/superpowers/specs/2026-11-09-live-landscape-design.md` and this audit log. Corrected `.nvmrc` from `16.19.0` to `24`, matching the `engines` field (`node >= 24`), the Dockerfile and CI.

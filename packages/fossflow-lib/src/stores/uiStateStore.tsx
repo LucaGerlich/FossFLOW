@@ -42,7 +42,6 @@ const initialState = () => {
       expandLabels: false, // Default to collapsed labels
       iconPackManager: null, // Will be set by Isoflow if provided
       isAnythingCopied: false,
-      liveAnalyticsEnabled: false, // Live analytics disabled by default
 
       actions: {
         setView: (view) => {
@@ -129,9 +128,6 @@ const initialState = () => {
         },
         setIsAnythingCopied: (isAnythingCopied) => {
           set({ isAnythingCopied })
-        },
-        setLiveAnalyticsEnabled: (liveAnalyticsEnabled) => {
-          set({ liveAnalyticsEnabled });
         }
       }
     };
