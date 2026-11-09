@@ -194,6 +194,22 @@ const locale: LocaleProps = {
     configPath2: "in alto a sinistra per accedere alla Configurazione.",
     canDisable: "Puoi disattivare questo comportamento se lo desideri.",
     signature: "-Stan"
+  },
+  live: {
+    cpu: "CPU",
+    memory: "Memoria",
+    disk: "Disco",
+    network: "Rete",
+    load: "Carico",
+    uptime: "Uptime",
+    temperature: "Temp.",
+    stopped: "fermo",
+    unknown: "sconosciuto",
+    unhealthy: "non integro",
+    starting: "in avvio",
+    down: "offline",
+    update: "Aggiornamento",
+    live: "Live"
   }
 };
 

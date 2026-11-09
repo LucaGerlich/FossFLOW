@@ -46,7 +46,7 @@ const EDITOR_MODE_MAPPING: EditorModeMapping = {
     'MAIN_MENU',
     'VIEW_TITLE'
   ],
-  [EditorModeEnum.EXPLORABLE_READONLY]: ['ZOOM_CONTROLS', 'MAIN_MENU', 'VIEW_TITLE'],
+  [EditorModeEnum.EXPLORABLE_READONLY]: ['ZOOM_CONTROLS', 'VIEW_TITLE'],
   [EditorModeEnum.NON_INTERACTIVE]: []
 };
 
@@ -253,7 +253,7 @@ export const UiOverlay = () => {
 
       {dialog === DialogTypeEnum.HELP && <HelpDialog />}
 
-      {dialog === DialogTypeEnum.SETTINGS && <SettingsDialog iconPackManager={iconPackManager || undefined} showLiveAnalytics={true} />}
+      {dialog === DialogTypeEnum.SETTINGS && <SettingsDialog iconPackManager={iconPackManager || undefined} />}
 
       {/* Show hint tooltips only in editable mode */}
       {editorMode === EditorModeEnum.EDITABLE && <ConnectorHintTooltip toolMenuRef={toolMenuRef} />}

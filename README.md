@@ -29,16 +29,18 @@ FossFLOW is a powerful, open-source Progressive Web App (PWA) for creating beaut
  
 <img width="100%" alt="FossFLOW-Isometric-Diagramming-Tool" src="https://github.com/user-attachments/assets/15956888-991a-4b5e-9849-dbd82d6f9308" />
 
-### Live Analytics (NEW)
-Transform your infrastructure diagrams into real-time monitoring dashboards:
-- **Multiple Data Sources** - Connect to Grafana, Prometheus, REST APIs, and webhooks
-- **Real-Time Status Indicators** - Color-coded health indicators (green/yellow/red) on nodes
-- **Mini Metrics Display** - Show live metric values directly on diagram nodes
-- **Threshold Configuration** - Set custom alert thresholds for each metric
-- **Grafana Panel Embedding** - View detailed dashboards in node tooltips
-- **See [Live Analytics Documentation](docs/LIVE_ANALYTICS.md)** for detailed setup instructions
-
 ---------
+
+## 🛰️ Live landscape (optional)
+
+Map your systems by hand as always, or connect a [Beszel](https://github.com/henrygd/beszel) hub. The map then discovers your servers and the Docker containers running on them, and shows live status and server vitals:
+- Colour appears only when something needs attention.
+- Stopped containers stay on the map as dimmed ghosts.
+- Selecting a server opens a vitals card with recent history.
+
+It reads Beszel with a read-only user, credentials stay on the server, and the Docker image keeps live data off unless HTTP Basic Auth is configured. A new **hairline** icon pack (server, container, database, cache, queue, gateway, clients, cloud) is available for hand-drawn diagrams too.
+
+Setup, security notes and troubleshooting: **[docs/LIVE.md](docs/LIVE.md)**.
 
 ## 🐳 Quick Deploy with Docker
 

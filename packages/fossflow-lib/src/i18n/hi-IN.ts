@@ -194,6 +194,22 @@ const locale: LocaleProps = {
     configPath2: "कॉन्फ़िगरेशन तक पहुंचने के लिए ऊपरी बाएं में।",
     canDisable: "यदि आप चाहें तो आप इस व्यवहार को अक्षम कर सकते हैं।",
     signature: "-Stan"
+  },
+  live: {
+    cpu: "CPU",
+    memory: "मेमोरी",
+    disk: "डिस्क",
+    network: "नेटवर्क",
+    load: "लोड",
+    uptime: "अपटाइम",
+    temperature: "तापमान",
+    stopped: "रुका हुआ",
+    unknown: "अज्ञात",
+    unhealthy: "अस्वस्थ",
+    starting: "शुरू हो रहा",
+    down: "बंद",
+    update: "अपडेट",
+    live: "लाइव"
   }
 };
 

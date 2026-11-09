@@ -5,6 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import rateLimit from 'express-rate-limit';
+import { setupLive } from './live/index.ts';
 
 dotenv.config();
 
@@ -30,6 +31,15 @@ function safeDiagramPath(id) {
 
 const readLimiter = rateLimit({ windowMs: 60_000, max: 200, standardHeaders: true, legacyHeaders: false });
 const writeLimiter = rateLimit({ windowMs: 60_000, max: 50, standardHeaders: true, legacyHeaders: false });
+
+// Behind the bundled nginx, use X-Forwarded-For so rate limits apply per client.
+app.set('trust proxy', 'loopback');
+
+// Optional live data (servers, containers, vitals). Disabled unless BESZEL_URL is set.
+// Mounted before cors() on purpose: no CORS headers, so other websites cannot read
+// the infrastructure inventory from a visitor's browser. The app calls it same-origin.
+const live = setupLive(process.env);
+app.use('/api/live', live.router);
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
@@ -234,6 +244,13 @@ if (STORAGE_ENABLED) {
 app.listen(PORT, HOST, () => {
   console.log(`FossFLOW Backend Server running on ${HOST}:${PORT}`);
   console.log(`Server storage: ${STORAGE_ENABLED ? 'ENABLED' : 'DISABLED'}`);
+  console.log(`Live data: ${live.summary}`);
+  if (live.hub && !['127.0.0.1', '::1', 'localhost'].includes(HOST)) {
+    console.warn(
+      `WARNING: live data is served on ${HOST}:${PORT} without authentication. ` +
+        'Put the backend behind an authenticating proxy or set BACKEND_HOST=127.0.0.1 (see docs/LIVE.md).'
+    );
+  }
   if (STORAGE_ENABLED) {
     console.log(`Storage path: ${STORAGE_PATH}`);
     console.log(`Git backup: ${ENABLE_GIT_BACKUP ? 'ENABLED' : 'DISABLED'}`);

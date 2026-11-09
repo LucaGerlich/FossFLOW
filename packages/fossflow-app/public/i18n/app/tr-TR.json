@@ -58,5 +58,9 @@
         "autoSaveFailed": "Depolama dolu! Lütfen alan açmak için Depolama Yöneticisi'ni kullanın.",
         "beforeUnload": "Kaydedilmemiş değişiklikleriniz var. Ayrılmak istediğinizden emin misiniz?",
         "quotaExceeded": "Depolama kotası aşıldı. Lütfen önemli diyagramları dışa aktarın ve biraz alan açın."
+    },
+    "live": {
+        "label": "Canlı",
+        "unavailable": "Canlı veriler kullanılamıyor"
     }
 }

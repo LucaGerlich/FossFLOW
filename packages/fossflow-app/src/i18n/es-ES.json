@@ -58,5 +58,9 @@
         "autoSaveFailed": "¡Almacenamiento lleno! Por favor usa el gestor de almacenamiento para liberar espacio.",
         "beforeUnload": "Tienes cambios sin guardar. ¿Estás seguro de que deseas salir?",
         "quotaExceeded": "Cuota de almacenamiento excedida. Por favor exporta los diagramas importantes y libera espacio."
+    },
+    "live": {
+        "label": "En vivo",
+        "unavailable": "Datos en vivo no disponibles"
     }
 }

@@ -1,4 +1,5 @@
-const CACHE_NAME = 'fossflow-v1';
+// v2: v1 cached /api responses; bumping the name purges them on activate.
+const CACHE_NAME = 'fossflow-v2';
 
 // Get the base path from the service worker's location
 const swPath = self.location.pathname;
@@ -25,6 +26,17 @@ self.addEventListener('install', event => {
 });
 
 self.addEventListener('fetch', event => {
+  const url = new URL(event.request.url);
+  // Never cache API calls (live data, diagram storage) or non-GET requests:
+  // let the browser handle them directly.
+  if (
+    event.request.method !== 'GET' ||
+    url.origin !== self.location.origin ||
+    url.pathname.startsWith('/api/')
+  ) {
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request)
       .then(response => {

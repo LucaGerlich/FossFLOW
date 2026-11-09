@@ -194,6 +194,22 @@ const locale: LocaleProps = {
     configPath2: "в верхнем левом углу, чтобы получить доступ к Конфигурации.",
     canDisable: "Вы можете отключить это поведение, если хотите.",
     signature: "-Stan"
+  },
+  live: {
+    cpu: "ЦП",
+    memory: "Память",
+    disk: "Диск",
+    network: "Сеть",
+    load: "Нагрузка",
+    uptime: "Аптайм",
+    temperature: "Темп.",
+    stopped: "остановлен",
+    unknown: "неизвестно",
+    unhealthy: "неисправен",
+    starting: "запускается",
+    down: "недоступен",
+    update: "Обновление",
+    live: "Онлайн"
   }
 };
 

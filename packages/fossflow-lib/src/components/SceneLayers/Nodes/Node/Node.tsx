@@ -11,6 +11,7 @@ import { ViewItem } from 'src/types';
 import { useModelItem } from 'src/hooks/useModelItem';
 import { ExpandableLabel } from 'src/components/Label/ExpandableLabel';
 import { RichTextEditor } from 'src/components/RichTextEditor/RichTextEditor';
+import { useLiveEntity } from 'src/live/LiveContext';
 
 interface Props {
   node: ViewItem;
@@ -20,6 +21,9 @@ interface Props {
 export const Node = memo(({ node, order }: Props) => {
   const modelItem = useModelItem(node.id);
   const { iconComponent } = useIcon(modelItem?.icon);
+  const live = useLiveEntity(modelItem?.live?.key);
+  // Stopped containers and vanished servers stay on the map as "ghosts".
+  const dimmed = live?.status === 'stopped' || live?.status === 'unknown';
 
   const position = useMemo(() => {
     return getTilePosition({
@@ -48,7 +52,8 @@ export const Node = memo(({ node, order }: Props) => {
     <Box
       sx={{
         position: 'absolute',
-        zIndex: order
+        zIndex: order,
+        ...(dimmed && { opacity: 0.35, filter: 'grayscale(1)' })
       }}
     >
       <Box

@@ -58,5 +58,9 @@
         "autoSaveFailed": "存储空间已满！请使用存储管理器释放空间。",
         "beforeUnload": "您有未保存的更改。您确定要离开吗？",
         "quotaExceeded": "存储配额已超出。请导出重要图表并清理一些空间。"
+    },
+    "live": {
+        "label": "实时",
+        "unavailable": "实时数据不可用"
     }
 }

@@ -194,6 +194,22 @@ const locale: LocaleProps = {
     configPath2: "以访问配置。",
     canDisable: "如果您愿意，可以禁用此行为。",
     signature: "-Stan"
+  },
+  live: {
+    cpu: "CPU",
+    memory: "内存",
+    disk: "磁盘",
+    network: "网络",
+    load: "负载",
+    uptime: "运行时间",
+    temperature: "温度",
+    stopped: "已停止",
+    unknown: "未知",
+    unhealthy: "不健康",
+    starting: "启动中",
+    down: "离线",
+    update: "更新",
+    live: "实时"
   }
 };
 

@@ -52,6 +52,9 @@ EXPOSE 80 3001
 ENV ENABLE_SERVER_STORAGE=true
 ENV STORAGE_PATH=/data/diagrams
 ENV BACKEND_PORT=3001
+# nginx reaches the backend on localhost; don't expose the API (live inventory)
+# to other containers around nginx's Basic Auth. Override for direct access.
+ENV BACKEND_HOST=127.0.0.1
 
 # Start services
 ENTRYPOINT ["/docker-entrypoint.sh"]

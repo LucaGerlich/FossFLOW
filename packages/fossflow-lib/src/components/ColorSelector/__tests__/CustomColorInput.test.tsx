@@ -105,6 +105,7 @@ describe('CustomColorInput', () => {
       // Mock EyeDropper API
       Object.defineProperty(window, 'EyeDropper', {
         writable: true,
+        configurable: true, // allows the afterAll `delete` in strict mode
         value: jest.fn().mockImplementation(() => ({
           open: jest.fn().mockResolvedValue({ sRGBHex: '#123456' })
         }))

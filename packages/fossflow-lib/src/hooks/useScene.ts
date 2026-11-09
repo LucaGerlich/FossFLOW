@@ -485,8 +485,10 @@ export const useScene = () => {
   
         if (pastedObject.type === 'ITEM') {
           const { viewItem, modelItem } = pastedObject.item;
+          // A copy is a new item: never let two nodes claim the same live entity.
+          const { live: _live, ...unboundModelItem } = modelItem;
           const stateWithNewModel = createModelItem({
-            ...modelItem,
+            ...unboundModelItem,
             id: newId
           }, state)
           
@@ -497,8 +499,9 @@ export const useScene = () => {
             tile: getTargetTile(viewItem.tile)
           }, stateWithNewModel)
         } else if (pastedObject.type === 'RECTANGLE') {
+          const { live: _live, ...unboundRectangle } = pastedObject.item;
           state = createRectangle({
-            ...pastedObject.item, 
+            ...unboundRectangle,
             id: newId,
             from: getTargetTile(pastedObject.item.from),
             to: getTargetTile(pastedObject.item.to)

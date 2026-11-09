@@ -1,6 +1,7 @@
 import type { EditorModeEnum, MainMenuOptions } from './common';
 import type { Model } from './model';
 import type { RendererProps } from './rendererProps';
+import type { LiveSnapshot } from 'src/live/types';
 
 export type InitialData = Model & {
   fitToView?: boolean;
@@ -201,6 +202,22 @@ export interface LocaleProps {
     canDisable: string;
     signature: string;
   };
+  live: {
+    cpu: string;
+    memory: string;
+    disk: string;
+    network: string;
+    load: string;
+    uptime: string;
+    temperature: string;
+    stopped: string;
+    unknown: string;
+    unhealthy: string;
+    starting: string;
+    down: string;
+    update: string;
+    live: string;
+  };
   // other namespaces can be added here
 }
 
@@ -219,15 +236,6 @@ export interface IconPackManagerProps {
   onTogglePack: (packName: string, enabled: boolean) => void;
 }
 
-export interface LiveAnalyticsProps {
-  /** Enable live analytics feature */
-  enabled?: boolean;
-  /** Initial configuration for live analytics */
-  initialConfig?: import('./liveAnalytics').LiveAnalyticsConfig;
-  /** Event handlers for live analytics events */
-  eventHandlers?: import('../stores/liveAnalyticsStore').LiveAnalyticsEventHandlers;
-}
-
 export interface IsoflowProps {
   initialData?: InitialData;
   mainMenuOptions?: MainMenuOptions;
@@ -239,6 +247,10 @@ export interface IsoflowProps {
   renderer?: RendererProps;
   locale?: LocaleProps;
   iconPackManager?: IconPackManagerProps;
-  /** Live analytics configuration */
-  liveAnalytics?: LiveAnalyticsProps;
+  /**
+   * Optional live data (servers, containers, vitals). When set, newly
+   * discovered items are placed automatically (editable mode) and bound items
+   * show their live status. Omit for plain diagramming.
+   */
+  live?: LiveSnapshot;
 }

@@ -11,6 +11,7 @@
     "dev:win": "cross-env NODE_ENV=development npm run start --workspace=packages/fossflow-app",
     "dev:lib": "npm run dev --workspace=packages/fossflow-lib",
     "dev:backend": "npm run dev --workspace=packages/fossflow-backend",
+    "dev:fake-beszel": "npm run dev:fake-beszel --workspace=packages/fossflow-backend",
     "build": "npm run build:lib && npm run build:app",
     "build:lib": "npm run build --workspace=packages/fossflow-lib",
     "build:app": "npm run build --workspace=packages/fossflow-app",

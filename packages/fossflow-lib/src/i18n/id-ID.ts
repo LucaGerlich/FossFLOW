@@ -194,6 +194,22 @@ const locale: LocaleProps = {
     configPath2: "di kiri atas untuk mengakses Konfigurasi.",
     canDisable: "Anda dapat menonaktifkan perilaku ini jika diinginkan.",
     signature: "-Stan"
+  },
+  live: {
+    cpu: "CPU",
+    memory: "Memori",
+    disk: "Disk",
+    network: "Jaringan",
+    load: "Beban",
+    uptime: "Waktu aktif",
+    temperature: "Suhu",
+    stopped: "berhenti",
+    unknown: "tidak diketahui",
+    unhealthy: "tidak sehat",
+    starting: "memulai",
+    down: "mati",
+    update: "Pembaruan",
+    live: "Langsung"
   }
 };
 

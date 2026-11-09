@@ -194,6 +194,22 @@ const locale: LocaleProps = {
     configPath2: "w lewym górnym rogu, aby uzyskać dostęp do ustawień.",
     canDisable: "Jeśli chcesz, możesz wyłączyć tę funkcję..",
     signature: "-Stan"
+  },
+  live: {
+    cpu: "CPU",
+    memory: "Pamięć",
+    disk: "Dysk",
+    network: "Sieć",
+    load: "Obciążenie",
+    uptime: "Czas pracy",
+    temperature: "Temp.",
+    stopped: "zatrzymany",
+    unknown: "nieznany",
+    unhealthy: "niesprawny",
+    starting: "uruchamianie",
+    down: "niedostępny",
+    update: "Aktualizacja",
+    live: "Na żywo"
   }
 };
 
