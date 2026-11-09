@@ -12,13 +12,13 @@ import { StorageManager } from './StorageManager';
 import { DiagramManager } from './components/DiagramManager';
 import { storageManager } from './services/storageService';
 import ChangeLanguage from './components/ChangeLanguage';
-import { allLocales } from 'fossflow';
+import { allLocales, HAIRLINE_ICONS } from 'fossflow';
 import { useIconPackManager, IconPackName } from './services/iconPackManager';
 import './App.css';
 import { BrowserRouter, Route, Routes, useParams } from 'react-router-dom';
 
-// Load core isoflow icons (always loaded)
-const coreIcons = flattenCollections([isoflowIsopack]);
+// Core icons (always loaded): isoflow pack + the hairline pack used by live data
+const coreIcons = [...flattenCollections([isoflowIsopack]), ...HAIRLINE_ICONS];
 
 interface SavedDiagram {
   id: string;

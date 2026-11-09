@@ -6,6 +6,13 @@ Newest entries first.
 
 ---
 
+## 2026-11-09 — Hairline icon pack
+
+- **What:** New `packages/fossflow-lib/src/live/hairlineIcons.ts` with eight isometric icons (server, container, database, cache, queue, gateway, clients/globe, cloud service) in the design file's hairline-ink style. The SVGs are generated in code from shared geometry and use the renderer's own projection ratio (`TILE_PROJECTION_MULTIPLIERS`, true 30° isometric). They are exported from the lib as `HAIRLINE_ICONS`, `HAIRLINE_ICON_IDS` and `getHairlineStatusOffset`, and added to the app's core icons.
+- **Why:** Gives hand-drawn landscapes and live discovery one consistent, distinctive look. Every icon shares one canvas centred on its footprint, so blocks sit exactly on their tile and the live overlay knows where each block's status light goes.
+- **Security:** None. The icons are static SVG data URLs with no scripts or external references (tested).
+- **Verified:** Lib `tsc` is clean; 28/28 suites and 212/212 tests pass (new: schema validity, unique ids, shared canvas, no `NaN`/script/href, status offsets). Rendered in the dev app in the browser pane at 100 % zoom; edges run parallel to the grid.
+
 ## 2026-11-09 — Security: no CORS on `/api/live`; fail closed without auth
 
 - **What:**
