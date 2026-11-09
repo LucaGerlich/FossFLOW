@@ -1,3 +1,4 @@
+import { DS_FONTS } from 'src/styles/tokens';
 import React from 'react';
 import {
   Box,
@@ -67,7 +68,7 @@ export const HotkeySettings = () => {
                 <TableRow key={tool.name}>
                   <TableCell>{tool.name}</TableCell>
                   <TableCell>
-                    <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                    <Typography variant="body2" sx={{ fontFamily: DS_FONTS.mono }}>
                       {tool.key ? tool.key.toUpperCase() : '-'}
                     </Typography>
                   </TableCell>

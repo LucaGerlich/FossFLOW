@@ -4,6 +4,8 @@
   "private": true,
   "description": "Progressive Web App for creating isometric diagrams",
   "dependencies": {
+    "@fontsource-variable/geist": "^5.3.0",
+    "@fontsource-variable/geist-mono": "^5.3.0",
     "@isoflow/isopacks": "^0.0.10",
     "fossflow": "*",
     "i18next": "^26.0.6",

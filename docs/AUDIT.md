@@ -6,6 +6,96 @@ Newest entries first.
 
 ---
 
+## 2026-11-09 — Live pill shows the server count, and says so when there are none
+
+- **What:** The toolbar's live pill now reads "Live · Beszel · 3 servers". When the source is reachable but returns no servers, it turns amber, reads "Live · Beszel · no servers" and explains the fix in its tooltip: share the servers with the read-only user, or set `SHARE_ALL_SYSTEMS=true`. The new strings (`live.servers` with plural forms, `live.noServers`, `live.noServersHint`) are translated in all 13 app languages and mirrored in `src/i18n`. `docs/LIVE.md` gained a troubleshooting row.
+- **Why:** A connected hub that shares nothing with the user looked exactly like a working one ("Live · Beszel"), with an empty map and no hint why. That happened on the first real setup.
+- **Security:** None. The pill only shows a count; the tooltip names no hosts or users.
+- **Verified:**
+  - Browser pane against the real hub, which currently shares 0 servers: amber "Live · Beszel · no servers" with the hint.
+  - A separate Playwright browser with stubbed `/api/live` responses:
+    - "2 servers" and "1 server" in English;
+    - Russian "1 сервер / 3 сервера / 5 серверов";
+    - Polish "2 serwery / 5 serwerów";
+    - Chinese "2 台服务器";
+    - German empty state with its hint.
+  - App `tsc` shows only the 13 pre-existing errors in untouched files.
+  - Not unit-tested: the app package has no test runner.
+
+## 2026-11-09 — Fix: every mouse step used the previous event's movement
+
+- **What:** `processMouseUpdate` in `useInteractionManager.ts` now passes the mode handlers the UI state read after `setMouse`, not the copy read before it.
+- **Why:** Zustand replaces the state object on every `set`, so handlers read the previous event's `mouse` (position, delta, press). Each step applied the last event's movement:
+  - a pan or item drag landed one step short of the cursor;
+  - the first step of a pan applied the press's own delta. That is the distance from wherever the editor last saw the mouse, so the canvas could jump by that much when a drag began.
+
+  This is long-standing upstream behaviour, listed as "known, not changed" in the entry below and fixed here at the user's request.
+- **Effect on other modes (audited):**
+  - `mousemove` handlers now see this event's movement, as written.
+  - `mousedown` handlers read the press point instead of the last processed move.
+  - Of the `mouseup` handlers, only Cursor and PlaceIcon read the mouse. PlaceIcon now drops at the release tile. Cursor's results are unchanged: its tile-move check only runs while still in cursor mode, which means no tile change has happened.
+- **Security:** None.
+- **Verified:**
+  - New `interaction/__tests__/useInteractionManager.test.tsx`, which drives the real interaction manager inside the real stores:
+    - a 10-step middle-drag must move the canvas exactly as far as the mouse;
+    - a pan released outside the page must end on the next buttonless move.
+
+    Both failed before the fix (90, 45 instead of 100, 50; and a 100 px jump on the first step) and pass now. All 240 lib tests pass; lib `tsc` is clean.
+  - Real Chromium input via Playwright, each landing exactly under the mouse:
+    - middle-drag pan, 120, 60 for a 120, 60 drag;
+    - drag-and-drop node placement, on the release tile;
+    - node drag, which ends on the tile under the cursor;
+    - rectangle drawing, from and to the tiles under the press and release;
+    - a click-mode connector between two nodes.
+  - The Selenium e2e suite was not rerun: its Docker image was removed on request.
+
+## 2026-11-09 — Fix: pan stays latched after a release outside the page
+
+- **What:** A move with no mouse button held, while the editor still thinks a button is down, now counts as the missed `mouseup` (`getMissedMouseUp` in `utils/renderer.ts`, used first thing in `useInteractionManager`'s `onMouseEvent`). `SlimMouseEvent` gained an optional `buttons` field; events synthesised from touches don't carry it, so touch is unaffected.
+- **Why:** The temporary pan (middle button, and the other pan triggers) only ended on a `mouseup`. Releasing the button outside the page, for example past the edge of the browser pane during a fast drag, never delivers one. The pan stayed on, and since a temporary pan follows every mouse move, reaching back for the next drag dragged the canvas back toward where it started. A recording of the reported case showed exactly this: press, pan, no `mouseup`, then the camera following a buttonless mouse until another middle-click. This is upstream code, not something the live layer or the restyle introduced.
+- **Security:** None.
+- **Verified:**
+  - 5 new unit tests (`utils/__tests__/missedRelease.test.ts`): written first and seen to fail, now passing. All 238 lib tests pass; lib `tsc` is clean.
+  - Real Chromium input via Playwright: a middle-drag whose `mouseup` is dropped before the editor sees it ends on the first buttonless move, and the camera stays put. Normal middle-drags, empty-canvas left-drag pan and lasso selection are unchanged.
+  - The Selenium e2e suite was not rerun: its Docker image was removed on request.
+- **Known, not changed:** each mouse step is applied with the previous event's movement: `processMouseUpdate` hands modes the state read before `setMouse`. A drag therefore lands one step short. This is long-standing upstream behaviour.
+
+## 2026-11-09 — Fix: toolbar overlap in narrow windows
+
+- **What:** In `App.css`, the toolbar's title area now truncates instead of overflowing (`overflow: hidden`). Below 1100 px the toolbar wraps: the title takes the first row and the actions wrap onto the next row(s); the divider is hidden while wrapped.
+- **Why:** In a roughly 725 px window the action buttons covered the FossFLOW wordmark and the diagram name; that came from the nav-bar restyle.
+- **Security:** None.
+- **Verified:** Browser pane at 725 px (title row, actions on two rows, nothing covered), 1000 px (title row plus one action row) and 1440 px (single row, unchanged). The language dropdown isn't clipped because no overflow scrolling is used.
+
+## 2026-11-09 — Design-system overhaul (`vercel.design.md`)
+
+- **What:** The whole UI now follows the project's design file: ink `#171717` on near-white, hairlines, Geist and Geist Mono, 6 px app radii, stacked shadows, colour only for meaning.
+  - **Lib, shared tokens:** `styles/tokens.ts` (`DS_COLORS`, `DS_FONTS`, `DS_RADII`, `DS_SHADOWS`, `DS_DROP_SHADOWS`) is the single source. It's exported from the package, and the live overlay derives from it.
+  - **Lib, MUI theme:**
+    - ink primary and secondary, text and divider tokens, `#fafafa` background;
+    - Geist with weights capped at 600 and negative heading tracking;
+    - `shape.borderRadius` 6; the 25 elevations mapped onto 5 stacked levels;
+    - overrides for Button, IconButton, ToggleButton, Paper, Card, Dialog, Backdrop, Menu, Popover, Tooltip, OutlinedInput, Tabs, Slider, Divider, Chip and Link.
+  - **Lib, canvas:**
+    - `diagramBg` `#fafafa`; neutral default colour `#c7c7c7`; grid lines at 8 % opacity;
+    - canvas text in Geist, with text-box weight 600 instead of bold;
+    - lasso, freehand lasso, transform handles, the export crop frame and the hover tile use link blue.
+  - **Lib, hardcoded components:** label cards, connector labels, floating panels, the tool buttons' radius, the icon picker, help and hotkey code chips, and the error fallbacks.
+  - **App:**
+    - self-hosted `@fontsource-variable/geist` and `geist-mono` (OFL-1.1); `applyDesignTokens()` writes `--ds-*` CSS variables from the lib tokens; the first render waits up to 1.5 s for Geist so canvas text measures correctly;
+    - a 56 px nav bar: wordmark, diagram name and status, hairline actions, **Export** as the single ink primary, the language switcher, the live pill;
+    - the dialogs become modal cards with semantic notes and explicit button classes;
+    - the server-storage manager, language dropdown, storage manager and error fallback restyled; `DiagramManager.css` scoped;
+    - the default palette keeps its ids with token values; `theme-color` `#fafafa`.
+- **Why:** Requested: the editor should match the live layer's look.
+- **Security:** Fonts are self-hosted, so no Google Fonts requests (GDPR). No behaviour changes.
+- **Fixed along the way:** `DiagramManager.css` set a *global* `.dialog-buttons button:first-child` (green), which leaked into every app dialog. All its rules are now scoped under `.diagram-manager`.
+- **Verified:**
+  - Lib `tsc` is clean; 31/31 suites and 233/233 tests pass. The 3 DebugUtils snapshots were updated after reviewing their diffs: only emotion class hashes changed, the markup is identical.
+  - `npm run build` passes. App `tsc` shows only the 13 pre-existing errors in untouched files.
+  - Checked in the browser pane against real Beszel data: the nav bar, main menu, settings dialog, node panel and vitals card, export dialog, help dialog, canvas, labels and live plates, with no console errors.
+  - Upstream e2e suite (Python Selenium, Chromium 4.27 in Docker) against the production build: **18/18 passed** (load, base-path routing, node placement, connectors, undo, import, SVG export).
+
 ## 2026-11-09 — Fix: HTTP Basic Auth locked everyone out (upstream bug)
 
 - **What:** `docker-entrypoint.sh` hashed the Basic Auth password with `openssl passwd -bcrypt`, an option OpenSSL doesn't have. The hash came out empty, so every login, even with the correct password, got 401. The entrypoint now uses `openssl passwd -6` (SHA-512 crypt, which musl's `crypt()` used by nginx on Alpine verifies) and exits with an error instead of writing an empty hash.

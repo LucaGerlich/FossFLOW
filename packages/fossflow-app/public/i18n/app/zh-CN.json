@@ -61,6 +61,9 @@
     },
     "live": {
         "label": "实时",
-        "unavailable": "实时数据不可用"
+        "unavailable": "实时数据不可用",
+        "servers_other": "{{count}} 台服务器",
+        "noServers": "无服务器",
+        "noServersHint": "已连接，但 Beszel 未向此用户共享任何服务器。请在 Beszel 管理面板中将该用户添加到每台服务器，或使用 SHARE_ALL_SYSTEMS=true 启动 hub。"
     }
 }

@@ -61,6 +61,11 @@
     },
     "live": {
         "label": "Live",
-        "unavailable": "Dati live non disponibili"
+        "unavailable": "Dati live non disponibili",
+        "servers_one": "{{count}} server",
+        "servers_many": "{{count}} server",
+        "servers_other": "{{count}} server",
+        "noServers": "nessun server",
+        "noServersHint": "Connesso, ma Beszel non condivide alcun server con questo utente. Aggiungi l'utente a ogni server nel pannello di amministrazione di Beszel oppure avvia l'hub con SHARE_ALL_SYSTEMS=true."
     }
 }

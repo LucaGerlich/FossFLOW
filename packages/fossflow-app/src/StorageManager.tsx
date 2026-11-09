@@ -106,14 +106,14 @@ export const StorageManager: React.FC<{ onClose: () => void }> = ({ onClose }) =
         <div style={{ marginBottom: '20px' }}>
           <h3>Storage Usage</h3>
           <div style={{
-            backgroundColor: '#e0e0e0',
+            backgroundColor: 'var(--ds-hairline)',
             borderRadius: '4px',
             height: '20px',
             overflow: 'hidden',
             marginBottom: '10px'
           }}>
             <div style={{
-              backgroundColor: storagePercentage > 80 ? '#f44336' : storagePercentage > 60 ? '#ff9800' : '#4caf50',
+              backgroundColor: storagePercentage > 80 ? 'var(--ds-error)' : storagePercentage > 60 ? 'var(--ds-warning)' : 'var(--ds-ok)',
               height: '100%',
               width: `${Math.min(storagePercentage, 100)}%`,
               transition: 'width 0.3s'
@@ -133,7 +133,7 @@ export const StorageManager: React.FC<{ onClose: () => void }> = ({ onClose }) =
             style={{
               padding: '10px 20px',
               marginRight: '10px',
-              backgroundColor: '#007bff',
+              backgroundColor: 'var(--ds-ink)',
               color: 'white',
               border: 'none',
               borderRadius: '4px',
@@ -146,7 +146,7 @@ export const StorageManager: React.FC<{ onClose: () => void }> = ({ onClose }) =
             onClick={clearOldDiagrams}
             style={{
               padding: '10px 20px',
-              backgroundColor: '#dc3545',
+              backgroundColor: 'var(--ds-error-deep)',
               color: 'white',
               border: 'none',
               borderRadius: '4px',
@@ -158,7 +158,7 @@ export const StorageManager: React.FC<{ onClose: () => void }> = ({ onClose }) =
         </div>
 
         <div style={{ 
-          backgroundColor: '#f8f9fa',
+          backgroundColor: 'var(--ds-canvas-soft)',
           padding: '15px',
           borderRadius: '4px',
           marginBottom: '20px',
@@ -176,7 +176,7 @@ export const StorageManager: React.FC<{ onClose: () => void }> = ({ onClose }) =
           onClick={onClose}
           style={{
             padding: '10px 20px',
-            backgroundColor: '#6c757d',
+            backgroundColor: 'var(--ds-body)',
             color: 'white',
             border: 'none',
             borderRadius: '4px',

@@ -305,6 +305,36 @@ export const getMouse = ({
   return nextMouse;
 };
 
+/**
+ * A button released outside the page (another window, or past the edge of
+ * an embedded view) never fires mouseup, so a press would stay latched. The
+ * first move with no button held stands in for that release.
+ */
+export const getMissedMouseUp = (
+  e: SlimMouseEvent,
+  mouse: Mouse
+): SlimMouseEvent | null => {
+  if (e.type !== 'mousemove' || e.buttons !== 0 || mouse.mousedown === null) {
+    return null;
+  }
+
+  return {
+    type: 'mouseup',
+    clientX: e.clientX,
+    clientY: e.clientY,
+    target: e.target,
+    button: e.button,
+    buttons: 0,
+    ctrlKey: e.ctrlKey,
+    altKey: e.altKey,
+    shiftKey: e.shiftKey,
+    metaKey: e.metaKey,
+    preventDefault: () => {
+      e.preventDefault();
+    }
+  };
+};
+
 export const getAllAnchors = (connectors: Connector[]) => {
   return connectors.reduce((acc, connector) => {
     return [...acc, ...connector.anchors];

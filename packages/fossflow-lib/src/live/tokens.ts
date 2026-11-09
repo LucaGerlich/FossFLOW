@@ -1,26 +1,25 @@
+import { DS_COLORS, DS_FONTS, DS_SHADOWS } from 'src/styles/tokens';
 import type { LiveDisplayStatus } from './types';
 
-/** Colour tokens from the project's design file. Colour means trouble only. */
+/** Live-overlay view of the shared design tokens. Colour means trouble only. */
 export const LIVE_TOKENS = {
-  ink: '#171717',
-  body: '#4d4d4d',
-  mute: '#888888',
-  hairline: '#ebebeb',
-  hairlineStrong: '#a1a1a1',
-  canvas: '#ffffff',
-  canvasSoft: '#fafafa',
-  ok: '#29bc9b',
-  warning: '#f5a623',
-  warningSoft: '#ffefcf',
-  warningDeep: '#ab570a',
-  critical: '#ee0000',
-  criticalSoft: '#f7d4d6',
-  criticalDeep: '#c50000',
-  mono: "'Geist Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, monospace",
-  sans: "Geist, Inter, system-ui, -apple-system, 'Segoe UI', sans-serif",
-  /** Stacked shadow from the design file (level 4) plus an inset hairline. */
-  cardShadow:
-    '0 0 0 1px rgba(0,0,0,0.08), 0 2px 2px rgba(0,0,0,0.04), 0 8px 16px -4px rgba(0,0,0,0.04)'
+  ink: DS_COLORS.ink,
+  body: DS_COLORS.body,
+  mute: DS_COLORS.mute,
+  hairline: DS_COLORS.hairline,
+  hairlineStrong: DS_COLORS.hairlineStrong,
+  canvas: DS_COLORS.canvas,
+  canvasSoft: DS_COLORS.canvasSoft,
+  ok: DS_COLORS.ok,
+  warning: DS_COLORS.warning,
+  warningSoft: DS_COLORS.warningSoft,
+  warningDeep: DS_COLORS.warningDeep,
+  critical: DS_COLORS.error,
+  criticalSoft: DS_COLORS.errorSoft,
+  criticalDeep: DS_COLORS.errorDeep,
+  mono: DS_FONTS.mono,
+  sans: DS_FONTS.sans,
+  cardShadow: DS_SHADOWS[4]
 } as const;
 
 /** Same thresholds as the backend's status rules (normalize.ts). */

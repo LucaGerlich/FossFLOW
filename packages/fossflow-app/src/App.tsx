@@ -74,13 +74,14 @@ function EditorPage() {
   // Initialize with empty diagram data
   // Create default colors for connectors
   const defaultColors = [
-    { id: 'blue', value: '#0066cc' },
-    { id: 'green', value: '#00aa00' },
-    { id: 'red', value: '#cc0000' },
-    { id: 'orange', value: '#ff9900' },
-    { id: 'purple', value: '#9900cc' },
-    { id: 'black', value: '#000000' },
-    { id: 'gray', value: '#666666' }
+    // Ids are kept for existing diagrams; values follow the design tokens.
+    { id: 'blue', value: '#0070f3' },
+    { id: 'green', value: '#29bc9b' },
+    { id: 'red', value: '#ee0000' },
+    { id: 'orange', value: '#f5a623' },
+    { id: 'purple', value: '#7928ca' },
+    { id: 'black', value: '#171717' },
+    { id: 'gray', value: '#a1a1a1' }
   ];
 
   const [diagramData, setDiagramData] = useState<DiagramData>(() => {
@@ -697,103 +698,93 @@ function EditorPage() {
 
   return (
     <div className="App">
-      <div className="toolbar">
-        {!isReadonlyUrl && (
-          <>
-            <button onClick={newDiagram}>{t('nav.newDiagram')}</button>
-            {serverStorageAvailable && (
-              <button
-                onClick={() => {
-                  return setShowDiagramManager(true);
-                }}
-                style={{ backgroundColor: '#2196F3', color: 'white' }}
-              >
-                🌐 {t('nav.serverStorage')}
-              </button>
-            )}
-            <button
-              onClick={() => {
-                return setShowSaveDialog(true);
-              }}
-            >
-              {t('nav.saveSessionOnly')}
-            </button>
-            <button
-              onClick={() => {
-                return setShowLoadDialog(true);
-              }}
-            >
-              {t('nav.loadSessionOnly')}
-            </button>
-            <button
-              onClick={() => {
-                return setShowExportDialog(true);
-              }}
-              style={{ backgroundColor: '#007bff' }}
-            >
-              💾 {t('nav.exportFile')}
-            </button>
-            <button
-              onClick={() => {
-                if (currentDiagram && hasUnsavedChanges) {
-                  saveDiagram();
-                }
-              }}
-              disabled={!currentDiagram || !hasUnsavedChanges}
-              style={{
-                backgroundColor:
-                  currentDiagram && hasUnsavedChanges ? '#ffc107' : '#6c757d',
-                opacity: currentDiagram && hasUnsavedChanges ? 1 : 0.5,
-                cursor:
-                  currentDiagram && hasUnsavedChanges
-                    ? 'pointer'
-                    : 'not-allowed'
-              }}
-              title="Save to current session only"
-            >
-              {t('nav.quickSaveSession')}
-            </button>
-          </>
-        )}
-        {isReadonlyUrl && (
-          <div
-            style={{
-              color: 'black',
-              padding: '8px 16px',
-              borderRadius: '4px',
-              fontWeight: 'bold',
-              border: '2px solid #000000'
-            }}
-          >
-            {t('dialog.readOnly.mode')}
-          </div>
-        )}
-        <ChangeLanguage />
-        <LiveIndicator live={live} />
-        <span className="current-diagram">
-          {isReadonlyUrl ? (
-            <span>
-              {t('status.current')}: {diagramName}
+      <header className="toolbar">
+        <div className="toolbar__start">
+          <span className="brand">FossFLOW</span>
+          <span className="current-diagram">
+            <span className="current-diagram__name">
+              {isReadonlyUrl
+                ? diagramName
+                : currentDiagram
+                  ? currentDiagram.name
+                  : diagramName || t('status.untitled')}
             </span>
-          ) : (
-            <>
-              {currentDiagram
-                ? `${t('status.current')}: ${currentDiagram.name}`
-                : diagramName || t('status.untitled')}
-              {hasUnsavedChanges && (
-                <span style={{ color: '#ff9800', marginLeft: '10px' }}>
-                  • {t('status.modified')}
-                </span>
-              )}
-              <span
-                style={{ fontSize: '12px', color: '#666', marginLeft: '10px' }}
-              >
-                ({t('status.sessionStorageNote')})
+            {!isReadonlyUrl && hasUnsavedChanges && (
+              <span className="current-diagram__modified">
+                {t('status.modified')}
               </span>
+            )}
+            {!isReadonlyUrl && (
+              <span className="current-diagram__note">
+                {t('status.sessionStorageNote')}
+              </span>
+            )}
+          </span>
+        </div>
+        <div className="toolbar__end">
+          {!isReadonlyUrl && (
+            <>
+              <button className="btn" onClick={newDiagram}>
+                {t('nav.newDiagram')}
+              </button>
+              {serverStorageAvailable && (
+                <button
+                  className="btn"
+                  onClick={() => {
+                    return setShowDiagramManager(true);
+                  }}
+                >
+                  {t('nav.serverStorage')}
+                </button>
+              )}
+              <button
+                className="btn"
+                onClick={() => {
+                  return setShowLoadDialog(true);
+                }}
+              >
+                {t('nav.loadSessionOnly')}
+              </button>
+              <button
+                className="btn"
+                onClick={() => {
+                  return setShowSaveDialog(true);
+                }}
+              >
+                {t('nav.saveSessionOnly')}
+              </button>
+              <button
+                className="btn"
+                onClick={() => {
+                  if (currentDiagram && hasUnsavedChanges) {
+                    saveDiagram();
+                  }
+                }}
+                disabled={!currentDiagram || !hasUnsavedChanges}
+                title="Save to current session only"
+              >
+                {t('nav.quickSaveSession')}
+              </button>
+              <button
+                className="btn btn--primary"
+                onClick={() => {
+                  return setShowExportDialog(true);
+                }}
+              >
+                {t('nav.exportFile')}
+              </button>
             </>
           )}
-        </span>
-      </div>
+          {isReadonlyUrl && (
+            <span className="badge badge--mono">
+              {t('dialog.readOnly.mode')}
+            </span>
+          )}
+          <span className="toolbar__divider" aria-hidden="true" />
+          <ChangeLanguage />
+          <LiveIndicator live={live} />
+        </div>
+      </header>
 
       <div className="fossflow-container">
         <Isoflow
@@ -820,16 +811,8 @@ function EditorPage() {
         <div className="dialog-overlay">
           <div className="dialog">
             <h2>{t('dialog.save.title')}</h2>
-            <div
-              style={{
-                backgroundColor: '#fff3cd',
-                border: '1px solid #ffeeba',
-                padding: '15px',
-                borderRadius: '4px',
-                marginBottom: '20px'
-              }}
-            >
-              <strong>⚠️ {t('dialog.save.warningTitle')}:</strong>{' '}
+            <div className="note note--warning">
+              <strong>{t('dialog.save.warningTitle')}:</strong>{' '}
               {t('dialog.save.warningMessage')}
               <br />
               <span
@@ -851,13 +834,16 @@ function EditorPage() {
               autoFocus
             />
             <div className="dialog-buttons">
-              <button onClick={saveDiagram}>{t('dialog.save.btnSave')}</button>
               <button
+                className="btn"
                 onClick={() => {
                   return setShowSaveDialog(false);
                 }}
               >
                 {t('dialog.save.btnCancel')}
+              </button>
+              <button className="btn btn--primary" onClick={saveDiagram}>
+                {t('dialog.save.btnSave')}
               </button>
             </div>
           </div>
@@ -869,35 +855,27 @@ function EditorPage() {
         <div className="dialog-overlay">
           <div className="dialog">
             <h2>{t('dialog.load.title')}</h2>
-            <div
-              style={{
-                backgroundColor: '#fff3cd',
-                border: '1px solid #ffeeba',
-                padding: '15px',
-                borderRadius: '4px',
-                marginBottom: '20px'
-              }}
-            >
-              <strong>⚠️ {t('dialog.load.noteTitle')}:</strong>{' '}
+            <div className="note note--warning">
+              <strong>{t('dialog.load.noteTitle')}:</strong>{' '}
               {t('dialog.load.noteMessage')}
             </div>
             <div className="diagram-list">
               {diagrams.length === 0 ? (
-                <p>{t('dialog.load.noSavedDiagrams')}</p>
+                <p className="empty-state">{t('dialog.load.noSavedDiagrams')}</p>
               ) : (
                 diagrams.map((diagram) => {
                   return (
                     <div key={diagram.id} className="diagram-item">
                       <div>
-                        <strong>{diagram.name}</strong>
-                        <br />
-                        <small>
+                        <div className="diagram-item__name">{diagram.name}</div>
+                        <div className="diagram-item__meta">
                           {t('dialog.load.updated')}:{' '}
                           {new Date(diagram.updatedAt).toLocaleString()}
-                        </small>
+                        </div>
                       </div>
                       <div className="diagram-actions">
                         <button
+                          className="btn btn--sm"
                           onClick={() => {
                             return loadDiagram(diagram, false);
                           }}
@@ -905,6 +883,7 @@ function EditorPage() {
                           {t('dialog.load.btnLoad')}
                         </button>
                         <button
+                          className="btn btn--sm btn--danger"
                           onClick={() => {
                             return deleteDiagram(diagram.id);
                           }}
@@ -919,6 +898,7 @@ function EditorPage() {
             </div>
             <div className="dialog-buttons">
               <button
+                className="btn"
                 onClick={() => {
                   return setShowLoadDialog(false);
                 }}
@@ -935,33 +915,24 @@ function EditorPage() {
         <div className="dialog-overlay">
           <div className="dialog">
             <h2>{t('dialog.export.title')}</h2>
-            <div
-              style={{
-                backgroundColor: '#d4edda',
-                border: '1px solid #c3e6cb',
-                padding: '15px',
-                borderRadius: '8px',
-                marginBottom: '20px'
-              }}
-            >
-              <p style={{ margin: '0 0 10px 0' }}>
-                <strong>✅ {t('dialog.export.recommendedTitle')}:</strong>{' '}
+            <div className="note note--info">
+              <p>
+                <strong>{t('dialog.export.recommendedTitle')}:</strong>{' '}
                 {t('dialog.export.recommendedMessage')}
               </p>
-              <p style={{ margin: 0, fontSize: '14px', color: '#155724' }}>
-                {t('dialog.export.noteMessage')}
-              </p>
+              <p className="note__detail">{t('dialog.export.noteMessage')}</p>
             </div>
             <div className="dialog-buttons">
-              <button onClick={exportDiagram}>
-                {t('dialog.export.btnDownload')}
-              </button>
               <button
+                className="btn"
                 onClick={() => {
                   return setShowExportDialog(false);
                 }}
               >
                 {t('dialog.export.btnCancel')}
+              </button>
+              <button className="btn btn--primary" onClick={exportDiagram}>
+                {t('dialog.export.btnDownload')}
               </button>
             </div>
           </div>

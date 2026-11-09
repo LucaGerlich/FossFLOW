@@ -61,6 +61,10 @@
     },
     "live": {
         "label": "लाइव",
-        "unavailable": "लाइव डेटा उपलब्ध नहीं"
+        "unavailable": "लाइव डेटा उपलब्ध नहीं",
+        "servers_one": "{{count}} सर्वर",
+        "servers_other": "{{count}} सर्वर",
+        "noServers": "कोई सर्वर नहीं",
+        "noServersHint": "कनेक्ट है, लेकिन Beszel इस उपयोगकर्ता के साथ कोई सर्वर साझा नहीं करता। Beszel के एडमिन पैनल में हर सर्वर पर इस उपयोगकर्ता को जोड़ें, या hub को SHARE_ALL_SYSTEMS=true के साथ शुरू करें।"
     }
 }

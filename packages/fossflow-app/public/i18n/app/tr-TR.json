@@ -61,6 +61,10 @@
     },
     "live": {
         "label": "Canlı",
-        "unavailable": "Canlı veriler kullanılamıyor"
+        "unavailable": "Canlı veriler kullanılamıyor",
+        "servers_one": "{{count}} sunucu",
+        "servers_other": "{{count}} sunucu",
+        "noServers": "sunucu yok",
+        "noServersHint": "Bağlandı, ancak Beszel bu kullanıcıyla hiçbir sunucu paylaşmıyor. Kullanıcıyı Beszel yönetim panelinde her sunucuya ekleyin veya hub'ı SHARE_ALL_SYSTEMS=true ile başlatın."
     }
 }

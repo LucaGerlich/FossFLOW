@@ -1,3 +1,4 @@
+import { DS_COLORS } from 'src/styles/tokens';
 import React, {
   useRef,
   useEffect,
@@ -313,7 +314,7 @@ export const ExportImageDialog = ({ onClose, quality = 1.5 }: Props) => {
           ctx.restore();
           
           // Draw crop border
-          ctx.strokeStyle = '#2196f3';
+          ctx.strokeStyle = DS_COLORS.link;
           ctx.lineWidth = 2;
           ctx.strokeRect(cropArea.x, cropArea.y, cropArea.width, cropArea.height);
         }
@@ -515,7 +516,7 @@ export const ExportImageDialog = ({ onClose, quality = 1.5 }: Props) => {
                         maxWidth: '100%',
                         maxHeight: '300px',
                         cursor: isInCropMode ? (isDragging ? 'grabbing' : 'crosshair') : 'default',
-                        border: isInCropMode ? '2px solid #2196f3' : 'none',
+                        border: isInCropMode ? `2px solid ${DS_COLORS.link}` : 'none',
                         userSelect: 'none'
                       }}
                       onMouseDown={handleMouseDown}

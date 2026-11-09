@@ -1,3 +1,4 @@
+import { DS_COLORS, DS_FONTS } from 'src/styles/tokens';
 import React from 'react';
 import Box from '@mui/material/Box';
 import Stack from '@mui/material/Stack';
@@ -44,8 +45,9 @@ export const Icon = ({ icon, onClick, onMouseDown, onDoubleClick }: Props) => {
                 right: 2,
                 padding: '1px 4px',
                 borderRadius: '4px',
-                backgroundColor: '#eeeb',
-                color: '#000'
+                backgroundColor: DS_COLORS.canvasSoft2,
+                color: DS_COLORS.body,
+                fontFamily: DS_FONTS.mono
               }}
             >
               <Typography variant='body2'>

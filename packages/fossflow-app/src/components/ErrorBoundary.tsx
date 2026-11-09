@@ -45,14 +45,14 @@ export default function ErrorBoundaryFallbackUI({
           {error.stack && (
             <details style={{ marginTop: '10px' }}>
               <summary
-                style={{ cursor: 'pointer', fontSize: '12px', color: '#666' }}
+                style={{ cursor: 'pointer', fontSize: '12px', color: 'var(--ds-mute)' }}
               >
                 Show technical details
               </summary>
               <pre
                 style={{
                   fontSize: '11px',
-                  color: '#666',
+                  color: 'var(--ds-mute)',
                   margin: '10px 0 0 0',
                   whiteSpace: 'pre-wrap',
                   wordBreak: 'break-word',
@@ -68,13 +68,13 @@ export default function ErrorBoundaryFallbackUI({
 
         <div
           style={{
-            backgroundColor: '#d1ecf1',
-            border: '1px solid #bee5eb',
+            backgroundColor: 'var(--ds-link-bg-soft)',
+            border: '1px solid var(--ds-link-bg-soft)',
             borderRadius: '4px',
             padding: '15px',
             marginBottom: '20px',
             fontSize: '14px',
-            color: '#0c5460'
+            color: 'var(--ds-ink)'
           }}
         >
           <p style={{ margin: '0 0 10px 0', fontWeight: '600' }}>
