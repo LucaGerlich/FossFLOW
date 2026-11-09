@@ -23,7 +23,9 @@ export type BoundingBox = [Coords, Coords, Coords, Coords];
 export type SlimMouseEvent = Pick<
   MouseEvent,
   'clientX' | 'clientY' | 'target' | 'type' | 'preventDefault' | 'button' | 'ctrlKey' | 'altKey' | 'shiftKey' | 'metaKey'
->;
+> &
+  // Absent on events synthesised from touches.
+  Partial<Pick<MouseEvent, 'buttons'>>;
 
 export const EditorModeEnum = {
   NON_INTERACTIVE: 'NON_INTERACTIVE',

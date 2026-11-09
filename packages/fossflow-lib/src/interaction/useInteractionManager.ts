@@ -3,7 +3,7 @@ import { useModelStoreApi } from 'src/stores/modelStore';
 import { useUiStateStore, useUiStateStoreApi } from 'src/stores/uiStateStore';
 import { ModeActions, State, SlimMouseEvent, Mouse } from 'src/types';
 import { DialogTypeEnum } from 'src/types/ui';
-import { getMouse, getItemAtTile, generateId, incrementZoom, decrementZoom, isPointInPolygon, isWithinBounds } from 'src/utils';
+import { getMouse, getMissedMouseUp, getItemAtTile, generateId, incrementZoom, decrementZoom, isPointInPolygon, isWithinBounds } from 'src/utils';
 import { useResizeObserver } from 'src/hooks/useResizeObserver';
 import { useScene } from 'src/hooks/useScene';
 import { useHistory } from 'src/hooks/useHistory';
@@ -330,10 +330,11 @@ export const useInteractionManager = () => {
   );
 
   const onMouseEvent = useCallback(
-    (e: SlimMouseEvent) => {
+    (rawEvent: SlimMouseEvent) => {
       if (!rendererRef.current) return;
 
       const uiState = uiStateApi.getState();
+      const e = getMissedMouseUp(rawEvent, uiState.mouse) ?? rawEvent;
 
       const nextMouse = getMouse({
         interactiveElement: rendererRef.current,

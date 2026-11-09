@@ -6,6 +6,17 @@ Newest entries first.
 
 ---
 
+## 2026-11-09 — Fix: pan stays latched after a release outside the page
+
+- **What:** A move with no mouse button held, while the editor still thinks a button is down, now counts as the missed `mouseup` (`getMissedMouseUp` in `utils/renderer.ts`, used first thing in `useInteractionManager`'s `onMouseEvent`). `SlimMouseEvent` gained an optional `buttons` field; events synthesised from touches don't carry it, so touch is unaffected.
+- **Why:** The temporary pan (middle button, and the other pan triggers) only ended on a `mouseup`. Releasing the button outside the page, for example past the edge of the browser pane during a fast drag, never delivers one. The pan stayed on, and since a temporary pan follows every mouse move, reaching back for the next drag dragged the canvas back toward where it started. A recording of the reported case showed exactly this: press, pan, no `mouseup`, then the camera following a buttonless mouse until another middle-click. This is upstream code, not something the live layer or the restyle introduced.
+- **Security:** None.
+- **Verified:**
+  - 5 new unit tests (`utils/__tests__/missedRelease.test.ts`): written first and seen to fail, now passing. All 238 lib tests pass; lib `tsc` is clean.
+  - Real Chromium input via Playwright: a middle-drag whose `mouseup` is dropped before the editor sees it ends on the first buttonless move, and the camera stays put. Normal middle-drags, empty-canvas left-drag pan and lasso selection are unchanged.
+  - The Selenium e2e suite was not rerun: its Docker image was removed on request.
+- **Known, not changed:** each mouse step is applied with the previous event's movement: `processMouseUpdate` hands modes the state read before `setMouse`. A drag therefore lands one step short. This is long-standing upstream behaviour.
+
 ## 2026-11-09 — Fix: toolbar overlap in narrow windows
 
 - **What:** In `App.css`, the toolbar's title area now truncates instead of overflowing (`overflow: hidden`). Below 1100 px the toolbar wraps: the title takes the first row and the actions wrap onto the next row(s); the divider is hidden while wrapped.
