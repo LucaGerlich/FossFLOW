@@ -6,6 +6,13 @@ Newest entries first.
 
 ---
 
+## 2026-11-09 — Fix: HTTP Basic Auth locked everyone out (upstream bug)
+
+- **What:** `docker-entrypoint.sh` hashed the Basic Auth password with `openssl passwd -bcrypt`, an option OpenSSL doesn't have. The hash came out empty, so every login, even with the correct password, got 401. The entrypoint now uses `openssl passwd -6` (SHA-512 crypt, which musl's `crypt()` used by nginx on Alpine verifies) and exits with an error instead of writing an empty hash.
+- **Why:** Found during the Docker verification of the live layer, whose access control relies on this Basic Auth. The bug came from upstream when Basic Auth was introduced.
+- **Security:** Basic Auth works again. A failure to hash now stops the container instead of silently producing a broken auth file.
+- **Verified:** Rebuilt image on the test network with real Beszel: no credentials → 401, wrong password → 401, correct credentials → 200 with live data (1 system, 10 containers); the app page → 200. Without Basic Auth, live data stays disabled with a warning. Backend port 3001 is unreachable from another container. The served service worker is `fossflow-v2` and skips `/api/`.
+
 ## 2026-11-09 — Review fixes for the live layer
 
 - **What:** Fixes for the findings of an independent code and security review (no critical or high issues; 8 medium):

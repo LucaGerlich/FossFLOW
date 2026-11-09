@@ -29,7 +29,13 @@ fi
 touch /etc/nginx/.htpasswd
 if [ -n "$HTTP_AUTH_USER" ] && [ -n "$HTTP_AUTH_PASSWORD" ]; then
     echo "Setup HTTP Basic Auth..."
-    echo "$HTTP_AUTH_USER:$(printf '%s' "$HTTP_AUTH_PASSWORD" | openssl passwd -bcrypt -stdin)" > /etc/nginx/.htpasswd
+    # SHA-512 crypt ($6$): OpenSSL has no bcrypt option, and musl's crypt()
+    # (used by nginx on Alpine) verifies $6$ hashes.
+    if ! HASH=$(printf '%s' "$HTTP_AUTH_PASSWORD" | openssl passwd -6 -stdin) || [ -z "$HASH" ]; then
+        echo "ERROR: could not hash HTTP_AUTH_PASSWORD; refusing to start without working auth." >&2
+        exit 1
+    fi
+    echo "$HTTP_AUTH_USER:$HASH" > /etc/nginx/.htpasswd
     sed -i 's/AUTH_BASIC_SETTING/"Restricted"/g' /etc/nginx/http.d/default.conf
 else
     echo "No (optional) HTTP Basic Auth configured"
