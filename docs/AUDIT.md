@@ -6,6 +6,33 @@ Newest entries first.
 
 ---
 
+## 2026-11-09 — Fix: every mouse step used the previous event's movement
+
+- **What:** `processMouseUpdate` in `useInteractionManager.ts` now passes the mode handlers the UI state read after `setMouse`, not the copy read before it.
+- **Why:** Zustand replaces the state object on every `set`, so handlers read the previous event's `mouse` (position, delta, press). Each step applied the last event's movement:
+  - a pan or item drag landed one step short of the cursor;
+  - the first step of a pan applied the press's own delta. That is the distance from wherever the editor last saw the mouse, so the canvas could jump by that much when a drag began.
+
+  This is long-standing upstream behaviour, listed as "known, not changed" in the entry below and fixed here at the user's request.
+- **Effect on other modes (audited):**
+  - `mousemove` handlers now see this event's movement, as written.
+  - `mousedown` handlers read the press point instead of the last processed move.
+  - Of the `mouseup` handlers, only Cursor and PlaceIcon read the mouse. PlaceIcon now drops at the release tile. Cursor's results are unchanged: its tile-move check only runs while still in cursor mode, which means no tile change has happened.
+- **Security:** None.
+- **Verified:**
+  - New `interaction/__tests__/useInteractionManager.test.tsx`, which drives the real interaction manager inside the real stores:
+    - a 10-step middle-drag must move the canvas exactly as far as the mouse;
+    - a pan released outside the page must end on the next buttonless move.
+
+    Both failed before the fix (90, 45 instead of 100, 50; and a 100 px jump on the first step) and pass now. All 240 lib tests pass; lib `tsc` is clean.
+  - Real Chromium input via Playwright, each landing exactly under the mouse:
+    - middle-drag pan, 120, 60 for a 120, 60 drag;
+    - drag-and-drop node placement, on the release tile;
+    - node drag, which ends on the tile under the cursor;
+    - rectangle drawing, from and to the tiles under the press and release;
+    - a click-mode connector between two nodes.
+  - The Selenium e2e suite was not rerun: its Docker image was removed on request.
+
 ## 2026-11-09 — Fix: pan stays latched after a release outside the page
 
 - **What:** A move with no mouse button held, while the editor still thinks a button is down, now counts as the missed `mouseup` (`getMissedMouseUp` in `utils/renderer.ts`, used first thing in `useInteractionManager`'s `onMouseEvent`). `SlimMouseEvent` gained an optional `buttons` field; events synthesised from touches don't carry it, so touch is unaffected.

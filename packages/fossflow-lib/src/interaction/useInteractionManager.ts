@@ -303,7 +303,9 @@ export const useInteractionManager = () => {
       const baseState: State = {
         model,
         scene,
-        uiState,
+        // Re-read: setMouse replaced the state object, and modes must see
+        // this event's mouse, not the previous one.
+        uiState: uiStateApi.getState(),
         rendererRef: rendererRef.current,
         rendererSize,
         isRendererInteraction: rendererRef.current === e.target
