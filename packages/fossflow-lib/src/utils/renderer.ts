@@ -849,14 +849,19 @@ export const getFitToViewParams = (view: View, viewportSize: Size) => {
   const sortedCornerPositions = sortByPosition(projectBounds);
   const boundingBoxSize = getBoundingBoxSize(projectBounds);
   const unprojectedBounds = getUnprojectedBounds(view);
-  const zoom = clamp(
-    Math.min(
-      viewportSize.width / unprojectedBounds.width,
-      viewportSize.height / unprojectedBounds.height
-    ),
-    0,
-    MAX_ZOOM
-  );
+  // Before the renderer is measured its size is 0: fitting would give zoom 0,
+  // which turns every mouse position into NaN. Centre at zoom 1 instead.
+  const measured = viewportSize.width > 0 && viewportSize.height > 0;
+  const zoom = measured
+    ? clamp(
+        Math.min(
+          viewportSize.width / unprojectedBounds.width,
+          viewportSize.height / unprojectedBounds.height
+        ),
+        MIN_ZOOM,
+        MAX_ZOOM
+      )
+    : 1;
   const scrollTarget: Coords = {
     x: (sortedCornerPositions.lowX + boundingBoxSize.width / 2) * zoom,
     y: (sortedCornerPositions.lowY + boundingBoxSize.height / 2) * zoom
