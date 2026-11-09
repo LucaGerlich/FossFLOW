@@ -1,7 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Isoflow } from 'fossflow';
-import { flattenCollections } from '@isoflow/isopacks/dist/utils';
-import isoflowIsopack from '@isoflow/isopacks/dist/isoflow';
 import { useTranslation } from 'react-i18next';
 import {
   DiagramData,
@@ -12,16 +10,14 @@ import { StorageManager } from './StorageManager';
 import { DiagramManager } from './components/DiagramManager';
 import { storageManager } from './services/storageService';
 import ChangeLanguage from './components/ChangeLanguage';
-import { allLocales, HAIRLINE_ICONS } from 'fossflow';
 import { useIconPackManager, IconPackName } from './services/iconPackManager';
 import { useLiveData } from './services/liveService';
 import { LiveIndicator } from './components/LiveIndicator';
 import './App.css';
 import { BrowserRouter, Route, Routes, useParams } from 'react-router-dom';
 import { routerBasename } from './basePath';
+import { coreIcons, defaultColors, editorLocale } from './editorDefaults';
 
-// Core icons (always loaded): isoflow pack + the hairline pack used by live data
-const coreIcons = [...flattenCollections([isoflowIsopack]), ...HAIRLINE_ICONS];
 
 interface SavedDiagram {
   id: string;
@@ -67,18 +63,6 @@ function EditorPage() {
   const isReadonlyUrl =
     window.location.pathname.startsWith('/display/') && readonlyDiagramId;
 
-  // Initialize with empty diagram data
-  // Create default colors for connectors
-  const defaultColors = [
-    // Ids are kept for existing diagrams; values follow the design tokens.
-    { id: 'blue', value: '#0070f3' },
-    { id: 'green', value: '#29bc9b' },
-    { id: 'red', value: '#ee0000' },
-    { id: 'orange', value: '#f5a623' },
-    { id: 'purple', value: '#7928ca' },
-    { id: 'black', value: '#171717' },
-    { id: 'gray', value: '#a1a1a1' }
-  ];
 
   const [diagramData, setDiagramData] = useState<DiagramData>(() => {
     // Initialize with last opened data if available
@@ -588,7 +572,7 @@ function EditorPage() {
   const { t, i18n } = useTranslation('app');
   
   // Get locale with fallback to en-US if not found
-  const currentLocale = allLocales[i18n.language as keyof typeof allLocales] || allLocales['en-US'];
+  const currentLocale = editorLocale(i18n.language);
 
   // Auto-save functionality
   useEffect(() => {

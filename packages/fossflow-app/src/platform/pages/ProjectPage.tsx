@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { NavLink, Navigate, Route, Routes, useParams } from 'react-router-dom';
 import { can, useProject } from '../projects';
+import { ProjectLandscapes } from '../components/ProjectLandscapes';
 import { ProjectSettings } from './ProjectSettings';
 
 const tabClass = ({ isActive }: { isActive: boolean }) => (isActive ? 'tab tab--active' : 'tab');
@@ -48,15 +49,7 @@ export function ProjectPage() {
         )}
       </nav>
       <Routes>
-        <Route
-          index
-          element={
-            <div className="empty-state">
-              <p className="empty-state__title">{t('platform.home.empty')}</p>
-              <p className="empty-state__hint">{t('platform.projects.landscapesHint')}</p>
-            </div>
-          }
-        />
+        <Route index element={<ProjectLandscapes project={data} />} />
         {showSettings && <Route path="settings" element={<ProjectSettings project={data} />} />}
         <Route path="*" element={<Navigate to={base} replace />} />
       </Routes>

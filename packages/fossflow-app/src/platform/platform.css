@@ -556,3 +556,144 @@
 .inline-form .field__input--compact {
   height: 40px;
 }
+
+/* ── Landscape lists ────────────────────────────────────────────────── */
+
+.page__actions,
+.tab-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.tab-toolbar {
+  margin-bottom: 16px;
+}
+
+.list__row--stacked {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.list__row-main {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.list__link {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ds-ink);
+  text-decoration: none;
+}
+
+.list__link:hover {
+  color: var(--ds-link);
+  text-decoration: underline;
+}
+
+.list__actions--wrap {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* ── Editor ─────────────────────────────────────────────────────────── */
+
+.editor-page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+  background-color: var(--ds-canvas);
+}
+
+.editor-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 48px;
+  padding: 0 16px;
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--ds-hairline);
+}
+
+.editor-bar__start {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.editor-bar__end {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.editor-bar__back {
+  font-size: 14px;
+  color: var(--ds-body);
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.editor-bar__back:hover {
+  color: var(--ds-ink);
+}
+
+.editor-bar__sep {
+  color: var(--ds-hairline-strong);
+}
+
+.editor-bar__title {
+  margin: 0;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.save-status {
+  font-size: 12px;
+  color: var(--ds-mute);
+  white-space: nowrap;
+}
+
+.save-status--pending,
+.save-status--saving {
+  color: var(--ds-body);
+}
+
+.save-status--conflict,
+.save-status--error {
+  color: var(--ds-error-deep);
+}
+
+.link-button--inline {
+  margin: 0;
+  font-size: 12px;
+}
+
+.editor-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 8px 16px;
+  font-size: 14px;
+  color: var(--ds-warning-deep);
+  background-color: var(--ds-warning-soft);
+  border-bottom: 1px solid var(--ds-hairline);
+}
+
+.editor-banner > span {
+  flex: 1 1 280px;
+}

@@ -124,7 +124,7 @@
         "home": {
             "title": "Overview",
             "empty": "No landscapes yet.",
-            "emptyHint": "Landscapes from your projects will appear here."
+            "emptyHint": "Create a landscape, or import a FossFLOW JSON export."
         },
         "users": {
             "title": "Users",
@@ -171,6 +171,35 @@
             "delete": "Delete project",
             "deleteHint": "Deletes the project and everything in it. This can’t be undone.",
             "deleteConfirm": "Delete “{{name}}”"
+        },
+        "landscapes": {
+            "untitled": "Untitled landscape",
+            "new": "New landscape",
+            "import": "Import JSON",
+            "importInvalid": "That file isn’t a FossFLOW JSON export.",
+            "name": "Landscape name",
+            "rename": "Rename",
+            "move": "Move",
+            "moveTo": "Move to…",
+            "delete": "Delete",
+            "deleteHint": "Delete this landscape? This can’t be undone.",
+            "deleteConfirm": "Delete “{{name}}”",
+            "updated": "Updated {{date}}",
+            "updatedBy": "Updated by {{name}}, {{date}}",
+            "notFound": "This landscape doesn’t exist, or you don’t have access to it.",
+            "back": "Back to the overview",
+            "readOnly": "Read only",
+            "export": "Export JSON",
+            "saved": "Saved",
+            "unsaved": "Unsaved changes",
+            "saving": "Saving…",
+            "notSaved": "Not saved",
+            "saveFailed": "Couldn’t save.",
+            "retry": "Try again",
+            "conflict": "{{name}} saved this landscape while you were editing. Reload to see their version, or overwrite it with yours.",
+            "someone": "Someone",
+            "reload": "Reload",
+            "overwrite": "Overwrite with mine"
         }
     }
 }

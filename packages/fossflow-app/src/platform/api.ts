@@ -1,8 +1,9 @@
-/** A failed API call, with the server's user-facing message when it sent one. */
+/** A failed API call, with the server's user-facing message and full answer. */
 export class ApiError extends Error {
   constructor(
     readonly status: number,
-    message: string
+    message: string,
+    readonly body: unknown = null
   ) {
     super(message);
     this.name = 'ApiError';
@@ -12,6 +13,8 @@ export class ApiError extends Error {
 interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
+  /** Keep the request going while the page unloads (last-chance saves). */
+  keepalive?: boolean;
 }
 
 /** Same-origin JSON calls; the session cookie travels automatically. */
@@ -19,6 +22,7 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
   const response = await fetch(path, {
     method: options.method ?? 'GET',
     credentials: 'same-origin',
+    keepalive: options.keepalive,
     headers: options.body === undefined ? undefined : { 'Content-Type': 'application/json' },
     body: options.body === undefined ? undefined : JSON.stringify(options.body)
   });
@@ -33,7 +37,7 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
         : typeof body?.message === 'string'
           ? body.message
           : `Request failed (${response.status})`;
-    throw new ApiError(response.status, message);
+    throw new ApiError(response.status, message, data);
   }
   return data as T;
 }

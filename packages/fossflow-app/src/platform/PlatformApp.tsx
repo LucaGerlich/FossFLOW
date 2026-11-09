@@ -8,6 +8,7 @@ import { Shell } from './components/Shell';
 import type { PlatformStatus } from './detect';
 import { HomePage } from './pages/HomePage';
 import { InvitePage } from './pages/InvitePage';
+import { LandscapeEditor } from './pages/LandscapeEditor';
 import { ProjectPage } from './pages/ProjectPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { SetupPage } from './pages/SetupPage';
@@ -58,6 +59,8 @@ function SignedIn() {
 
   return (
     <Routes>
+      {/* The editor takes the whole window, like n8n's canvas. */}
+      <Route path="landscapes/:landscapeId" element={<LandscapeEditor />} />
       <Route element={<Shell user={user} />}>
         <Route index element={<HomePage />} />
         <Route path="projects/:projectId/*" element={<ProjectPage />} />
