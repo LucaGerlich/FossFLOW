@@ -151,7 +151,7 @@ export const ConnectorLabel = memo(({ connector: sceneConnector, groupIndex = 0,
               sx={{
                 py: 0.75,
                 px: 1,
-                borderRadius: 2,
+                borderRadius: '6px',
                 backgroundColor: 'background.paper',
                 opacity: 0.95
               }}

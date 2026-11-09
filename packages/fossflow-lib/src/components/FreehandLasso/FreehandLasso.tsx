@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { DS_COLORS } from 'src/styles/tokens';
 import { useUiStateStore } from 'src/stores/uiStateStore';
 import { createSmoothPath } from 'src/utils';
 
@@ -40,8 +41,8 @@ export const FreehandLasso = () => {
     >
       <path
         d={smoothPath}
-        fill="rgba(33, 150, 243, 0.15)"
-        stroke="#2196f3"
+        fill="rgba(0, 112, 243, 0.08)"
+        stroke={DS_COLORS.link}
         strokeWidth={2}
         strokeDasharray="8 4"
         strokeLinejoin="round"

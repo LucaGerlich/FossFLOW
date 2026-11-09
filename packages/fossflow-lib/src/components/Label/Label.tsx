@@ -1,3 +1,4 @@
+import { DS_COLORS, DS_DROP_SHADOWS } from 'src/styles/tokens';
 import React, { useRef } from 'react';
 import { Box, SxProps } from '@mui/material';
 
@@ -63,8 +64,9 @@ export const Label = ({
           display: 'inline-block',
           bgcolor: 'common.white',
           border: '1px solid',
-          borderColor: 'grey.400',
-          borderRadius: 2,
+          borderColor: DS_COLORS.hairline,
+          borderRadius: '8px',
+          boxShadow: DS_DROP_SHADOWS[2],
           py: 1,
           px: 1.5,
           transformOrigin: 'bottom center',

@@ -1,3 +1,4 @@
+import { DS_COLORS, DS_FONTS } from 'src/styles/tokens';
 import React from 'react';
 import {
   Dialog,
@@ -185,10 +186,10 @@ export const HelpDialog = () => {
                       <TableCell>
                         <code
                           style={{
-                            backgroundColor: '#f5f5f5',
+                            backgroundColor: DS_COLORS.canvasSoft2,
                             padding: '2px 6px',
                             borderRadius: '4px',
-                            fontFamily: 'monospace'
+                            fontFamily: DS_FONTS.mono
                           }}
                         >
                           {shortcut.shortcut}
@@ -226,10 +227,10 @@ export const HelpDialog = () => {
                       <TableCell>
                         <code
                           style={{
-                            backgroundColor: '#f5f5f5',
+                            backgroundColor: DS_COLORS.canvasSoft2,
                             padding: '2px 6px',
                             borderRadius: '4px',
-                            fontFamily: 'monospace'
+                            fontFamily: DS_FONTS.mono
                           }}
                         >
                           {interaction.shortcut}

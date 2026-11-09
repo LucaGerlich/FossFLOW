@@ -1,3 +1,4 @@
+import { DS_COLORS } from 'src/styles/tokens';
 import React, { useCallback, useRef, useState } from 'react';
 import { Stack, Alert, IconButton as MUIIconButton, Box, Button, FormControlLabel, Checkbox, Typography, Slider } from '@mui/material';
 import { ControlsContainer } from 'src/components/ItemControls/components/ControlsContainer';
@@ -223,10 +224,10 @@ export const IconSelectionControls = () => {
       
       <Section>
         <Box sx={{ 
-          border: '1px solid #e0e0e0', 
+          border: `1px solid ${DS_COLORS.hairline}`,
           borderRadius: 1, 
           p: 1.5,
-          backgroundColor: '#f5f5f5'
+          backgroundColor: DS_COLORS.canvasSoft2
         }}>
           <Button
             variant="outlined"

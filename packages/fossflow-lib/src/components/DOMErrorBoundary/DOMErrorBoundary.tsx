@@ -1,3 +1,4 @@
+import { DS_COLORS } from 'src/styles/tokens';
 import React, { Component, ReactNode } from 'react';
 
 interface DOMErrorBoundaryProps {
@@ -95,10 +96,10 @@ class DOMErrorBoundary extends Component<DOMErrorBoundaryProps, DOMErrorBoundary
           <div
             style={{
               padding: '10px',
-              border: '1px solid #ccc',
+              border: `1px solid ${DS_COLORS.hairline}`,
               borderRadius: '4px',
-              backgroundColor: '#f9f9f9',
-              color: '#666'
+              backgroundColor: DS_COLORS.canvasSoft,
+              color: DS_COLORS.body
             }}
           >
             Component temporarily unavailable due to rendering errors

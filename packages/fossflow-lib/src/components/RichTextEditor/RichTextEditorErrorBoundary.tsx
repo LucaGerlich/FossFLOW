@@ -1,3 +1,4 @@
+import { DS_COLORS } from 'src/styles/tokens';
 import React, { Component, ReactNode } from 'react';
 
 interface ErrorBoundaryProps {
@@ -79,10 +80,10 @@ class RichTextEditorErrorBoundary extends Component<ErrorBoundaryProps, ErrorBou
       return this.props.fallback || (
         <div style={{
           padding: '10px',
-          border: '1px solid #ccc',
+          border: `1px solid ${DS_COLORS.hairline}`,
           borderRadius: '4px',
-          backgroundColor: '#f9f9f9',
-          color: '#666'
+          backgroundColor: DS_COLORS.canvasSoft,
+          color: DS_COLORS.body
         }}>
           Rich text editor temporarily unavailable
         </div>

@@ -1,4 +1,5 @@
 import React from 'react';
+import { DS_COLORS } from 'src/styles/tokens';
 import { useUiStateStore } from 'src/stores/uiStateStore';
 import { IsoTileArea } from 'src/components/IsoTileArea/IsoTileArea';
 
@@ -18,10 +19,10 @@ export const Lasso = () => {
     <IsoTileArea
       from={startTile}
       to={endTile}
-      fill="rgba(33, 150, 243, 0.15)"
+      fill="rgba(0, 112, 243, 0.08)"
       cornerRadius={8}
       stroke={{
-        color: '#2196f3',
+        color: DS_COLORS.link,
         width: 2,
         dashArray: '8 4'
       }}

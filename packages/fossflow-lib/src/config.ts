@@ -1,3 +1,4 @@
+import { DS_COLORS, DS_FONTS } from './styles/tokens';
 import {
   Size,
   InitialData,
@@ -29,7 +30,7 @@ export const DEFAULT_COLOR: Colors[0] = {
   value: customVars.customPalette.defaultColor
 };
 
-export const DEFAULT_FONT_FAMILY = 'Roboto, Arial, sans-serif';
+export const DEFAULT_FONT_FAMILY = DS_FONTS.sans;
 
 export const VIEW_DEFAULTS: Required<
   Omit<View, 'id' | 'description' | 'lastUpdated'>
@@ -72,7 +73,7 @@ export const TEXTBOX_DEFAULTS: Required<Omit<TextBox, 'id' | 'tile'>> = {
 };
 
 export const TEXTBOX_PADDING = 0.2;
-export const TEXTBOX_FONT_WEIGHT = 'bold';
+export const TEXTBOX_FONT_WEIGHT = 600; // design file caps weights at 600
 
 export const RECTANGLE_DEFAULTS: Required<
   Omit<Rectangle, 'id' | 'from' | 'to' | 'color' | 'live'>
@@ -84,7 +85,7 @@ export const ZOOM_INCREMENT = 0.05;
 export const MIN_ZOOM = 0.1;
 export const MAX_ZOOM = 1;
 export const TRANSFORM_ANCHOR_SIZE = 30;
-export const TRANSFORM_CONTROLS_COLOR = '#0392ff';
+export const TRANSFORM_CONTROLS_COLOR = DS_COLORS.link;
 export const INITIAL_DATA: InitialData = {
   title: 'Untitled',
   version: '',

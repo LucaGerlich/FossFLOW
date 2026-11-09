@@ -41,7 +41,7 @@ export const IconButton = ({
         variant="text"
         onClick={onClick}
         sx={{
-          borderRadius: 0,
+          borderRadius: 1,
           height: theme.customVars.toolMenu.height,
           width: theme.customVars.toolMenu.height,
           maxWidth: '100%',
