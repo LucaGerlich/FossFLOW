@@ -6,6 +6,35 @@ Newest entries first.
 
 ---
 
+## 2026-11-09 — Design-system overhaul (`vercel.design.md`)
+
+- **What:** The whole UI now follows the project's design file: ink `#171717` on near-white, hairlines, Geist and Geist Mono, 6 px app radii, stacked shadows, colour only for meaning.
+  - **Lib, shared tokens:** `styles/tokens.ts` (`DS_COLORS`, `DS_FONTS`, `DS_RADII`, `DS_SHADOWS`, `DS_DROP_SHADOWS`) is the single source. It's exported from the package, and the live overlay derives from it.
+  - **Lib, MUI theme:**
+    - ink primary and secondary, text and divider tokens, `#fafafa` background;
+    - Geist with weights capped at 600 and negative heading tracking;
+    - `shape.borderRadius` 6; the 25 elevations mapped onto 5 stacked levels;
+    - overrides for Button, IconButton, ToggleButton, Paper, Card, Dialog, Backdrop, Menu, Popover, Tooltip, OutlinedInput, Tabs, Slider, Divider, Chip and Link.
+  - **Lib, canvas:**
+    - `diagramBg` `#fafafa`; neutral default colour `#c7c7c7`; grid lines at 8 % opacity;
+    - canvas text in Geist, with text-box weight 600 instead of bold;
+    - lasso, freehand lasso, transform handles, the export crop frame and the hover tile use link blue.
+  - **Lib, hardcoded components:** label cards, connector labels, floating panels, the tool buttons' radius, the icon picker, help and hotkey code chips, and the error fallbacks.
+  - **App:**
+    - self-hosted `@fontsource-variable/geist` and `geist-mono` (OFL-1.1); `applyDesignTokens()` writes `--ds-*` CSS variables from the lib tokens; the first render waits up to 1.5 s for Geist so canvas text measures correctly;
+    - a 56 px nav bar: wordmark, diagram name and status, hairline actions, **Export** as the single ink primary, the language switcher, the live pill;
+    - the dialogs become modal cards with semantic notes and explicit button classes;
+    - the server-storage manager, language dropdown, storage manager and error fallback restyled; `DiagramManager.css` scoped;
+    - the default palette keeps its ids with token values; `theme-color` `#fafafa`.
+- **Why:** Requested: the editor should match the live layer's look.
+- **Security:** Fonts are self-hosted, so no Google Fonts requests (GDPR). No behaviour changes.
+- **Fixed along the way:** `DiagramManager.css` set a *global* `.dialog-buttons button:first-child` (green), which leaked into every app dialog. All its rules are now scoped under `.diagram-manager`.
+- **Verified:**
+  - Lib `tsc` is clean; 31/31 suites and 233/233 tests pass. The 3 DebugUtils snapshots were updated after reviewing their diffs: only emotion class hashes changed, the markup is identical.
+  - `npm run build` passes. App `tsc` shows only the 13 pre-existing errors in untouched files.
+  - Checked in the browser pane against real Beszel data: the nav bar, main menu, settings dialog, node panel and vitals card, export dialog, help dialog, canvas, labels and live plates, with no console errors.
+  - Upstream e2e suite (Python Selenium, Chromium 4.27 in Docker) against the production build: **18/18 passed** (load, base-path routing, node placement, connectors, undo, import, SVG export).
+
 ## 2026-11-09 — Fix: HTTP Basic Auth locked everyone out (upstream bug)
 
 - **What:** `docker-entrypoint.sh` hashed the Basic Auth password with `openssl passwd -bcrypt`, an option OpenSSL doesn't have. The hash came out empty, so every login, even with the correct password, got 401. The entrypoint now uses `openssl passwd -6` (SHA-512 crypt, which musl's `crypt()` used by nginx on Alpine verifies) and exits with an error instead of writing an empty hash.

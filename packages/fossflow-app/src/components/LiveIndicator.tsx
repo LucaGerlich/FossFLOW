@@ -15,28 +15,10 @@ export function LiveIndicator({ live }: LiveIndicatorProps) {
 
   return (
     <span
+      className={ok ? 'badge' : 'badge badge--warning'}
       title={live.error ?? undefined}
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 6,
-        padding: '4px 10px',
-        borderRadius: 999,
-        border: `1px solid ${ok ? '#ebebeb' : '#ffefcf'}`,
-        background: ok ? '#fafafa' : '#ffefcf',
-        color: ok ? '#4d4d4d' : '#ab570a',
-        fontSize: 12,
-        whiteSpace: 'nowrap'
-      }}
     >
-      <span
-        style={{
-          width: 7,
-          height: 7,
-          borderRadius: '50%',
-          background: ok ? '#29bc9b' : '#f5a623'
-        }}
-      />
+      <span className="badge__dot" />
       {ok ? `${t('live.label')} · ${source}` : t('live.unavailable')}
     </span>
   );
