@@ -1,4 +1,4 @@
-import type { BeszelContainer, BeszelSystem } from './beszel.ts';
+import type { BeszelContainer, BeszelSystem } from './beszel.js';
 import type {
   LiveContainer,
   LiveContainerKind,
@@ -7,7 +7,7 @@ import type {
   LiveStatus,
   LiveSystem,
   LiveVitals
-} from './types.ts';
+} from './types.js';
 
 // ponytail: fixed thresholds; per-item baselines ("6x its normal") come later.
 export const VITALS_WARNING_PERCENT = 80;

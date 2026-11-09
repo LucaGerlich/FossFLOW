@@ -1,19 +1,19 @@
 import assert from 'node:assert/strict';
-import { after, before, describe, it } from 'node:test';
-import { LiveSourceError, createBeszelClient } from './beszel.ts';
+import { afterAll, beforeAll, describe, it } from 'vitest';
+import { LiveSourceError, createBeszelClient } from './beszel.js';
 import {
   demoLandscape,
   startFakeBeszel,
   type FakeBeszel
-} from './testing/fakeBeszel.ts';
+} from './testing/fakeBeszel.js';
 
 describe('Beszel client', () => {
   let fake: FakeBeszel;
 
-  before(async () => {
+  beforeAll(async () => {
     fake = await startFakeBeszel(demoLandscape(Date.now()));
   });
-  after(() => fake.close());
+  afterAll(() => fake.close());
 
   const client = () =>
     createBeszelClient({

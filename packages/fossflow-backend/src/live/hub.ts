@@ -1,13 +1,13 @@
-import { LiveSourceError, type BeszelClient } from './beszel.ts';
-import type { LiveConfig } from './config.ts';
-import { normalizeInventory } from './normalize.ts';
+import { LiveSourceError, type BeszelClient } from './beszel.js';
+import type { LiveConfig } from './config.js';
+import { normalizeInventory } from './normalize.js';
 import type {
   LiveHistory,
   LiveSnapshot,
   LiveSourceHealth,
   LiveStatusResponse,
   LiveVitals
-} from './types.ts';
+} from './types.js';
 
 export const HISTORY_SAMPLES = 60;
 /** After this many poll intervals without a good sync, data is shown as unknown. */
@@ -108,22 +108,22 @@ export function createLiveHub(options: LiveHubOptions): LiveHub {
       for (const key of history.keys()) {
         if (!systems.some((system) => system.key === key)) history.delete(key);
       }
-      if (!source.ok) options.logger.info('[live] Beszel sync OK');
+      if (!source.ok) options.logger.info('Beszel sync OK');
       if (inventory.truncated) {
         options.logger.warn(
-          '[live] Beszel returned more records than the page cap; some are not shown'
+          'Beszel returned more records than the page cap; some are not shown'
         );
       }
       if (inventory.skipped > 0) {
         options.logger.warn(
-          `[live] skipped ${inventory.skipped} malformed Beszel record(s)`
+          `skipped ${inventory.skipped} malformed Beszel record(s)`
         );
       }
       source = { ...source, ok: true, lastSync: at.toISOString(), error: null };
       snapshot = { updatedAt: at.toISOString(), systems, sources: [source] };
     } catch (error) {
       const message = safeMessage(error);
-      if (source.error !== message) options.logger.warn(`[live] ${message}`);
+      if (source.error !== message) options.logger.warn(message);
       source = { ...source, ok: false, error: message };
       // Keep the last good systems so the map does not blank out on a blip.
       snapshot = { ...snapshot, sources: [source] };

@@ -1,41 +1,51 @@
 import assert from 'node:assert/strict';
-import type { Server } from 'node:http';
-import type { AddressInfo } from 'node:net';
-import { after, describe, it } from 'node:test';
-import express from 'express';
-import { createBeszelClient } from './beszel.ts';
-import { createLiveHub, type LiveHub } from './hub.ts';
-import { createLiveRouter } from './routes.ts';
-import { demoLandscape, startFakeBeszel } from './testing/fakeBeszel.ts';
-import type { LiveSnapshot, LiveStatusResponse } from './types.ts';
+import type { INestApplication } from '@nestjs/common';
+import { Test } from '@nestjs/testing';
+import request from 'supertest';
+import { afterAll, describe, it } from 'vitest';
+import { createBeszelClient } from './beszel.js';
+import { createLiveHub, type LiveHub } from './hub.js';
+import { LIVE_HUB, LiveController } from './live.controller.js';
+import { demoLandscape, startFakeBeszel } from './testing/fakeBeszel.js';
+import type { LiveSnapshot, LiveStatusResponse } from './types.js';
 
 const silent = { info: () => {}, warn: () => {} };
 
-async function serve(
-  hub: LiveHub | null
-): Promise<{ base: string; server: Server }> {
-  const app = express();
-  app.use('/api/live', createLiveRouter(hub));
-  const server = await new Promise<Server>((resolve) => {
-    const s = app.listen(0, '127.0.0.1', () => resolve(s));
-  });
-  return {
-    base: `http://127.0.0.1:${(server.address() as AddressInfo).port}/api/live`,
-    server
-  };
+async function serve(hub: LiveHub | null): Promise<INestApplication> {
+  const moduleRef = await Test.createTestingModule({
+    controllers: [LiveController],
+    providers: [{ provide: LIVE_HUB, useValue: hub }]
+  }).compile();
+  const app = moduleRef.createNestApplication({ logger: false });
+  app.setGlobalPrefix('api');
+  await app.init();
+  return app;
 }
 
 describe('live routes', () => {
-  const servers: Server[] = [];
-  after(() => servers.forEach((s) => s.close()));
+  const apps: INestApplication[] = [];
+  afterAll(async () => {
+    await Promise.all(apps.map((app) => app.close()));
+  });
 
   it('reports disabled when no source is configured', async () => {
-    const { base, server } = await serve(null);
-    servers.push(server);
-    const status = await fetch(`${base}/status`);
-    assert.equal(status.headers.get('cache-control'), 'no-store');
-    assert.deepEqual(await status.json(), { enabled: false, sources: [] });
-    assert.equal((await fetch(`${base}/snapshot`)).status, 404);
+    const app = await serve(null);
+    apps.push(app);
+    const status = await request(app.getHttpServer()).get('/api/live/status');
+    assert.equal(status.headers['cache-control'], 'no-store');
+    assert.deepEqual(status.body, { enabled: false, sources: [] });
+    const snapshot = await request(app.getHttpServer()).get('/api/live/snapshot');
+    assert.equal(snapshot.status, 404);
+    assert.deepEqual(snapshot.body, { error: 'Live data is not configured' });
+  });
+
+  it('sends no CORS headers', async () => {
+    const app = await serve(null);
+    apps.push(app);
+    const response = await request(app.getHttpServer())
+      .get('/api/live/status')
+      .set('Origin', 'https://evil.example');
+    assert.equal(response.headers['access-control-allow-origin'], undefined);
   });
 
   it('serves the snapshot without credentials and keeps it through outages', async () => {
@@ -50,41 +60,37 @@ describe('live routes', () => {
       logger: silent
     });
     await hub.syncNow();
-    const { base, server } = await serve(hub);
-    servers.push(server);
+    const app = await serve(hub);
+    apps.push(app);
 
-    const response = await fetch(`${base}/snapshot`);
-    assert.equal(response.headers.get('cache-control'), 'no-store');
-    const text = await response.text();
+    const response = await request(app.getHttpServer()).get('/api/live/snapshot');
+    assert.equal(response.headers['cache-control'], 'no-store');
     for (const secret of [fake.password, fake.email, fake.url]) {
       assert.ok(
-        !text.includes(secret),
+        !response.text.includes(secret),
         'snapshot must not expose source credentials'
       );
     }
-    const snapshot = JSON.parse(text);
+    const snapshot = response.body as LiveSnapshot;
     assert.equal(snapshot.systems.length, 2);
-    assert.equal(snapshot.sources[0].ok, true);
-    const db = snapshot.systems.find(
-      (s: { name: string }) => s.name === 'db-01'
-    );
-    assert.equal(db.status, 'warning'); // memory 83 %
+    assert.equal(snapshot.sources[0]?.ok, true);
+    const db = snapshot.systems.find((s) => s.name === 'db-01');
+    assert.equal(db?.status, 'warning'); // memory 83 %
     assert.equal(
-      db.containers.find((c: { name: string }) => c.name === 'postgres').status,
+      db?.containers.find((c) => c.name === 'postgres')?.status,
       'critical'
     );
 
     await fake.close();
     await hub.syncNow();
-    const afterOutage = (await (
-      await fetch(`${base}/snapshot`)
-    ).json()) as LiveSnapshot;
+    const afterOutage = (
+      await request(app.getHttpServer()).get('/api/live/snapshot')
+    ).body as LiveSnapshot;
     assert.equal(afterOutage.systems.length, 2, 'last good systems are kept');
     assert.equal(afterOutage.sources[0]?.ok, false);
     assert.match(afterOutage.sources[0]?.error ?? '', /unreachable/);
-    const status = (await (
-      await fetch(`${base}/status`)
-    ).json()) as LiveStatusResponse;
+    const status = (await request(app.getHttpServer()).get('/api/live/status'))
+      .body as LiveStatusResponse;
     assert.equal(status.enabled, true);
   });
 
@@ -126,8 +132,7 @@ describe('live hub staleness', () => {
 
     clock += 60_000; // two intervals: still trusted
     await hub.syncNow();
-    const recent = hub.getSnapshot();
-    assert.notEqual(recent.systems[0]?.status, 'unknown');
+    assert.notEqual(hub.getSnapshot().systems[0]?.status, 'unknown');
 
     clock += 60_000; // four intervals since the last good sync
     const stale = hub.getSnapshot();

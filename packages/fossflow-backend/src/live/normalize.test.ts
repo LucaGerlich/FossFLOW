@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
-import { describe, it } from 'node:test';
-import type { BeszelContainer, BeszelSystem } from './beszel.ts';
+import { describe, it } from 'vitest';
+import type { BeszelContainer, BeszelSystem } from './beszel.js';
 import {
   STALE_CONTAINER_MS,
   detectKind,
@@ -8,7 +8,7 @@ import {
   systemStatus,
   toContainer,
   toVitals
-} from './normalize.ts';
+} from './normalize.js';
 
 const NOW = 1_800_000_000_000;
 
@@ -31,6 +31,7 @@ const system = (overrides: Partial<BeszelSystem> = {}): BeszelSystem => ({
   name: 'web-01',
   status: 'up',
   info: { cpu: 10, mp: 20, dp: 30, bb: 1000, la: [1, 2, 3], u: 60, dt: 41.27 },
+  updated: undefined,
   ...overrides
 });
 

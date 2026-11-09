@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
-import { describe, it } from 'node:test';
-import { readLiveConfig } from './config.ts';
+import { describe, it } from 'vitest';
+import { readLiveConfig } from './config.js';
 
 const SECRET = 's3cret-Passw0rd';
 const base = {

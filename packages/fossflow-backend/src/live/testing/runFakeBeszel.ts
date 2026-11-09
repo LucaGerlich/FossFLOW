@@ -1,4 +1,4 @@
-import { demoLandscape, startFakeBeszel } from './fakeBeszel.ts';
+import { demoLandscape, startFakeBeszel } from './fakeBeszel.js';
 
 /**
  * Local demo source: `npm run dev:fake-beszel`, then start the backend with

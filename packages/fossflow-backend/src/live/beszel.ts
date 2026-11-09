@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { BeszelConfig } from './config.ts';
+import type { BeszelConfig } from './config.js';
 
 /**
  * Minimal read-only client for the Beszel hub (PocketBase REST API).
@@ -11,7 +11,8 @@ const REQUEST_TIMEOUT_MS = 10_000;
 const PAGE_SIZE = 500;
 const MAX_PAGES = 20;
 
-const finite = z.number().finite();
+// zod 4 numbers reject Infinity and NaN.
+const finite = z.number();
 
 /** Beszel stores Unix ms on containers and PocketBase date strings on systems. */
 const timestamp = z
@@ -37,7 +38,7 @@ export const beszelSystemSchema = z.object({
       u: finite.optional(),
       dt: finite.optional()
     })
-    .passthrough()
+    .loose()
     .nullish(),
   /** When the hub last stored a report from this system's agent. */
   updated: timestamp
@@ -160,7 +161,7 @@ export function createBeszelClient(
   async function listAll<T>(
     collection: string,
     fields: string,
-    schema: z.ZodType<T, z.ZodTypeDef, unknown>
+    schema: z.ZodType<T, unknown>
   ): Promise<{ records: T[]; skipped: number; truncated: boolean }> {
     const records: T[] = [];
     let skipped = 0;
