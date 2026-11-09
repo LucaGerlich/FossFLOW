@@ -58,5 +58,9 @@
         "autoSaveFailed": "Storage full! Please use Storage Manager to free up space.",
         "beforeUnload": "You have unsaved changes. Are you sure you want to leave?",
         "quotaExceeded": "Storage quota exceeded. Please export important diagrams and clear some space."
+    },
+    "live": {
+        "label": "Live",
+        "unavailable": "Live data unavailable"
     }
 }

@@ -58,5 +58,9 @@
     "autoSaveFailed": "Speicher voll! Bitte nutze die Speicherverwaltung, um Platz freizugeben.",
     "beforeUnload": "Du hast ungespeicherte Änderungen. Möchtest du die Seite wirklich verlassen?",
     "quotaExceeded": "Speicherlimit überschritten. Bitte exportiere wichtige Diagramme und schaffe etwas Platz."
+  },
+  "live": {
+    "label": "Live",
+    "unavailable": "Live-Daten nicht verfügbar"
   }
 }

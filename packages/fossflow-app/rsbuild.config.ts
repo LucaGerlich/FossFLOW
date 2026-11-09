@@ -10,6 +10,12 @@ const rootNodeModules = path.resolve(__dirname, '../../node_modules');
 
 export default defineConfig({
     plugins: [pluginReact()],
+    server: {
+        // Live data is same-origin only (the backend sends no CORS headers for it).
+        proxy: {
+            '/api/live': `http://localhost:${process.env.BACKEND_PORT || 3001}`,
+        },
+    },
     resolve: {
         alias: {
             // Force React to resolve from root node_modules

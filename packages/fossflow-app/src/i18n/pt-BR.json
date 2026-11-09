@@ -58,5 +58,9 @@
         "autoSaveFailed": "Armazenamento cheio! Por favor, use o gerenciador de armazenamento para liberar espaço.",
         "beforeUnload": "Você tem alterações não salvas. Tem certeza de que deseja sair?",
         "quotaExceeded": "Cota de armazenamento excedida. Por favor, exporte os diagramas importantes e libere espaço."
+    },
+    "live": {
+        "label": "Ao vivo",
+        "unavailable": "Dados ao vivo indisponíveis"
     }
 }

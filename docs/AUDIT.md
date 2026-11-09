@@ -6,6 +6,44 @@ Newest entries first.
 
 ---
 
+## 2026-11-09 — App: live data polling and toolbar indicator
+
+- **What:**
+  - New `services/liveService.ts`: the `useLiveData()` hook checks `/api/live/status` once, then polls `/api/live/snapshot` every 15 s while the tab is visible. It backs off exponentially up to 2 min on errors, uses a 10 s timeout and does a basic shape check.
+  - New `components/LiveIndicator.tsx`: a toolbar pill reading `● Live · Beszel`, or "Live data unavailable" with the technical error as a tooltip.
+  - `App.tsx` passes the snapshot to `<Isoflow live>` (editor and `/display` routes).
+  - `rsbuild.config.ts` proxies `/api/live` to the backend in development.
+  - Two strings (`live.label`, `live.unavailable`) added to all app translation files, in both copies.
+- **Why:** Connects the backend's live data to the editor. With no backend, or live data disabled, the hook stays off and the app is plain FossFLOW.
+- **Security:** Same-origin requests only: nginx in production, the dev proxy in development, matching the no-CORS backend. `cache: 'no-store'`. No credentials or tokens in the browser.
+- **Verified:**
+  - In the dev app (browser pane) against the backend and the fake Beszel:
+    - an empty diagram gets two server plates in a level row with all six containers;
+    - the degraded db-01 shows an amber chip and its vitals card automatically, and postgres a red light with `unhealthy · 41% · 2.1 GB`;
+    - selecting web-01 opens its card;
+    - after saving and reloading there are 8 bound items with 8 unique keys and no duplicates.
+  - With the backend stopped: no chip, no overlay, no console errors.
+  - Not checked here: the app has no unit tests, and `tsc -p packages/fossflow-app` shows 13 errors, all in untouched upstream files (dead `EditorPage.tsx`, `reportWebVitals.ts`, `index.tsx`).
+
+## 2026-11-09 — Live overlay and vitals card
+
+- **What:** New lib files in `live/`:
+  - `LiveContext.tsx`: a provider with the key → status lookup.
+  - `status.ts`: pure status resolution. A bound container missing from a present server is `stopped`; a missing server is `unknown`.
+  - `LiveLayer.tsx`, mounted in its own `SceneLayer` after the nodes:
+    - a status light on the lid of hairline icons, or above other icons;
+    - a pulse ring for warning and critical;
+    - a mono metric chip under every bound node;
+    - an `UPDATE` tag when an update is available.
+  - `VitalsCard.tsx`, option B: a card on a leader line, left of the server, with sparklines for CPU, memory and disk, plus network, load, uptime and temperature. It shows when the server is selected, and always when it is warning or critical.
+  - `format.ts` and `tokens.ts`, with colours from the design file.
+  - `Node.tsx` dims stopped and unknown nodes (35 % opacity, greyscale).
+  - A `live` namespace (14 strings) in `LocaleProps` and all 12 locales, translated.
+  - Discovery now lays plates out as a level row on screen with a wider gap (`PLATE_GAP` 5) so a card fits between plates.
+- **Why:** The visible half of the live layer, following the approved mockups: colour only for trouble.
+- **Security:** The overlay is display-only (`pointer-events: none`) and renders text through React (no HTML injection).
+- **Verified:** Lib `tsc` is clean; 31/31 suites and 229/229 tests pass (new: status resolution, formatters, updated layout tests). Visually checked in the browser pane together with the app wiring (next entry).
+
 ## 2026-11-09 — Live bindings and automatic placement
 
 - **What:**

@@ -58,5 +58,9 @@
         "autoSaveFailed": "Archiviazione piena! Usa il Gestore archiviazione per liberare spazio.",
         "beforeUnload": "Hai modifiche non salvate. Sei sicuro di voler uscire?",
         "quotaExceeded": "Quota di archiviazione superata. Esporta i diagrammi importanti e libera spazio."
+    },
+    "live": {
+        "label": "Live",
+        "unavailable": "Dati live non disponibili"
     }
 }

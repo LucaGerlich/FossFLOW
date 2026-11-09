@@ -58,5 +58,9 @@
         "autoSaveFailed": "Stockage plein ! Veuillez utiliser le gestionnaire de stockage pour libérer de l'espace.",
         "beforeUnload": "Vous avez des modifications non enregistrées. Êtes-vous sûr de vouloir partir ?",
         "quotaExceeded": "Quota de stockage dépassé. Veuillez exporter les diagrammes importants et libérer de l'espace."
+    },
+    "live": {
+        "label": "En direct",
+        "unavailable": "Données en direct indisponibles"
     }
 }

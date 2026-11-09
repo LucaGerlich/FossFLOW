@@ -58,5 +58,9 @@
         "autoSaveFailed": "Magazyn pełny! Użyj Menedżera Magazynu, aby zwolnić miejsce.",
         "beforeUnload": "Masz niezapisane zmiany. Czy na pewno chcesz opuścić stronę?",
         "quotaExceeded": "Przekroczono limit magazynu. Proszę eksportować ważne diagramy i usunąć część danych."
+    },
+    "live": {
+        "label": "Na żywo",
+        "unavailable": "Dane na żywo niedostępne"
     }
 }

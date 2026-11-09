@@ -58,6 +58,9 @@
         "autoSaveFailed": "Penyimpanan penuh! Silakan gunakan Manajer Penyimpanan untuk membebaskan ruang.",
         "beforeUnload": "Anda memiliki perubahan yang belum disimpan. Apakah Anda yakin ingin keluar?",
         "quotaExceeded": "Kuota penyimpanan terlampaui. Silakan ekspor diagram penting dan kosongkan beberapa ruang."
+    },
+    "live": {
+        "label": "Langsung",
+        "unavailable": "Data langsung tidak tersedia"
     }
 }
-
