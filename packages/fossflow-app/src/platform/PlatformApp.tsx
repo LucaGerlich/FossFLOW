@@ -8,6 +8,7 @@ import { Shell } from './components/Shell';
 import type { PlatformStatus } from './detect';
 import { HomePage } from './pages/HomePage';
 import { InvitePage } from './pages/InvitePage';
+import { ProjectPage } from './pages/ProjectPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { SetupPage } from './pages/SetupPage';
 import { SignInPage } from './pages/SignInPage';
@@ -59,6 +60,7 @@ function SignedIn() {
     <Routes>
       <Route element={<Shell user={user} />}>
         <Route index element={<HomePage />} />
+        <Route path="projects/:projectId/*" element={<ProjectPage />} />
         <Route
           path="settings/users"
           element={<AdminOnly allowed={isAdmin(user)}><UsersPage me={user} /></AdminOnly>}

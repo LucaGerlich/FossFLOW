@@ -108,12 +108,18 @@
             "overview": "Overview",
             "settings": "Settings",
             "users": "Users",
-            "signOut": "Sign out"
+            "signOut": "Sign out",
+            "personal": "Personal",
+            "projects": "Projects",
+            "noProjects": "No team projects yet."
         },
         "roles": {
             "owner": "Owner",
             "admin": "Admin",
-            "member": "Member"
+            "member": "Member",
+            "editor": "Editor",
+            "viewer": "Viewer",
+            "personalOwner": "Owner"
         },
         "home": {
             "title": "Overview",
@@ -144,6 +150,27 @@
         },
         "errors": {
             "generic": "Something went wrong. Please try again."
+        },
+        "projects": {
+            "create": "New project",
+            "createHint": "A shared space for one infrastructure or team, with its own landscapes, credentials and members.",
+            "createSubmit": "Create project",
+            "notFound": "This project doesn’t exist, or you don’t have access to it.",
+            "personalHint": "Only you can see what’s here.",
+            "landscapes": "Landscapes",
+            "landscapesHint": "Landscapes in this project will appear here.",
+            "settings": "Settings",
+            "name": "Project name",
+            "save": "Save",
+            "members": "Members",
+            "rolesHint": "Admins manage the project and its members, editors change landscapes and credentials, viewers only look.",
+            "remove": "Remove",
+            "addMember": "Add a member",
+            "pickPerson": "Choose a person…",
+            "add": "Add",
+            "delete": "Delete project",
+            "deleteHint": "Deletes the project and everything in it. This can’t be undone.",
+            "deleteConfirm": "Delete “{{name}}”"
         }
     }
 }
