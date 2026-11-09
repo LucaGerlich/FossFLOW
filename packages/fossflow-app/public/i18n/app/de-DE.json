@@ -61,6 +61,10 @@
   },
   "live": {
     "label": "Live",
-    "unavailable": "Live-Daten nicht verfügbar"
+    "unavailable": "Live-Daten nicht verfügbar",
+    "servers_one": "{{count}} Server",
+    "servers_other": "{{count}} Server",
+    "noServers": "keine Server",
+    "noServersHint": "Verbunden, aber Beszel teilt keine Server mit diesem Benutzer. Füge den Benutzer im Beszel-Adminbereich bei jedem Server hinzu oder starte den Hub mit SHARE_ALL_SYSTEMS=true."
   }
 }

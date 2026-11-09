@@ -61,6 +61,11 @@
     },
     "live": {
         "label": "Ao vivo",
-        "unavailable": "Dados ao vivo indisponíveis"
+        "unavailable": "Dados ao vivo indisponíveis",
+        "servers_one": "{{count}} servidor",
+        "servers_many": "{{count}} servidores",
+        "servers_other": "{{count}} servidores",
+        "noServers": "nenhum servidor",
+        "noServersHint": "Conectado, mas o Beszel não compartilha nenhum servidor com este usuário. Adicione o usuário a cada servidor no painel de administração do Beszel ou inicie o hub com SHARE_ALL_SYSTEMS=true."
     }
 }

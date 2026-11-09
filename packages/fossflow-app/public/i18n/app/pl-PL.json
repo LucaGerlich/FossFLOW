@@ -61,6 +61,12 @@
     },
     "live": {
         "label": "Na żywo",
-        "unavailable": "Dane na żywo niedostępne"
+        "unavailable": "Dane na żywo niedostępne",
+        "servers_one": "{{count}} serwer",
+        "servers_few": "{{count}} serwery",
+        "servers_many": "{{count}} serwerów",
+        "servers_other": "{{count}} serwera",
+        "noServers": "brak serwerów",
+        "noServersHint": "Połączono, ale Beszel nie udostępnia temu użytkownikowi żadnych serwerów. Dodaj użytkownika do każdego serwera w panelu administracyjnym Beszel lub uruchom hub z SHARE_ALL_SYSTEMS=true."
     }
 }

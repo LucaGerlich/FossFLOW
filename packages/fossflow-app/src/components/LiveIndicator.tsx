@@ -10,16 +10,30 @@ export function LiveIndicator({ live }: LiveIndicatorProps) {
   const { t } = useTranslation('app');
   if (live.connection === 'off') return null;
 
-  const ok = live.connection === 'ok';
-  const source = live.snapshot?.sources[0]?.name ?? 'Live';
+  if (live.connection !== 'ok' || !live.snapshot) {
+    return (
+      <span className="badge badge--warning" title={live.error ?? undefined}>
+        <span className="badge__dot" />
+        {t('live.unavailable')}
+      </span>
+    );
+  }
+
+  const source = live.snapshot.sources[0]?.name ?? 'Live';
+  const servers = live.snapshot.systems.length;
+  // Connected but empty almost always means the source shares nothing with
+  // this user, so say how to fix it. ponytail: hint names Beszel, the only source.
+  const empty = servers === 0;
 
   return (
     <span
-      className={ok ? 'badge' : 'badge badge--warning'}
-      title={live.error ?? undefined}
+      className={empty ? 'badge badge--warning' : 'badge'}
+      title={empty ? t('live.noServersHint') : undefined}
     >
       <span className="badge__dot" />
-      {ok ? `${t('live.label')} · ${source}` : t('live.unavailable')}
+      {`${t('live.label')} · ${source} · ${
+        empty ? t('live.noServers') : t('live.servers', { count: servers })
+      }`}
     </span>
   );
 }

@@ -61,6 +61,9 @@
     },
     "live": {
         "label": "Langsung",
-        "unavailable": "Data langsung tidak tersedia"
+        "unavailable": "Data langsung tidak tersedia",
+        "servers_other": "{{count}} server",
+        "noServers": "tidak ada server",
+        "noServersHint": "Terhubung, tetapi Beszel tidak membagikan server apa pun dengan pengguna ini. Tambahkan pengguna ke setiap server di panel admin Beszel, atau jalankan hub dengan SHARE_ALL_SYSTEMS=true."
     }
 }

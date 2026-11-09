@@ -78,6 +78,7 @@ The live snapshot is an inventory of your infrastructure: server names, containe
 |---|---|
 | No `Live` pill | `GET /api/live/status` should return `{"enabled": true, ...}`. If it returns `false`, check the backend's startup log for the reason; it never prints the password. |
 | Pill reads "Live data unavailable" | Hover it for the error, e.g. `Beszel: Beszel login failed (HTTP 400)` (wrong credentials, or the user isn't verified) or `Beszel is unreachable (ECONNREFUSED)`. |
+| Pill reads "Live · Beszel · no servers" (amber) | The login works but Beszel shares no servers with this user. Add the user to each server's **users** field in the admin panel, or start the hub with `SHARE_ALL_SYSTEMS=true` (step 1). |
 | Servers appear, but no containers | The agent needs the Docker socket, and Beszel only reports **running** containers. |
 | Live data stays off in Docker | Configure `HTTP_AUTH_USER` and `HTTP_AUTH_PASSWORD`, or set `LIVE_ALLOW_UNAUTHENTICATED=true` on purpose. |
 

@@ -6,6 +6,22 @@ Newest entries first.
 
 ---
 
+## 2026-11-09 — Live pill shows the server count, and says so when there are none
+
+- **What:** The toolbar's live pill now reads "Live · Beszel · 3 servers". When the source is reachable but returns no servers, it turns amber, reads "Live · Beszel · no servers" and explains the fix in its tooltip: share the servers with the read-only user, or set `SHARE_ALL_SYSTEMS=true`. The new strings (`live.servers` with plural forms, `live.noServers`, `live.noServersHint`) are translated in all 13 app languages and mirrored in `src/i18n`. `docs/LIVE.md` gained a troubleshooting row.
+- **Why:** A connected hub that shares nothing with the user looked exactly like a working one ("Live · Beszel"), with an empty map and no hint why. That happened on the first real setup.
+- **Security:** None. The pill only shows a count; the tooltip names no hosts or users.
+- **Verified:**
+  - Browser pane against the real hub, which currently shares 0 servers: amber "Live · Beszel · no servers" with the hint.
+  - A separate Playwright browser with stubbed `/api/live` responses:
+    - "2 servers" and "1 server" in English;
+    - Russian "1 сервер / 3 сервера / 5 серверов";
+    - Polish "2 serwery / 5 serwerów";
+    - Chinese "2 台服务器";
+    - German empty state with its hint.
+  - App `tsc` shows only the 13 pre-existing errors in untouched files.
+  - Not unit-tested: the app package has no test runner.
+
 ## 2026-11-09 — Fix: every mouse step used the previous event's movement
 
 - **What:** `processMouseUpdate` in `useInteractionManager.ts` now passes the mode handlers the UI state read after `setMouse`, not the copy read before it.
