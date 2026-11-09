@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Put } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, Query } from '@nestjs/common';
 import { z } from 'zod';
 import type { AuthSession } from '../auth/auth.js';
 import { CurrentSession } from '../auth/guards.js';
@@ -52,8 +52,12 @@ export class ProjectsController {
   @Delete(':id')
   @RequireProjectScope('project:delete')
   @HttpCode(204)
-  async remove(@Param('id') id: string): Promise<void> {
-    await this.projects.remove(id);
+  async remove(
+    @CurrentSession() session: AuthSession,
+    @Param('id') id: string,
+    @Query('transferTo') transferTo?: string
+  ): Promise<void> {
+    await this.projects.remove(id, session.user, transferTo || undefined);
   }
 
   @Get(':id/candidates')

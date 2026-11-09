@@ -1,5 +1,14 @@
 import { sql } from 'drizzle-orm';
-import { index, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import {
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+  uniqueIndex
+} from 'drizzle-orm/pg-core';
 import { user } from './auth-schema.js';
 
 export * from './auth-schema.js';
@@ -68,4 +77,27 @@ export const projectRelation = pgTable(
       .on(table.userId)
       .where(sql`${table.role} = 'project:personalOwner'`)
   ]
+);
+
+/**
+ * A landscape (n8n's workflow): one FossFLOW model stored in a project.
+ * `version` increases with every save; a save based on an older version is
+ * refused, so nobody silently overwrites someone else's changes.
+ */
+export const landscape = pgTable(
+  'landscape',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => project.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    model: jsonb('model').notNull(),
+    version: integer('version').notNull().default(1),
+    createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
+    updatedBy: text('updated_by').references(() => user.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [index('landscape_project_idx').on(table.projectId)]
 );

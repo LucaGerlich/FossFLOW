@@ -14,7 +14,7 @@ import { Reflector } from '@nestjs/core';
 import { and, eq } from 'drizzle-orm';
 import type { AuthenticatedRequest } from '../auth/guards.js';
 import { DB, type Database } from '../database/database.module.js';
-import { project, projectRelation } from '../database/schema.js';
+import { landscape, project, projectRelation } from '../database/schema.js';
 import { type ProjectScope, projectScopesFor } from '../rbac/roles.js';
 
 export interface ProjectAccessInfo {
@@ -57,42 +57,65 @@ export class ProjectAccess {
 
 const PROJECT_SCOPE_KEY = 'fossflow:projectScope';
 
+/** Which record the route parameter names; its project decides access. */
+type ScopeTarget = 'project' | 'landscape';
+
+interface ProjectScopeRule {
+  scope: ProjectScope;
+  param: string;
+  target: ScopeTarget;
+}
+
 @Injectable()
 class ProjectScopeGuard implements CanActivate {
   constructor(
     private readonly access: ProjectAccess,
-    private readonly reflector: Reflector
+    private readonly reflector: Reflector,
+    @Inject(DB) private readonly db: Database
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const { scope, param } = this.reflector.get<{ scope: ProjectScope; param: string }>(
-      PROJECT_SCOPE_KEY,
-      context.getHandler()
-    );
+    const rule = this.reflector.get<ProjectScopeRule>(PROJECT_SCOPE_KEY, context.getHandler());
     const request = context.switchToHttp().getRequest<ProjectRequest>();
     const viewer = request.auth?.user;
-    const projectId = request.params[param];
-    if (!viewer || typeof projectId !== 'string') {
-      throw new NotFoundException({ error: 'Project not found' });
-    }
+    const id = request.params[rule.param];
+    const notFound = rule.target === 'landscape' ? 'Landscape not found' : 'Project not found';
+    if (!viewer || typeof id !== 'string') throw new NotFoundException({ error: notFound });
 
-    const access = await this.access.resolve(viewer, projectId);
-    if (!access) throw new NotFoundException({ error: 'Project not found' });
-    if (!access.scopes.has(scope)) {
+    const projectId = rule.target === 'landscape' ? await this.projectOfLandscape(id) : id;
+    const access = projectId ? await this.access.resolve(viewer, projectId) : null;
+    if (!access) throw new NotFoundException({ error: notFound });
+    if (!access.scopes.has(rule.scope)) {
       throw new ForbiddenException({ error: 'Not allowed in this project' });
     }
     request.projectAccess = access;
     return true;
   }
+
+  private async projectOfLandscape(landscapeId: string): Promise<string | null> {
+    const [row] = await this.db
+      .select({ projectId: landscape.projectId })
+      .from(landscape)
+      .where(eq(landscape.id, landscapeId));
+    return row?.projectId ?? null;
+  }
 }
 
 /**
  * The signed-in user needs `scope` in the project named by the route
- * parameter (default `:id`). Projects you can't see answer 404, not 403.
+ * parameter (default `:id`), or in the project that holds the landscape it
+ * names. Anything you can't see answers 404, not 403.
  */
-export const RequireProjectScope = (scope: ProjectScope, param = 'id') =>
+export const RequireProjectScope = (
+  scope: ProjectScope,
+  options: { param?: string; target?: ScopeTarget } = {}
+) =>
   applyDecorators(
-    SetMetadata(PROJECT_SCOPE_KEY, { scope, param }),
+    SetMetadata(PROJECT_SCOPE_KEY, {
+      scope,
+      param: options.param ?? 'id',
+      target: options.target ?? 'project'
+    } satisfies ProjectScopeRule),
     UseGuards(ProjectScopeGuard)
   );
 

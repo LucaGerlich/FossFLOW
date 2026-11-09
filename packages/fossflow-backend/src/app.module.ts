@@ -8,6 +8,7 @@ import { DatabaseModule } from './database/database.module.js';
 import { HealthController } from './health/health.controller.js';
 import { InvitationsController } from './invitations/invitations.controller.js';
 import { InvitationsService } from './invitations/invitations.service.js';
+import { LandscapesModule } from './landscapes/landscapes.module.js';
 import { LiveModule } from './live/live.module.js';
 import { ProjectsModule } from './projects/projects.module.js';
 import { ScopesGuard } from './rbac/scopes.guard.js';
@@ -28,6 +29,7 @@ export class AppModule {
         ThrottlerModule.forRoot({ throttlers: [RATE_LIMIT] }),
         DatabaseModule,
         ProjectsModule,
+        LandscapesModule,
         AuthModule,
         LiveModule
       ],

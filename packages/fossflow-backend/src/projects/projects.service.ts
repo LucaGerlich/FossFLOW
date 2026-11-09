@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Inject,
   Injectable,
   Logger,
@@ -10,7 +11,8 @@ import {
 } from '@nestjs/common';
 import { and, asc, desc, eq, isNotNull, ne, notExists, or, sql } from 'drizzle-orm';
 import { DB, type Database } from '../database/database.module.js';
-import { project, projectRelation, user } from '../database/schema.js';
+import { landscape, project, projectRelation, user } from '../database/schema.js';
+import { ProjectAccess } from './project-access.js';
 import { hasInstanceScope, projectScopesFor, type TeamProjectRole } from '../rbac/roles.js';
 
 const isUniqueViolation = (error: unknown) =>
@@ -42,7 +44,10 @@ interface Viewer {
 export class ProjectsService implements OnApplicationBootstrap {
   private readonly logger = new Logger('Projects');
 
-  constructor(@Inject(DB) private readonly db: Database) {}
+  constructor(
+    @Inject(DB) private readonly db: Database,
+    private readonly access: ProjectAccess
+  ) {}
 
   async onApplicationBootstrap(): Promise<void> {
     const created = await this.ensurePersonalProjects();
@@ -130,9 +135,31 @@ export class ProjectsService implements OnApplicationBootstrap {
     await this.db.update(project).set({ name }).where(eq(project.id, projectId));
   }
 
-  async remove(projectId: string): Promise<void> {
+  /**
+   * Deletes a team project. Its landscapes move to `transferTo` when given
+   * (you need to be able to add landscapes there); otherwise they go too.
+   */
+  async remove(projectId: string, viewer: Viewer, transferTo?: string): Promise<void> {
     await this.requireTeam(projectId);
-    await this.db.delete(project).where(eq(project.id, projectId));
+    if (transferTo !== undefined) {
+      if (transferTo === projectId) {
+        throw new BadRequestException({ error: 'Choose a different project' });
+      }
+      const target = await this.access.resolve(viewer, transferTo);
+      if (!target) throw new NotFoundException({ error: 'Project not found' });
+      if (!target.scopes.has('landscape:create')) {
+        throw new ForbiddenException({ error: 'You can’t add landscapes to that project' });
+      }
+    }
+    await this.db.transaction(async (tx) => {
+      if (transferTo !== undefined) {
+        await tx
+          .update(landscape)
+          .set({ projectId: transferTo })
+          .where(eq(landscape.projectId, projectId));
+      }
+      await tx.delete(project).where(eq(project.id, projectId));
+    });
   }
 
   members(projectId: string): Promise<ProjectMember[]> {
