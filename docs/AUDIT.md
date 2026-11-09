@@ -6,6 +6,77 @@ Newest entries first.
 
 ---
 
+## 2026-11-09 — Platform phase 1, milestone 2: logins, owner setup and invitations
+
+- **What:**
+  - **Identity:** better-auth 1.7 handles email and password plus sessions, through its Drizzle adapter. Its tables (`user`, `session`, `account`, `verification`) were generated with its CLI, with an `instanceRole` field that clients can't set.
+    - Public sign-up is off; accounts come only from owner setup and invitations.
+    - better-auth is mounted at `/api/auth/*` ahead of the JSON body parser. Its own route rate limit is on, keyed by `X-Real-IP`, which nginx overwrites, so clients can't spoof it.
+  - **Owner setup:** `POST /api/setup/owner` works only on an empty instance. A `meta` row is claimed first, so two simultaneous setups can't both become owner.
+  - **Invitations:**
+    - Owners and admins invite by email. Only the owner can create admins (n8n warns about admins minting admins).
+    - The link's token is 256 random bits; only its SHA-256 hash is stored. It's valid for 7 days, works once (claimed atomically) and can be revoked. It's shown to the admin once, and emailed too when SMTP is set.
+    - Accepting sets name and password and signs in.
+  - **Password reset:**
+    - Admins can copy a one-hour reset link: the owner for anyone, admins for members only.
+    - With SMTP, people can request one themselves.
+    - Resets revoke existing sessions.
+  - **Password rule (n8n's):** 8+ characters with a number and a capital letter. It is enforced on setup, invitations and resets.
+  - **Access control:**
+    - Every API route needs a session unless marked public (health, platform status, setup, invitation acceptance). Live data now needs a session too.
+    - Instance roles Owner, Admin and Member map to n8n-style scopes (`user:list`, `user:invite`, `user:resetPassword`), checked by a guard.
+    - Guard order: rate limit, CSRF origin check (every write must carry FossFLOW's own `Origin`), session, scopes.
+  - **Encryption key:**
+    - One master key, from `FOSSFLOW_ENCRYPTION_KEY` (32 bytes, base64) or generated once into `FOSSFLOW_DATA_DIR/config/encryption-key` with mode 0600. A "back it up" warning is logged then.
+    - A damaged key file is refused, never replaced.
+    - Per-purpose keys are derived with HKDF; the better-auth secret is the first.
+  - **Mail:** optional SMTP via nodemailer (`SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`).
+  - **App:**
+    - **Mode detection:** at startup the app asks `/api/platform/status`. With a server it runs the platform; without one, the plain local editor as before.
+    - **New screens** in the design system: owner setup, sign-in (with "forgot password" only when mail is set up), accepting an invitation, password reset, and an n8n-style shell with a sidebar.
+    - **Users page:** invite people, show the link once with a copy button, revoke pending invitations, copy reset links.
+    - **Data and strings:** TanStack Query for data. English strings under `platform.*`; other languages fall back to English for now.
+  - **Deploy:** the image sets `FOSSFLOW_DATA_DIR=/data`. With `PUID`/`PGID`, the entrypoint gives that user `/data`. `compose.dev.yml` sets `FOSSFLOW_URL` and a data volume. `/data/` and `packages/fossflow-backend/data/` are gitignored.
+- **Why:** Milestone 2 of the platform plan: n8n-style accounts, with no public sign-up, before projects and landscapes.
+- **How users are created:** with sign-up off, better-auth refuses its own `signUpEmail`, even server-side; that was confirmed in its source. Owner setup and invitations therefore create users through the same internal adapter calls its sign-up route uses (hash, `createUser`, `linkAccount`), then sign in through the normal API to set the cookie. Reset links use the same `reset-password:` verification record as its reset route. Integration tests run each flow end to end, so a better-auth upgrade that changes these internals fails loudly.
+- **Security:**
+  - No public sign-up.
+  - CSRF origin check on all writes.
+  - Brute-force limit on sign-in (a test makes repeated attempts from one address and expects a 429).
+  - Invite tokens stored hashed, single use and expiring.
+  - Admins can't create admins or reset the owner's password.
+  - Lists never contain password material.
+  - Config and key errors never echo values.
+  - The key file is 0600 and never committed.
+  - While building this, a test without a data dir wrote a key into the package folder, which wasn't gitignored. It was deleted, both data locations are now ignored, and tests use temporary folders.
+- **Verified:**
+  - Server `tsc` clean. **76** Vitest tests, including 17 auth-flow tests against real Postgres 18:
+    - setup once, and the setup race;
+    - sign-up closed;
+    - CSRF;
+    - the password rule;
+    - sign-in and its brute-force limit;
+    - invitations: once, expiry, revocation, existing emails, role limits;
+    - reset links: weak password refused, link reuse refused;
+    - members kept out.
+  - Lib 240 tests, lint and the app build pass; the app's `tsc` shows only the 13 earlier errors in untouched files.
+  - **Browser click-through (dev):** setup screen; weak password refused with the rule shown; owner created and signed in; Users page; member invited and link copied; signed out; link opened as the invitee; account created and signed in as Member, with no Settings in the sidebar; `/api/users` and `/api/invitations` answer 403. Narrow-width layout fixed with container queries.
+  - The dev database was reset afterwards, so the first real setup is yours.
+  - **Docker image, through nginx:**
+    - status reports setup required;
+    - setup without the app's Origin returns 403, with it 201;
+    - the session has the owner role;
+    - anonymous live data returns 401;
+    - the key file is created with mode 0600;
+    - with `PUID=1000`, the server runs as that user and owns its key.
+  - **Image fix found by this test:** npm keeps some server packages inside the workspace's own `node_modules` (better-auth, zod 4), so the image now ships that folder too. Before the fix, the server didn't start in the image.
+  - **Leaner image:**
+    - better-auth lists dev tools as optional peers: drizzle-kit, Vitest, and through them Vite, jsdom, tsx, esbuild and Babel.
+    - Because those were installed for development, `npm ci --omit=dev` shipped them: about 70 MB, including an old esbuild with a dev-server advisory (GHSA-67mh-4wv8-2f99).
+    - The image now installs with `--omit=dev --omit=optional --omit=peer`; every package the server needs is a direct dependency. That cut server dependencies from about 150 MB to about 70 MB.
+    - `npm audit` of exactly that set finds 0 vulnerabilities.
+    - The slim image passed setup, invitation, sign-out and sign-in through nginx. The image is 341 MB.
+
 ## 2026-11-09 — Platform phase 1, milestone 1: NestJS server with PostgreSQL
 
 - **What:** First step of the platform: n8n-style projects, users, server-stored landscapes and encrypted credentials. The design is in `docs/superpowers/specs/2026-11-09-platform-foundation-design.md`.
