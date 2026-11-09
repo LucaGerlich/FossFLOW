@@ -101,6 +101,26 @@ describe('toVitals', () => {
   });
 });
 
+describe('normalizeInventory: stopped containers', () => {
+  it('drops containers missing from the system’s latest agent report', () => {
+    const [result] = normalizeInventory({
+      sourceId: 'beszel',
+      systems: [system({ updated: NOW })],
+      containers: [
+        container({ name: 'running', updated: NOW }),
+        container({ name: 'just-reported', updated: NOW - 30_000 }),
+        container({ name: 'stopped', updated: NOW - 120_000 })
+      ],
+      historyFor: () => ({ cpu: [], memory: [], disk: [] }),
+      nowMs: NOW
+    });
+    assert.deepEqual(
+      result?.containers.map((c) => c.name),
+      ['just-reported', 'running']
+    );
+  });
+});
+
 describe('normalizeInventory', () => {
   it('groups fresh containers under their system and drops stale ones', () => {
     const [result] = normalizeInventory({

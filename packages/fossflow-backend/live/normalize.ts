@@ -16,6 +16,25 @@ export const VITALS_CRITICAL_PERCENT = 90;
 /** Container records not refreshed for this long are treated as gone. */
 export const STALE_CONTAINER_MS = 10 * 60_000;
 
+/**
+ * Agents report every running container with each system report, so a
+ * container whose last report is older than its system's latest one (plus
+ * some slack) has stopped. Detects stops in ~1-2 min instead of 10.
+ */
+export const CONTAINER_REPORT_LAG_MS = 90_000;
+
+function isCurrent(
+  container: BeszelContainer,
+  systemUpdated: number | undefined,
+  nowMs: number
+): boolean {
+  if (container.updated === undefined) return true;
+  if (systemUpdated !== undefined) {
+    return systemUpdated - container.updated <= CONTAINER_REPORT_LAG_MS;
+  }
+  return nowMs - container.updated <= STALE_CONTAINER_MS;
+}
+
 const HEALTH_BY_CODE: Record<number, LiveHealth> = {
   0: 'none',
   1: 'starting',
@@ -102,11 +121,6 @@ export interface NormalizeInput {
 
 /** Maps Beszel records to live systems, sorted by name for a stable layout. */
 export function normalizeInventory(input: NormalizeInput): LiveSystem[] {
-  const fresh = input.containers.filter(
-    (record) =>
-      record.updated === undefined ||
-      input.nowMs - record.updated <= STALE_CONTAINER_MS
-  );
   return input.systems
     .map((record): LiveSystem => {
       const key = `${input.sourceId}:${record.id}`;
@@ -118,8 +132,12 @@ export function normalizeInventory(input: NormalizeInput): LiveSystem[] {
         state: record.status,
         vitals,
         history: input.historyFor(key, vitals),
-        containers: fresh
-          .filter((container) => container.system === record.id)
+        containers: input.containers
+          .filter(
+            (container) =>
+              container.system === record.id &&
+              isCurrent(container, record.updated, input.nowMs)
+          )
           .map((container) => toContainer(input.sourceId, container))
           .sort((a, b) => a.name.localeCompare(b.name))
       };

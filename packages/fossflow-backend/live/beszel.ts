@@ -13,6 +13,15 @@ const MAX_PAGES = 20;
 
 const finite = z.number().finite();
 
+/** Beszel stores Unix ms on containers and PocketBase date strings on systems. */
+const timestamp = z
+  .union([z.number(), z.string()])
+  .optional()
+  .transform((value) => {
+    const ms = typeof value === 'string' ? Date.parse(value) : value;
+    return ms !== undefined && Number.isFinite(ms) ? ms : undefined;
+  });
+
 export const beszelSystemSchema = z.object({
   id: z.string().min(1),
   name: z.string(),
@@ -29,7 +38,9 @@ export const beszelSystemSchema = z.object({
       dt: finite.optional()
     })
     .passthrough()
-    .nullish()
+    .nullish(),
+  /** When the hub last stored a report from this system's agent. */
+  updated: timestamp
 });
 
 export const beszelContainerSchema = z.object({
@@ -41,14 +52,8 @@ export const beszelContainerSchema = z.object({
   cpu: finite.default(0),
   memory: finite.default(0),
   updatable: z.boolean().optional(),
-  /** Last report for this container: Beszel stores Unix ms; tolerate a date string too. */
-  updated: z
-    .union([z.number(), z.string()])
-    .optional()
-    .transform((value) => {
-      const ms = typeof value === 'string' ? Date.parse(value) : value;
-      return ms !== undefined && Number.isFinite(ms) ? ms : undefined;
-    })
+  /** When this container last appeared in an agent report. */
+  updated: timestamp
 });
 
 export type BeszelSystem = z.infer<typeof beszelSystemSchema>;
@@ -183,7 +188,7 @@ export function createBeszelClient(
     async fetchInventory() {
       const systems = await listAll(
         'systems',
-        'id,name,status,info',
+        'id,name,status,info,updated',
         beszelSystemSchema
       );
       const containers = await listAll(

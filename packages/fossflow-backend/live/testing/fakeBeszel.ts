@@ -16,6 +16,8 @@ export interface FakeSystem {
   name: string;
   status: string;
   info: Record<string, unknown>;
+  /** PocketBase date string of the last agent report. */
+  updated?: string;
 }
 
 export interface FakeContainer {
@@ -188,8 +190,20 @@ export function demoLandscape(nowMs: number): {
   });
   return {
     systems: [
-      { id: 'sysweb01', name: 'web-01', status: 'up', info: info(34, 61, 72) },
-      { id: 'sysdb01', name: 'db-01', status: 'up', info: info(58, 83, 64) }
+      {
+        id: 'sysweb01',
+        name: 'web-01',
+        status: 'up',
+        info: info(34, 61, 72),
+        updated: new Date(nowMs).toISOString()
+      },
+      {
+        id: 'sysdb01',
+        name: 'db-01',
+        status: 'up',
+        info: info(58, 83, 64),
+        updated: new Date(nowMs).toISOString()
+      }
     ],
     containers: [
       ctr('sysweb01', 'traefik', 'traefik:3.2', 0.8, 64),

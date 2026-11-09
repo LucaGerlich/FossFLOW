@@ -26,6 +26,7 @@ setInterval(() => {
   fake.setSystems(
     landscape.systems.map((system) => ({
       ...system,
+      updated: new Date(now).toISOString(),
       info: { ...system.info, cpu: drift(Number(system.info.cpu)) }
     }))
   );
