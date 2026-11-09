@@ -6,6 +6,13 @@ Newest entries first.
 
 ---
 
+## 2026-11-09 — Fix: toolbar overlap in narrow windows
+
+- **What:** In `App.css`, the toolbar's title area now truncates instead of overflowing (`overflow: hidden`). Below 1100 px the toolbar wraps: the title takes the first row and the actions wrap onto the next row(s); the divider is hidden while wrapped.
+- **Why:** In a roughly 725 px window the action buttons covered the FossFLOW wordmark and the diagram name; that came from the nav-bar restyle.
+- **Security:** None.
+- **Verified:** Browser pane at 725 px (title row, actions on two rows, nothing covered), 1000 px (title row plus one action row) and 1440 px (single row, unchanged). The language dropdown isn't clipped because no overflow scrolling is used.
+
 ## 2026-11-09 — Design-system overhaul (`vercel.design.md`)
 
 - **What:** The whole UI now follows the project's design file: ink `#171717` on near-white, hairlines, Geist and Geist Mono, 6 px app radii, stacked shadows, colour only for meaning.

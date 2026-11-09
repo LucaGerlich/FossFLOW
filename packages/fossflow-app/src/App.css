@@ -28,8 +28,42 @@
   min-width: 0;
 }
 
+/* Title truncates instead of running under the actions. */
+.toolbar__start {
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
 .toolbar__end {
   flex-shrink: 0;
+}
+
+/*
+ * Narrow windows: actions move to a second row (and wrap if needed) rather
+ * than covering the title. No overflow scrolling, which would clip the
+ * language dropdown.
+ */
+@media (max-width: 1100px) {
+  .toolbar {
+    flex-wrap: wrap;
+    height: auto;
+    min-height: 56px;
+    padding: 10px 16px;
+    row-gap: 8px;
+  }
+
+  .toolbar__start {
+    flex-basis: 100%;
+  }
+
+  .toolbar__end {
+    flex-wrap: wrap;
+    flex-shrink: 1;
+  }
+
+  .toolbar__divider {
+    display: none;
+  }
 }
 
 .toolbar__divider {
