@@ -1,5 +1,5 @@
 # Use the official Node.js runtime as the base image
-FROM node:22 AS build
+FROM node:24 AS build
 
 # Set the working directory in the container
 WORKDIR /app
@@ -8,9 +8,6 @@ WORKDIR /app
 COPY package*.json ./
 COPY packages/fossflow-lib/package*.json ./packages/fossflow-lib/
 COPY packages/fossflow-app/package*.json ./packages/fossflow-app/
-
-#Update NPM
-RUN npm install -g npm@11.5.2
 
 # Install dependencies for the entire workspace
 RUN npm install
@@ -22,13 +19,18 @@ COPY . .
 RUN npm run build:lib && npm run build:app
 
 # Use Node with nginx for production
-FROM node:22-alpine
+FROM node:24-alpine
 
-# Install nginx
-RUN apk add --no-cache nginx
+# Install web server packages, with the Alpine fixes released after the base image
+RUN apk upgrade --no-cache && apk add --no-cache nginx openssl su-exec
 
 # Copy backend code
 COPY --from=build /app/packages/fossflow-backend /app/packages/fossflow-backend
+
+WORKDIR /app/packages/fossflow-backend
+# npm is only needed to install the backend dependencies: remove it, and the packages it bundles
+RUN npm install --omit=dev && npm cache clean --force && \
+    rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
 # Copy the built React app to Nginx's web server directory
 COPY --from=build /app/packages/fossflow-app/build /usr/share/nginx/html

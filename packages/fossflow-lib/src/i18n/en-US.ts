@@ -33,6 +33,10 @@ const locale: LocaleProps = {
     redoDescription: "Redo the last undone action",
     redoAltAction: "Redo (Alternative)",
     redoAltDescription: "Alternative redo shortcut",
+    copyAction: 'Copy',
+    copyDescription: 'Copy selected item/s',
+    pasteAction: 'Paste',
+    pasteDescription: 'Paste items/s from clipboard',
     helpAction: "Help",
     helpDescription: "Open help dialog with keyboard shortcuts",
     zoomInAction: "Zoom In",
@@ -119,7 +123,9 @@ const locale: LocaleProps = {
     zoom: {
       description: "Configure zoom behavior when using the mouse wheel.",
       zoomToCursor: "Zoom to Cursor",
-      zoomToCursorDesc: "When enabled, zoom in/out centered on the mouse cursor position. When disabled, zoom is centered on the canvas."
+      zoomToCursorDesc: "When enabled, zoom in/out centered on the mouse cursor position. When disabled, zoom is centered on the canvas.",
+      trackpadMode: "Trackpad Mode",
+      trackpadModeDesc: "When enabled: scrolling pans the canvas and pinch-to-zoom controls canvas zoom. When disabled: scrolling zooms the canvas (default). Best used with a trackpad."
     },
     hotkeys: {
       title: "Hotkey Settings",

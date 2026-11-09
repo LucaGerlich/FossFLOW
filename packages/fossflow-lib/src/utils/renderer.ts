@@ -357,7 +357,7 @@ export const getConnectorPath = ({
 } => {
   if (anchors.length < 2)
     throw new Error(
-      `Connector needs at least two anchors (receieved: ${anchors.length})`
+      `Connector needs at least two anchors (received: ${anchors.length})`
     );
 
   const anchorPosition = anchors.map((anchor) => {
@@ -514,6 +514,23 @@ export const getItemAtTile = ({
   }
 
   return null;
+};
+
+export const getConnectorsAtTile = ({
+  tile,
+  scene
+}: GetItemAtTile): string[] => {
+  return scene.connectors
+    .filter((con) => {
+      return con.path.tiles.some((pathTile) => {
+        const globalPathTile = connectorPathTileToGlobal(
+          pathTile,
+          con.path.rectangle.from
+        );
+        return CoordsUtils.isEqual(globalPathTile, tile);
+      });
+    })
+    .map((con) => con.id);
 };
 
 interface FontProps {

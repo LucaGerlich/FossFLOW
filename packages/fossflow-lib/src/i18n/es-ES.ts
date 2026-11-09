@@ -35,6 +35,10 @@ const locale: LocaleProps = {
     redoAltDescription: "Atajo alternativo para rehacer",
     helpAction: "Ayuda",
     helpDescription: "Abrir diálogo de ayuda con atajos de teclado",
+    copyAction: 'Copiar',
+    copyDescription: 'Copiar los elementos seleccionados',
+    pasteAction: 'Pegar',
+    pasteDescription: 'Pegar los elementos desde el portapapeles',
     zoomInAction: "Acercar",
     zoomInShortcut: "Rueda del ratón hacia arriba",
     zoomInDescription: "Acercar en el lienzo",
@@ -119,7 +123,9 @@ const locale: LocaleProps = {
     zoom: {
       description: "Configura el comportamiento del zoom al usar la rueda del ratón.",
       zoomToCursor: "Zoom al cursor",
-      zoomToCursorDesc: "Cuando está habilitado, el zoom se centra en la posición del cursor del ratón. Cuando está deshabilitado, el zoom se centra en el lienzo."
+      zoomToCursorDesc: "Cuando está habilitado, el zoom se centra en la posición del cursor del ratón. Cuando está deshabilitado, el zoom se centra en el lienzo.",
+      trackpadMode: "Modo Trackpad",
+      trackpadModeDesc: "Cuando está activado: desplazamiento con dos dedos mueve el lienzo, pellizcar hace zoom sin afectar el navegador. Cuando está desactivado: la rueda hace zoom en el lienzo (comportamiento predeterminado del ratón)."
     },
     hotkeys: {
       title: "Configuración de atajos",

@@ -29,8 +29,7 @@ FossFLOW es una potente aplicación web progresiva (PWA) de código abierto para
 
 ![Screenshot_20250630_160954](https://github.com/user-attachments/assets/e7f254ad-625f-4b8a-8efc-5293b5be9d55)
 
-- **📝 [FOSSFLOW_TODO.md](https://github.com/stan-smith/FossFLOW/blob/master/FOSSFLOW_TODO.md)** - Problemas actuales y hoja de ruta con mapeos de código base, la mayoría de las quejas son con la biblioteca isoflow en sí.
-- **🤝 [CONTRIBUTORS.md](https://github.com/stan-smith/FossFLOW/blob/master/CONTRIBUTORS.md)** - Cómo contribuir al proyecto.
+- **🤝 [CONTRIBUTORS.md](https://github.com/Abrar74774/FossFLOW/blob/master/CONTRIBUTORS.md)** - Cómo contribuir al proyecto.
 
 ## Actualizaciones Recientes (Octubre 2025)
 
@@ -118,7 +117,7 @@ docker run -p 80:80 -e ENABLE_SERVER_STORAGE=false stnsmith/fossflow:latest
 
 ```bash
 # Clonar el repositorio
-git clone https://github.com/stan-smith/FossFLOW
+git clone https://github.com/Abrar74774/FossFLOW
 cd FossFLOW
 
 # Instalar dependencias
@@ -197,7 +196,6 @@ npm run publish:lib  # Publicar biblioteca en npm
 ## Documentación
 
 - [FOSSFLOW_ENCYCLOPEDIA.md](../FOSSFLOW_ENCYCLOPEDIA.md) - Guía completa del código base
-- [FOSSFLOW_TODO.md](../FOSSFLOW_TODO.md) - Problemas actuales y hoja de ruta
 - [CONTRIBUTORS.md](../CONTRIBUTORS.md) - Pautas de contribución
 
 ## Licencia

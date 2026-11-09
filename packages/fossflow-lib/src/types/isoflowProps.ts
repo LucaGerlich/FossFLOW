@@ -40,6 +40,10 @@ export interface LocaleProps {
     redoDescription: string;
     redoAltAction: string;
     redoAltDescription: string;
+    copyAction: string;
+    copyDescription: string;
+    pasteAction: string;
+    pasteDescription: string;
     helpAction: string;
     helpDescription: string;
     zoomInAction: string;
@@ -127,6 +131,8 @@ export interface LocaleProps {
       description: string;
       zoomToCursor: string;
       zoomToCursorDesc: string;
+      trackpadMode: string;
+      trackpadModeDesc: string;
     };
     hotkeys: {
       title: string;

@@ -21,8 +21,7 @@ FossFLOW 是一款功能强大的、开源的渐进式 Web 应用（PWA），专
 
 ![Screenshot_20250630_160954](https://github.com/user-attachments/assets/e7f254ad-625f-4b8a-8efc-5293b5be9d55)
 
-- **📝 [FOSSFLOW_TODO.md](https://github.com/stan-smith/FossFLOW/blob/master/ISOFLOW_TODO.md)** - 当前的问题和路线图，包含代码库映射，大多数问题都与 isoflow 库本身有关。
-- **🤝 [CONTRIBUTORS.md](https://github.com/stan-smith/FossFLOW/blob/master/CONTRIBUTORS.md)** - 如何为项目做出贡献。
+- **🤝 [CONTRIBUTORS.md](https://github.com/Abrar74774/FossFLOW/blob/master/CONTRIBUTORS.md)** - 如何为项目做出贡献。
 
 ## 功能
 
@@ -42,7 +41,7 @@ FossFLOW 是一款功能强大的、开源的渐进式 Web 应用（PWA），专
 
 ```bash
 # 克隆仓库
-git clone https://github.com/stan-smith/FossFLOW
+git clone https://github.com/Abrar74774/FossFLOW
 cd FossFLOW
 
 # 安装依赖

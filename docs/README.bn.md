@@ -21,7 +21,7 @@
 
 ## এটি অনলাইনে চেষ্টা করুন
 
-যান  <b> --> https://stan-smith.github.io/FossFLOW/ <-- </b>
+যান  <b> --> https://abrar74774.github.io/FossFLOW/ <-- </b>
 
 
 ------------------------------------------------------------------------------------------------------------------------------
@@ -29,8 +29,7 @@ FossFLOW হল সুন্দর আইসোমেট্রিক ডায�
 
 ![Screenshot_20250630_160954](https://github.com/user-attachments/assets/e7f254ad-625f-4b8a-8efc-5293b5be9d55)
 
-- **📝 [FOSSFLOW_TODO.md](https://github.com/stan-smith/FossFLOW/blob/master/FOSSFLOW_TODO.md)** - কোডবেস ম্যাপিং সহ বর্তমান সমস্যা এবং রোডম্যাপ, বেশিরভাগ অভিযোগ isoflow লাইব্রেরি সম্পর্কে।
-- **🤝 [CONTRIBUTORS.md](https://github.com/stan-smith/FossFLOW/blob/master/CONTRIBUTORS.md)** - প্রকল্পে কীভাবে অবদান রাখবেন।
+- **🤝 [CONTRIBUTORS.md](https://github.com/Abrar74774/FossFLOW/blob/master/CONTRIBUTORS.md)** - প্রকল্পে কীভাবে অবদান রাখবেন।
 
 ## সাম্প্রতিক আপডেট (অক্টোবর 2025)
 
@@ -118,7 +117,7 @@ docker run -p 80:80 -e ENABLE_SERVER_STORAGE=false stnsmith/fossflow:latest
 
 ```bash
 # রিপোজিটরি ক্লোন করুন
-git clone https://github.com/stan-smith/FossFLOW
+git clone https://github.com/Abrar74774/FossFLOW
 cd FossFLOW
 
 # নির্ভরতা ইনস্টল করুন
@@ -197,7 +196,6 @@ npm run publish:lib  # npm-এ লাইব্রেরি প্রকাশ �
 ## ডকুমেন্টেশন
 
 - [FOSSFLOW_ENCYCLOPEDIA.md](../FOSSFLOW_ENCYCLOPEDIA.md) - কোডবেসের জন্য ব্যাপক গাইড
-- [FOSSFLOW_TODO.md](../FOSSFLOW_TODO.md) - বর্তমান সমস্যা এবং রোডম্যাপ
 - [CONTRIBUTORS.md](../CONTRIBUTORS.md) - অবদানের নির্দেশিকা
 
 ## লাইসেন্স

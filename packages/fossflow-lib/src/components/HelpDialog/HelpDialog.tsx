@@ -60,6 +60,16 @@ export const HelpDialog = () => {
       description: t('redoAltDescription')
     },
     {
+      action: t('copyAction'),
+      shortcut: 'Ctrl+C',
+      description: t('copyDescription')
+    },
+    {
+      action: t('pasteAction'),
+      shortcut: 'Ctrl+V',
+      description: t('pasteDescription')
+    },
+    {
       action: t('helpAction'),
       shortcut: 'F1',
       description: t('helpDescription')

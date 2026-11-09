@@ -291,10 +291,20 @@ function EditorPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${diagramName || 'fossflow-diagram'}-${new Date().toISOString().split('T')[0]}.json`;
+    const exportTimestamp = new Date().toISOString().replace(/[:T]/g, '-').split('.')[0];
+    a.download = `${diagramName || 'fossflow-diagram'}-${exportTimestamp}.json`;
     document.body.appendChild(a);
     a.click();
-    document.body.removeChild(a);
+
+    // Safely remove the temporary element
+    try {
+      if (a.parentNode === document.body) {
+        document.body.removeChild(a);
+      }
+    } catch (err) {
+      console.warn('Failed to remove temporary download link:', err);
+    }
+
     URL.revokeObjectURL(url);
     setShowExportDialog(false);
   };

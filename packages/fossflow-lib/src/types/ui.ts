@@ -11,7 +11,13 @@ interface AddItemControls {
   type: 'ADD_ITEM';
 }
 
-export type ItemControls = ItemReference | AddItemControls;
+export interface ConnectorGroupControls {
+  type: 'CONNECTOR_GROUP';
+  ids: string[];
+  focusedId: string | null;
+}
+
+export type ItemControls = ItemReference | AddItemControls | ConnectorGroupControls;
 
 export interface Mouse {
   position: {
@@ -50,6 +56,7 @@ export interface DragItemsMode {
 export interface PanMode {
   type: 'PAN';
   showCursor: boolean;
+  temp?: boolean; // For panning temporarily from other modes
 }
 
 export interface PlaceIconMode {
@@ -155,7 +162,7 @@ export const DialogTypeEnum = {
 } as const;
 
 export interface ContextMenu {
-  type: 'ITEM' | 'EMPTY';
+  type: 'ITEM' | 'EMPTY' | 'SELECTION';
   item?: ItemReference;
   tile: Coords;
 }
@@ -185,8 +192,8 @@ export interface UiState {
   connectorInteractionMode: ConnectorInteractionMode;
   expandLabels: boolean;
   iconPackManager: IconPackManagerProps | null;
+  isAnythingCopied: boolean;
   liveAnalyticsEnabled: boolean;
-
 }
 
 export interface UiStateActions {
@@ -214,8 +221,8 @@ export interface UiStateActions {
   setConnectorInteractionMode: (mode: ConnectorInteractionMode) => void;
   setExpandLabels: (expand: boolean) => void;
   setIconPackManager: (iconPackManager: IconPackManagerProps | null) => void;
+  setIsAnythingCopied: (isAnythingCopied: boolean) => void;
   setLiveAnalyticsEnabled: (enabled: boolean) => void;
-
 }
 
 export type UiStateStore = UiState & {

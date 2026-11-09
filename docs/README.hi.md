@@ -29,8 +29,7 @@ FossFLOW सुंदर आइसोमेट्रिक आरेख बन�
 
 ![Screenshot_20250630_160954](https://github.com/user-attachments/assets/e7f254ad-625f-4b8a-8efc-5293b5be9d55)
 
-- **📝 [FOSSFLOW_TODO.md](https://github.com/stan-smith/FossFLOW/blob/master/FOSSFLOW_TODO.md)** - कोडबेस मैपिंग के साथ वर्तमान समस्याएं और रोडमैप, अधिकांश शिकायतें isoflow लाइब्रेरी के बारे में हैं।
-- **🤝 [CONTRIBUTORS.md](https://github.com/stan-smith/FossFLOW/blob/master/CONTRIBUTORS.md)** - परियोजना में योगदान कैसे करें।
+- **🤝 [CONTRIBUTORS.md](https://github.com/Abrar74774/FossFLOW/blob/master/CONTRIBUTORS.md)** - परियोजना में योगदान कैसे करें।
 
 ## हाल के अपडेट (अक्टूबर 2025)
 
@@ -118,7 +117,7 @@ docker run -p 80:80 -e ENABLE_SERVER_STORAGE=false stnsmith/fossflow:latest
 
 ```bash
 # रिपॉजिटरी क्लोन करें
-git clone https://github.com/stan-smith/FossFLOW
+git clone https://github.com/Abrar74774/FossFLOW
 cd FossFLOW
 
 # निर्भरताएं इंस्टॉल करें
@@ -197,7 +196,6 @@ npm run publish:lib  # npm पर लाइब्रेरी प्रकाश
 ## प्रलेखन
 
 - [FOSSFLOW_ENCYCLOPEDIA.md](../FOSSFLOW_ENCYCLOPEDIA.md) - कोडबेस के लिए व्यापक गाइड
-- [FOSSFLOW_TODO.md](../FOSSFLOW_TODO.md) - वर्तमान समस्याएं और रोडमैप
 - [CONTRIBUTORS.md](../CONTRIBUTORS.md) - योगदान दिशानिर्देश
 
 ## लाइसेंस

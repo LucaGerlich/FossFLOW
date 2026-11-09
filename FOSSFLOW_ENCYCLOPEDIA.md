@@ -131,6 +131,7 @@ The backend package provides server-side storage capabilities, allowing diagrams
 #### Server (`server.js`)
 - **Technology**: Express.js with ES modules
 - **Port**: 3001 (configurable via `BACKEND_PORT`)
+- **Host**: 0.0.0.0 (configurable via `BACKEND_HOST`)
 - **Features**:
   - CORS enabled for cross-origin requests
   - 10MB JSON payload limit for large diagrams
@@ -176,6 +177,7 @@ Response: { success: boolean }
 - `ENABLE_SERVER_STORAGE`: Enable/disable storage endpoints (default: `true`)
 - `STORAGE_PATH`: Directory for diagram files (default: `/data/diagrams`)
 - `BACKEND_PORT`: Server port (default: `3001`)
+- `BACKEND_HOST`: Server host (default: `0.0.0.0`)
 - `ENABLE_GIT_BACKUP`: Enable Git version control (default: `false`)
 
 ### Storage Format
@@ -755,7 +757,7 @@ COPY --from=build /app/packages/fossflow-app/build /app/frontend
 
 1. **Clone and Install**:
 ```bash
-git clone https://github.com/stan-smith/FossFLOW
+git clone https://github.com/Abrar74774/FossFLOW
 cd FossFLOW
 npm install  # Installs dependencies for all workspaces
 ```

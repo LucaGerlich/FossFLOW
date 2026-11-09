@@ -35,6 +35,10 @@ const locale: LocaleProps = {
     redoAltDescription: "Alternatywny skrót do ponownego wykonania",
     helpAction: "Pomoc",
     helpDescription: "Otwórz okno dialogowe pomocy za pomocą skrótów klawiaturowych",
+    copyAction: 'Kopiuj',
+    copyDescription: 'Kopiuj zaznaczone elementy',
+    pasteAction: 'Wklej',
+    pasteDescription: 'Wklej elementy ze schowka',
     zoomInAction: "Powiększ",
     zoomInShortcut: "Kółko myszy w górę",
     zoomInDescription: "Powiększ obszar roboczy",
@@ -119,7 +123,10 @@ const locale: LocaleProps = {
     zoom: {
       description: "Skonfiguruj zachowanie powiększania podczas korzystania z kółka myszy.",
       zoomToCursor: "Powiększ do kursora",
-      zoomToCursorDesc: "Po włączeniu funkcji powiększanie/pomniejszanie odbywa się w oparciu o położenie kursora myszy. Po wyłączeniu funkcji <strong>Powiększ do kursora</strong> odbywa się w oparciu o położenie obszaru roboczego."
+      zoomToCursorDesc: "Po włączeniu funkcji powiększanie/pomniejszanie odbywa się w oparciu o położenie kursora myszy. Po wyłączeniu funkcji <strong>Powiększ do kursora</strong> odbywa się w oparciu o położenie obszaru roboczego.",
+
+      trackpadMode: "Tryb Trackpada",
+      trackpadModeDesc: "Po włączeniu: przewijanie dwoma palcami przesuwa płótno, uszczypnięcie powiększa bez wpływu na przeglądarkę. Po wyłączeniu: kółko myszy powiększa płótno (domyślne zachowanie myszy)."
     },
     hotkeys: {
       title: "Ustawienia skrótów klawiszowych",

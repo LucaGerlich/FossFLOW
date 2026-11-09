@@ -262,7 +262,7 @@ export const validateView = (view: View, ctx: { model: Model }): Issue[] => {
           view: view.id
         },
         message:
-          'Invalid item in view.  The item references a non-existant item in the model.'
+          'Invalid item in view.  The item references a non-existent item in the model.'
       });
     }
   });

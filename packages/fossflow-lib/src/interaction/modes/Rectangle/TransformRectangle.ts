@@ -61,7 +61,7 @@ export const TransformRectangle: ModeActions = {
     }
   },
   mousedown: () => {
-    // MOUSE_DOWN is triggered by the anchor iteself (see `TransformAnchor.tsx`)
+    // MOUSE_DOWN is triggered by the anchor itself (see `TransformAnchor.tsx`)
   },
   mouseup: ({ uiState }) => {
     if (uiState.mode.type !== 'RECTANGLE.TRANSFORM') return;

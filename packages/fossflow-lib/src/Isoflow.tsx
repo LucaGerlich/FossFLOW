@@ -1,10 +1,10 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useLayoutEffect } from 'react';
 import { ThemeProvider } from '@mui/material/styles';
 import { Box } from '@mui/material';
 import { theme } from 'src/styles/theme';
 import { IsoflowProps } from 'src/types';
-import { setWindowCursor, modelFromModelStore } from 'src/utils';
-import { useModelStore, ModelProvider } from 'src/stores/modelStore';
+import { setWindowCursor } from 'src/utils';
+import { useModelStore, ModelProvider, useModelStoreApi } from 'src/stores/modelStore';
 import { SceneProvider } from 'src/stores/sceneStore';
 import { LocaleProvider } from 'src/stores/localeStore';
 import { LiveAnalyticsProvider } from 'src/stores/liveAnalyticsStore';
@@ -33,9 +33,7 @@ const App = ({
     return state.actions;
   });
   const initialDataManager = useInitialDataManager();
-  const model = useModelStore((state) => {
-    return modelFromModelStore(state);
-  });
+  const modelStoreApi = useModelStoreApi();
 
   const { load } = initialDataManager;
 
@@ -56,9 +54,9 @@ const App = ({
 
   useEffect(() => {
     if (!initialDataManager.isReady || !onModelUpdated) return;
-
+    const model = modelStoreApi.getState()
     onModelUpdated(model);
-  }, [model, initialDataManager.isReady, onModelUpdated]);
+  }, [modelStoreApi.getState(), initialDataManager.isReady, onModelUpdated]);
 
   useEffect(() => {
     uiStateActions.setEnableDebugTools(enableDebugTools);
@@ -70,7 +68,10 @@ const App = ({
     }
   }, [renderer?.expandLabels, uiStateActions]);
 
-  useEffect(() => {
+  // Use useLayoutEffect to set iconPackManager synchronously before paint
+  // This prevents a race condition where the Settings dialog could open
+  // before iconPackManager is set in the store (causing the Icon Pack tab to be hidden)
+  useLayoutEffect(() => {
     uiStateActions.setIconPackManager(iconPackManager || null);
   }, [iconPackManager, uiStateActions]);
 

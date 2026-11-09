@@ -35,6 +35,10 @@ const locale: LocaleProps = {
     redoAltDescription: "Pintasan alternatif untuk mengulangi",
     helpAction: "Bantuan",
     helpDescription: "Buka dialog bantuan dengan pintasan keyboard",
+    copyAction: 'Salin',
+    copyDescription: 'Salin item yang dipilih',
+    pasteAction: 'Tempel',
+    pasteDescription: 'Tempel item dari papan klip',
     zoomInAction: "Perbesar",
     zoomInShortcut: "Roda Mouse Naik",
     zoomInDescription: "Perbesar kanvas",
@@ -119,7 +123,10 @@ const locale: LocaleProps = {
     zoom: {
       description: "Konfigurasi perilaku zoom saat menggunakan roda mouse.",
       zoomToCursor: "Zoom ke Kursor",
-      zoomToCursorDesc: "Saat diaktifkan, zoom masuk/keluar terpusat pada posisi kursor mouse. Saat dinonaktifkan, zoom terpusat pada kanvas."
+      zoomToCursorDesc: "Saat diaktifkan, zoom masuk/keluar terpusat pada posisi kursor mouse. Saat dinonaktifkan, zoom terpusat pada kanvas.",
+
+      trackpadMode: "Mode Trackpad",
+      trackpadModeDesc: "Saat diaktifkan: gulir dua jari menggeser kanvas, cubit untuk memperbesar tanpa mempengaruhi browser. Saat dinonaktifkan: roda gulir memperbesar kanvas (perilaku mouse default)."
     },
     hotkeys: {
       title: "Pengaturan Pintasan",

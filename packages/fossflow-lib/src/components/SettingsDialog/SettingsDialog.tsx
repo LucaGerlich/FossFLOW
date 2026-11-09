@@ -20,6 +20,7 @@ import { ConnectorSettings } from '../ConnectorSettings/ConnectorSettings';
 import { IconPackSettings } from '../IconPackSettings/IconPackSettings';
 import { LiveAnalyticsSettings } from '../LiveAnalytics/LiveAnalyticsSettings';
 import { useTranslation } from 'src/stores/localeStore';
+import { clickStopperProps } from 'src/utils';
 
 export interface SettingsDialogProps {
   iconPackManager?: {
@@ -92,6 +93,7 @@ export const SettingsDialog = ({ iconPackManager, showLiveAnalytics = false }: S
       onClose={handleClose}
       maxWidth="md"
       fullWidth
+      {...clickStopperProps}
     >
       <DialogTitle>
         Settings
@@ -109,9 +111,16 @@ export const SettingsDialog = ({ iconPackManager, showLiveAnalytics = false }: S
         </IconButton>
       </DialogTitle>
       <DialogContent dividers>
-        <Tabs value={tabValue} onChange={handleTabChange} sx={{ borderBottom: 1, borderColor: 'divider' }}>
-          {tabs.map((tab, index) => (
-            <Tab key={index} label={tab.label} />
+        <Tabs
+          value={tabValue}
+          onChange={handleTabChange}
+          variant="scrollable"
+          scrollButtons="auto"
+          allowScrollButtonsMobile
+          sx={{ borderBottom: 1, borderColor: 'divider' }}
+        >
+          {tabs.map((tab) => (
+            <Tab key={tab.label} label={tab.label} />
           ))}
         </Tabs>
 

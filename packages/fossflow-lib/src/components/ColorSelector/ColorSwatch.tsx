@@ -23,7 +23,7 @@ export const ColorSwatch = ({ hex, onClick, isActive }: Props) => {
             bgcolor: hex,
             width: 28,
             height: 28,
-            trasformOrigin: 'center',
+            transformOrigin: 'center',
             transform: `scale(${isActive ? 1.25 : 1})`,
             borderRadius: '100%'
           }}

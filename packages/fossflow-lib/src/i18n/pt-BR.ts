@@ -35,6 +35,10 @@ const locale: LocaleProps = {
     redoAltDescription: "Atalho alternativo para refazer",
     helpAction: "Ajuda",
     helpDescription: "Abrir diálogo de ajuda com atalhos de teclado",
+    copyAction: 'Copiar',
+    copyDescription: 'Copiar os itens selecionados',
+    pasteAction: 'Colar',
+    pasteDescription: 'Colar os itens da área de transferência',
     zoomInAction: "Aumentar zoom",
     zoomInShortcut: "Roda do mouse para cima",
     zoomInDescription: "Aumentar o zoom na tela",
@@ -119,7 +123,10 @@ const locale: LocaleProps = {
     zoom: {
       description: "Configurar o comportamento do zoom ao usar a roda do mouse.",
       zoomToCursor: "Zoom no cursor",
-      zoomToCursorDesc: "Quando habilitado, o zoom é centralizado na posição do cursor do mouse. Quando desabilitado, o zoom é centralizado na tela."
+      zoomToCursorDesc: "Quando habilitado, o zoom é centralizado na posição do cursor do mouse. Quando desabilitado, o zoom é centralizado na tela.",
+
+      trackpadMode: "Modo Trackpad",
+      trackpadModeDesc: "Quando ativado: rolagem com dois dedos move a tela, pinça com zoom sem afetar o navegador. Quando desativado: a roda do mouse amplia a tela (comportamento padrão do mouse)."
     },
     hotkeys: {
       title: "Configurações de atalhos",

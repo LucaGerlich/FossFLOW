@@ -1,6 +1,7 @@
 node_modules/
 dist/
 build/
+diagrams/
 *.log
 .env
 .env.local
@@ -21,3 +22,4 @@ prime/
 stage/
 overlay/
 .claude
+.factory

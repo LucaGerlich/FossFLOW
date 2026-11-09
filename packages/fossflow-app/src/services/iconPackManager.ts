@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { flattenCollections } from '@isoflow/isopacks/dist/utils';
 
 // Available icon packs (excluding core isoflow which is always loaded)
@@ -235,6 +235,8 @@ export const useIconPackManager = (coreIcons: any[]) => {
     }
   }, [packInfo, enabledPacks, loadPack]);
 
+  const isPackEnabled = useCallback((packName: IconPackName) => enabledPacks.includes(packName), [enabledPacks]);
+
   // Initialize: Load enabled packs or all packs depending on lazy loading setting
   useEffect(() => {
     const initialize = async () => {
@@ -253,7 +255,19 @@ export const useIconPackManager = (coreIcons: any[]) => {
     initialize();
   }, []); // Only run once on mount
 
-  return {
+  return useMemo(() => {
+    return {
+      lazyLoadingEnabled,
+      enabledPacks,
+      packInfo,
+      loadedIcons,
+      togglePack,
+      toggleLazyLoading,
+      loadAllPacks,
+      loadPacksForDiagram,
+      isPackEnabled
+    };
+  }, [
     lazyLoadingEnabled,
     enabledPacks,
     packInfo,
@@ -262,6 +276,6 @@ export const useIconPackManager = (coreIcons: any[]) => {
     toggleLazyLoading,
     loadAllPacks,
     loadPacksForDiagram,
-    isPackEnabled: (packName: IconPackName) => enabledPacks.includes(packName)
-  };
+    isPackEnabled
+  ]);
 };

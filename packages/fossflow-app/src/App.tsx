@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Isoflow } from 'fossflow';
 import { flattenCollections } from '@isoflow/isopacks/dist/utils';
 import isoflowIsopack from '@isoflow/isopacks/dist/isoflow';
@@ -409,7 +409,7 @@ function EditorPage() {
     }
   };
 
-  const handleModelUpdated = (model: any) => {
+  const handleModelUpdated = useCallback((model: any) => {
     // Store the current model state whenever it updates
     // The model from Isoflow contains the COMPLETE state including all icons
 
@@ -429,7 +429,7 @@ function EditorPage() {
     if (!isReadonlyUrl) {
       setHasUnsavedChanges(true);
     }
-  };
+  }, [isReadonlyUrl]);
 
   const exportDiagram = () => {
     // Use the most recent model data - prefer currentModel as it gets updated by handleModelUpdated
@@ -477,7 +477,8 @@ function EditorPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${diagramName || 'diagram'}-${new Date().toISOString().split('T')[0]}.json`;
+    const exportTimestamp = new Date().toISOString().replace(/[:T]/g, '-').split('.')[0];
+    a.download = `${diagramName || 'diagram'}-${exportTimestamp}.json`;
     a.click();
     URL.revokeObjectURL(url);
 

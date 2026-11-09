@@ -35,6 +35,10 @@ const locale: LocaleProps = {
     redoAltDescription: "备选重做快捷键",
     helpAction: "帮助",
     helpDescription: "打开包含键盘快捷键的帮助对话框",
+    copyAction: '复制',
+    copyDescription: '复制所选项目',
+    pasteAction: '粘贴',
+    pasteDescription: '从剪贴板粘贴项目',
     zoomInAction: "放大",
     zoomInShortcut: "鼠标滚轮向上",
     zoomInDescription: "放大画布",
@@ -119,7 +123,10 @@ const locale: LocaleProps = {
     zoom: {
       description: "配置使用鼠标滚轮时的缩放行为。",
       zoomToCursor: "光标缩放",
-      zoomToCursorDesc: "启用时，以鼠标光标位置为中心进行缩放。禁用时，以画布中心进行缩放。"
+      zoomToCursorDesc: "启用时，以鼠标光标位置为中心进行缩放。禁用时，以画布中心进行缩放。",
+
+      trackpadMode: "触控板模式",
+      trackpadModeDesc: "启用时：双指滚动可平移画布，双指捏合可缩放且不影响浏览器。禁用时：鼠标滚轮缩放画布（默认鼠标行为）。"
     },
     hotkeys: {
       title: "快捷键设置",

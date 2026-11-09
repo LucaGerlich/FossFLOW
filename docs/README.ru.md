@@ -29,8 +29,7 @@ FossFLOW - это мощное прогрессивное веб-приложе�
 
 ![Screenshot_20250630_160954](https://github.com/user-attachments/assets/e7f254ad-625f-4b8a-8efc-5293b5be9d55)
 
-- **📝 [FOSSFLOW_TODO.md](https://github.com/stan-smith/FossFLOW/blob/master/FOSSFLOW_TODO.md)** - Текущие проблемы и дорожная карта с отображением кодовой базы, большинство жалоб касаются самой библиотеки isoflow.
-- **🤝 [CONTRIBUTORS.md](https://github.com/stan-smith/FossFLOW/blob/master/CONTRIBUTORS.md)** - Как внести вклад в проект.
+- **🤝 [CONTRIBUTORS.md](https://github.com/Abrar74774/FossFLOW/blob/master/CONTRIBUTORS.md)** - Как внести вклад в проект.
 
 ## Недавние обновления (Октябрь 2025)
 
@@ -118,7 +117,7 @@ docker run -p 80:80 -e ENABLE_SERVER_STORAGE=false stnsmith/fossflow:latest
 
 ```bash
 # Клонировать репозиторий
-git clone https://github.com/stan-smith/FossFLOW
+git clone https://github.com/Abrar74774/FossFLOW
 cd FossFLOW
 
 # Установить зависимости
@@ -197,7 +196,6 @@ npm run publish:lib  # Опубликовать библиотеку в npm
 ## Документация
 
 - [FOSSFLOW_ENCYCLOPEDIA.md](../FOSSFLOW_ENCYCLOPEDIA.md) - Всестороннее руководство по кодовой базе
-- [FOSSFLOW_TODO.md](../FOSSFLOW_TODO.md) - Текущие проблемы и дорожная карта
 - [CONTRIBUTORS.md](../CONTRIBUTORS.md) - Руководство по внесению вклада
 
 ## Лицензия

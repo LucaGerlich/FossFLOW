@@ -1,4 +1,4 @@
-import { useCallback, useState, useRef } from 'react';
+import { useCallback, useState, useRef, useMemo } from 'react';
 import { InitialData, IconCollectionState } from 'src/types';
 import { INITIAL_DATA, INITIAL_SCENE_STATE } from 'src/config';
 import {
@@ -105,7 +105,7 @@ export const useInitialDataManager = () => {
       }
 
       prevInitialData.current = initialData;
-      model.actions.set(initialData);
+      model.actions.set(initialData, true);
 
       const view = getItemByIdOrThrow(
         initialData.views,
@@ -151,9 +151,15 @@ export const useInitialDataManager = () => {
     uiStateActions.resetUiState();
   }, [load, model.icons, model.colors, uiStateActions]);
 
-  return {
+  return useMemo(() => {
+    return {
+      load,
+      clear,
+      isReady
+    }
+  }, [
     load,
     clear,
     isReady
-  };
+  ])
 };
