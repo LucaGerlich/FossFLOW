@@ -79,15 +79,15 @@ const tileOf = (state: State, key: string) => {
 };
 
 describe('plate geometry', () => {
-  it('lays out slots two tiles apart, four per row', () => {
+  it('lays out slots three tiles apart, four per row', () => {
     const bounds = plateFor(0, 0, 5);
-    expect(bounds).toEqual({ xMin: 0, xMax: 8, yMin: -4, yMax: 0 });
+    expect(bounds).toEqual({ xMin: 0, xMax: 11, yMin: -5, yMax: 0 });
     expect(plateSlots(bounds).slice(0, 5)).toEqual([
       { x: 1, y: -1 },
-      { x: 3, y: -1 },
-      { x: 5, y: -1 },
+      { x: 4, y: -1 },
       { x: 7, y: -1 },
-      { x: 1, y: -3 }
+      { x: 10, y: -1 },
+      { x: 1, y: -4 }
     ]);
   });
 });
@@ -109,11 +109,11 @@ describe('syncLiveInventory', () => {
     expect(plate).toMatchObject({
       live: { key: 'beszel:web' },
       from: { x: 0, y: 0 },
-      to: { x: 8, y: -2 }
+      to: { x: 11, y: -2 }
     });
     expect(tileOf(result, 'beszel:web')).toEqual({ x: 1, y: -1 });
-    expect(tileOf(result, 'beszel:web/app')).toEqual({ x: 3, y: -1 });
-    expect(tileOf(result, 'beszel:web/db')).toEqual({ x: 5, y: -1 });
+    expect(tileOf(result, 'beszel:web/app')).toEqual({ x: 4, y: -1 });
+    expect(tileOf(result, 'beszel:web/db')).toEqual({ x: 7, y: -1 });
     const icons = result.model.items.map((i) => i.icon);
     expect(icons).toEqual(
       expect.arrayContaining([
@@ -156,8 +156,8 @@ describe('syncLiveInventory', () => {
       ),
       { createId }
     )!;
-    expect(tileOf(second, 'beszel:web/app')).toEqual({ x: 3, y: -1 });
-    expect(tileOf(second, 'beszel:web/worker')).toEqual({ x: 5, y: -1 });
+    expect(tileOf(second, 'beszel:web/app')).toEqual({ x: 4, y: -1 });
+    expect(tileOf(second, 'beszel:web/worker')).toEqual({ x: 7, y: -1 });
   });
 
   it('grows a full plate by one row', () => {
@@ -176,8 +176,8 @@ describe('syncLiveInventory', () => {
       { createId }
     )!;
     const [plate] = view(second).rectangles!;
-    expect(plate).toMatchObject({ from: { x: 0, y: 0 }, to: { x: 8, y: -4 } });
-    expect(tileOf(second, 'beszel:web/d')).toEqual({ x: 1, y: -3 });
+    expect(plate).toMatchObject({ from: { x: 0, y: 0 }, to: { x: 11, y: -5 } });
+    expect(tileOf(second, 'beszel:web/d')).toEqual({ x: 1, y: -4 });
   });
 
   it('keeps items where a person moved them', () => {
@@ -196,7 +196,7 @@ describe('syncLiveInventory', () => {
           {
             ...view(first),
             items: view(first).items.map((v) =>
-              v.tile.x === 3 ? { ...v, tile: { x: 20, y: 20 } } : v
+              v.tile.x === 4 ? { ...v, tile: { x: 20, y: 20 } } : v
             )
           }
         ]
@@ -211,19 +211,55 @@ describe('syncLiveInventory', () => {
       { createId }
     )!;
     expect(tileOf(second, 'beszel:web/app')).toEqual({ x: 20, y: 20 });
-    expect(tileOf(second, 'beszel:web/new')).toEqual({ x: 3, y: -1 });
+    expect(tileOf(second, 'beszel:web/new')).toEqual({ x: 4, y: -1 });
   });
 
-  it('skips slots taken by hand-placed items', () => {
+  it('skips plate slots taken by hand-placed items', () => {
+    const createId = ids();
+    const first = syncLiveInventory(
+      emptyState(),
+      VIEW,
+      snapshot(system('web', [container('web', 'app')])),
+      { createId }
+    )!;
+    // Someone drops their own node into the next free slot (7, -1).
+    const withManual: State = {
+      ...first,
+      model: {
+        ...first.model,
+        items: [...first.model.items, { id: 'manual', name: 'manual' }],
+        views: [
+          {
+            ...view(first),
+            items: [
+              ...view(first).items,
+              { id: 'manual', tile: { x: 7, y: -1 } }
+            ]
+          }
+        ]
+      }
+    };
+    const second = syncLiveInventory(
+      withManual,
+      VIEW,
+      snapshot(
+        system('web', [container('web', 'app'), container('web', 'new')])
+      ),
+      { createId }
+    )!;
+    expect(tileOf(second, 'beszel:web/new')).toEqual({ x: 10, y: -1 });
+  });
+
+  it('places a new plate to the right of hand-placed items', () => {
     const state = emptyState();
     state.model.items.push({ id: 'manual', name: 'manual' });
-    view(state).items.push({ id: 'manual', tile: { x: 3, y: -1 } });
+    view(state).items.push({ id: 'manual', tile: { x: 4, y: -1 } });
     const first = syncLiveInventory(state, VIEW, snapshot(system('web', [])), {
       createId: ids()
     })!;
     const plate = view(first).rectangles![0]!;
     // On screen, the plate's left corner (x - y) is right of the manual item.
-    expect(plate.from.x - plate.from.y).toBeGreaterThan(3 - -1);
+    expect(plate.from.x - plate.from.y).toBeGreaterThan(4 - -1);
   });
 
   it('does not scatter containers when a person deleted the plate', () => {

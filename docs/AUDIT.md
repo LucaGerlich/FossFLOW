@@ -6,6 +6,17 @@ Newest entries first.
 
 ---
 
+## 2026-11-09 — Real-Beszel fixes: faster stop detection, roomier plates
+
+- **What:**
+  - **Backend:** `normalize.ts` treats a container as stopped once its last report is more than 90 s older than its system's latest report (`CONTAINER_REPORT_LAG_MS`). The system `updated` timestamp is now fetched, and one shared timestamp schema accepts Unix ms or PocketBase date strings. The fake hub sets system timestamps.
+  - **Lib:** auto-placed slots are 3 tiles apart instead of 2. Plate geometry derives from `SLOT_SPACING` and `PLATE_MARGIN` (`PLATE_WIDTH`).
+- **Why:** Found while testing against a real Beszel 0.21.1 hub and agent in Docker.
+  - Beszel keeps container records for 10 minutes, so a stopped container only became a ghost after about 10 min. Agents report every running container with each system report, which gives a much faster signal (about 1–2 min).
+  - With real container names, labels of one row covered the metric chips of the row behind.
+- **Security:** None.
+- **Verified:** 38/38 backend tests pass (new: containers missing from the latest report are dropped). 21/21 live lib tests pass (updated coordinates, new real slot-occupancy test). Visually checked against the real hub: no label/chip overlaps.
+
 ## 2026-11-09 — Docs: live landscape guide
 
 - **What:** New `docs/LIVE.md` covering what live data shows, how it works, Beszel read-only user setup (role `readonly`, **verified** on, server sharing or `SHARE_ALL_SYSTEMS`), environment variables, security notes, troubleshooting and the development workflow with the fake hub. Added a README section linking to it.

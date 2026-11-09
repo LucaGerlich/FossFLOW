@@ -27,7 +27,12 @@ import type {
  */
 
 export const PLATE_COLUMNS = 4;
-export const SLOT_SPACING = 2;
+/** Tiles between slots: room for each node's label and metric chip. */
+export const SLOT_SPACING = 3;
+/** Tiles between a plate's edge and its outer slots. */
+const PLATE_MARGIN = 1;
+/** Plate width in tiles along x. */
+const PLATE_WIDTH = (PLATE_COLUMNS - 1) * SLOT_SPACING + 2 * PLATE_MARGIN;
 /** Horizontal gap between plates in half-tile units: room for a vitals card. */
 export const PLATE_GAP = 5;
 const PLATE_COLOR = '#f2f2f2';
@@ -60,8 +65,16 @@ const boundsOf = ({ from, to }: Pick<Rectangle, 'from' | 'to'>): Bounds => ({
 /** Slots inside a plate, in reading order (rows toward the viewer, columns to the right). */
 export function plateSlots(bounds: Bounds): Coords[] {
   const slots: Coords[] = [];
-  for (let y = bounds.yMax - 1; y >= bounds.yMin + 1; y -= SLOT_SPACING) {
-    for (let x = bounds.xMin + 1; x <= bounds.xMax - 1; x += SLOT_SPACING) {
+  for (
+    let y = bounds.yMax - PLATE_MARGIN;
+    y >= bounds.yMin + PLATE_MARGIN;
+    y -= SLOT_SPACING
+  ) {
+    for (
+      let x = bounds.xMin + PLATE_MARGIN;
+      x <= bounds.xMax - PLATE_MARGIN;
+      x += SLOT_SPACING
+    ) {
       slots.push({ x, y });
     }
   }
@@ -71,10 +84,12 @@ export function plateSlots(bounds: Bounds): Coords[] {
 /** Plate bounds for `slotCount` slots with its back-left corner at (x0, y0). */
 export function plateFor(x0: number, y0: number, slotCount: number): Bounds {
   const rows = Math.max(1, Math.ceil(slotCount / PLATE_COLUMNS));
+  const span = (count: number): number =>
+    (count - 1) * SLOT_SPACING + 2 * PLATE_MARGIN;
   return {
     xMin: x0,
-    xMax: x0 + PLATE_COLUMNS * SLOT_SPACING,
-    yMin: y0 - rows * SLOT_SPACING,
+    xMax: x0 + PLATE_WIDTH,
+    yMin: y0 - span(rows),
     yMax: y0
   };
 }
@@ -98,8 +113,7 @@ export function nextPlateOrigin(view: View): Coords {
   // ponytail: one endless row; wrap into several rows once landscapes get big.
   if (points.length === 0) return { x: 0, y: 0 };
   let right = Math.max(...points.map(({ x, y }) => x - y)) + PLATE_GAP;
-  const top =
-    Math.max(...points.map(({ x, y }) => x + y)) - PLATE_COLUMNS * SLOT_SPACING;
+  const top = Math.max(...points.map(({ x, y }) => x + y)) - PLATE_WIDTH;
   if ((right + top) % 2 !== 0) right += 1; // tiles are integers
   return { x: (top + right) / 2, y: (top - right) / 2 };
 }
