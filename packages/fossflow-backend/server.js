@@ -34,12 +34,15 @@ const writeLimiter = rateLimit({ windowMs: 60_000, max: 50, standardHeaders: tru
 
 // Behind the bundled nginx, use X-Forwarded-For so rate limits apply per client.
 app.set('trust proxy', 'loopback');
-app.use(cors());
-app.use(express.json({ limit: '10mb' }));
 
 // Optional live data (servers, containers, vitals). Disabled unless BESZEL_URL is set.
+// Mounted before cors() on purpose: no CORS headers, so other websites cannot read
+// the infrastructure inventory from a visitor's browser. The app calls it same-origin.
 const live = setupLive(process.env);
 app.use('/api/live', live.router);
+
+app.use(cors());
+app.use(express.json({ limit: '10mb' }));
 
 // Health check / Storage status endpoint
 app.get('/api/storage/status', (req, res) => {

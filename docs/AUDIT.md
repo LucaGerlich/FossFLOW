@@ -6,6 +6,18 @@ Newest entries first.
 
 ---
 
+## 2026-11-09 — Security: no CORS on `/api/live`; fail closed without auth
+
+- **What:**
+  - `server.js` mounts `/api/live` before the global `cors()` middleware, so live responses carry no `Access-Control-Allow-Origin` header.
+  - `docker-entrypoint.sh` keeps live data disabled (it unsets `BESZEL_URL` and logs why) when Basic Auth isn't configured, unless `LIVE_ALLOW_UNAUTHENTICATED=true`.
+  - `compose.dev.yml` sets that opt-out for local development, and `compose.yml` and `.env.example` document it.
+- **Why:** Raised by an automated security review of the backend commit.
+  - With the global `cors()` sending `*`, any website visited by someone on the same network could read the server and container inventory from an unauthenticated deployment via their browser.
+  - Relying on optional Basic Auth was a documented assumption, not an enforced one.
+- **Security:** Browsers now block cross-origin reads of the live inventory; the app reaches it same-origin (nginx in production, a dev-server proxy in development). The Docker image refuses to serve live data without auth in front unless the operator explicitly opts out. Deployments that run `server.js` directly must provide their own auth (to be documented in `docs/LIVE.md`). Not done: an app-level token or session, since v1 uses Basic Auth by decision.
+- **Verified:** `curl` with `Origin: https://evil.example` shows no CORS header on `/api/live/status` while `/api/storage/status` behaves as before; `sh -n docker-entrypoint.sh`; 37/37 backend tests pass. The entrypoint behaviour is checked in the Docker verification step.
+
 ## 2026-11-09 — Deploy wiring for live data; service worker no longer caches the API
 
 - **What:**
