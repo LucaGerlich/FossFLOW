@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useModelStoreApi } from 'src/stores/modelStore';
 import { useSceneStoreApi } from 'src/stores/sceneStore';
-import { useUiStateStore } from 'src/stores/uiStateStore';
+import { useUiStateStore, useUiStateStoreApi } from 'src/stores/uiStateStore';
 import type { State } from 'src/stores/reducers/types';
 import { syncLiveInventory } from './sync';
 import type { LiveSnapshot } from './types';
@@ -20,11 +20,22 @@ interface LiveSyncProps {
 export const LiveSync = ({ snapshot }: LiveSyncProps) => {
   const editorMode = useUiStateStore((state) => state.editorMode);
   const viewId = useUiStateStore((state) => state.view);
+  const uiStateApi = useUiStateStoreApi();
   const modelStoreApi = useModelStoreApi();
   const sceneStoreApi = useSceneStoreApi();
 
   useEffect(() => {
     if (editorMode !== 'EDITABLE' || !viewId) return;
+    // Never rewrite the model mid-gesture (drag, connector, lasso…); the next
+    // snapshot retries.
+    const { mode, mouse } = uiStateApi.getState();
+    const busy =
+      mouse.mousedown !== null ||
+      mode.type === 'DRAG_ITEMS' ||
+      mode.type === 'RECTANGLE.DRAW' ||
+      mode.type === 'RECTANGLE.TRANSFORM' ||
+      (mode.type === 'CONNECTOR' && mode.isConnecting === true);
+    if (busy) return;
     const model = modelStoreApi.getState();
     const scene = sceneStoreApi.getState();
     const state: State = {
@@ -48,7 +59,7 @@ export const LiveSync = ({ snapshot }: LiveSyncProps) => {
       // A malformed diagram must not break the editor; skip this round.
       console.warn('[live] could not place discovered items', error);
     }
-  }, [snapshot, editorMode, viewId, modelStoreApi, sceneStoreApi]);
+  }, [snapshot, editorMode, viewId, uiStateApi, modelStoreApi, sceneStoreApi]);
 
   return null;
 };

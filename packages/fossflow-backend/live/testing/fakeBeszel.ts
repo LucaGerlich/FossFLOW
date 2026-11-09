@@ -38,6 +38,8 @@ export interface FakeBeszelOptions {
   port?: number;
   systems?: FakeSystem[];
   containers?: FakeContainer[];
+  /** Answer every request with a 307 to this base URL (redirect tests). */
+  redirectTo?: string;
 }
 
 export interface FakeBeszel {
@@ -82,6 +84,14 @@ export async function startFakeBeszel(
     void (async () => {
       const url = new URL(req.url ?? '/', 'http://fake');
       requests.push(`${req.method} ${url.pathname}`);
+
+      if (options.redirectTo) {
+        res.writeHead(307, {
+          Location: `${options.redirectTo}${url.pathname}`
+        });
+        res.end();
+        return;
+      }
 
       if (
         req.method === 'POST' &&

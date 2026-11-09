@@ -64,6 +64,8 @@ export interface BeszelInventory {
   containers: BeszelContainer[];
   /** Records that failed validation and were skipped. */
   skipped: number;
+  /** True when a list hit the page cap and more records may exist. */
+  truncated: boolean;
 }
 
 export interface BeszelClient {
@@ -99,6 +101,9 @@ export function createBeszelClient(
     try {
       return await fetchImpl(`${config.url}${path}`, {
         ...init,
+        // Never follow redirects: a 307/308 would re-send the password or
+        // token to wherever the redirect points.
+        redirect: 'error',
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
       });
     } catch (error) {
@@ -156,14 +161,16 @@ export function createBeszelClient(
     collection: string,
     fields: string,
     schema: z.ZodType<T, z.ZodTypeDef, unknown>
-  ): Promise<{ records: T[]; skipped: number }> {
+  ): Promise<{ records: T[]; skipped: number; truncated: boolean }> {
     const records: T[] = [];
     let skipped = 0;
+    let truncated = false;
     for (let page = 1; page <= MAX_PAGES; page += 1) {
       const query = new URLSearchParams({
         page: String(page),
         perPage: String(PAGE_SIZE),
         skipTotal: '1',
+        sort: 'id', // stable pages while records change
         fields
       });
       const body = pageSchema.safeParse(
@@ -180,8 +187,9 @@ export function createBeszelClient(
         else skipped += 1;
       }
       if (body.data.items.length < PAGE_SIZE) break;
+      if (page === MAX_PAGES) truncated = true;
     }
-    return { records, skipped };
+    return { records, skipped, truncated };
   }
 
   return {
@@ -199,7 +207,8 @@ export function createBeszelClient(
       return {
         systems: systems.records,
         containers: containers.records,
-        skipped: systems.skipped + containers.skipped
+        skipped: systems.skipped + containers.skipped,
+        truncated: systems.truncated || containers.truncated
       };
     }
   };

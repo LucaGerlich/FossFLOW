@@ -86,3 +86,53 @@ describe('Beszel client', () => {
     assert.equal(result.skipped, 1);
   });
 });
+
+describe('Beszel client hardening', () => {
+  it('never follows redirects, so credentials cannot leak to another host', async () => {
+    const target = await startFakeBeszel();
+    const redirecting = await startFakeBeszel({ redirectTo: target.url });
+    try {
+      const beszel = createBeszelClient({
+        url: redirecting.url,
+        email: target.email,
+        password: target.password
+      });
+      await assert.rejects(beszel.fetchInventory(), LiveSourceError);
+      assert.deepEqual(
+        target.requests,
+        [],
+        'redirect target must not be contacted'
+      );
+    } finally {
+      await Promise.all([target.close(), redirecting.close()]);
+    }
+  });
+
+  it('flags lists that hit the page cap instead of truncating silently', async () => {
+    const now = Date.now();
+    const fake = await startFakeBeszel({
+      systems: [{ id: 's', name: 's', status: 'up', info: {} }],
+      containers: Array.from({ length: 10_001 }, (_, i) => ({
+        system: 's',
+        name: `c${i}`,
+        image: 'busybox',
+        status: 'Up',
+        health: 0,
+        cpu: 0,
+        memory: 1,
+        updated: now
+      }))
+    });
+    try {
+      const result = await createBeszelClient({
+        url: fake.url,
+        email: fake.email,
+        password: fake.password
+      }).fetchInventory();
+      assert.equal(result.truncated, true);
+      assert.equal(result.containers.length, 10_000);
+    } finally {
+      await fake.close();
+    }
+  });
+});

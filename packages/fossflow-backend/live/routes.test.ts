@@ -106,3 +106,37 @@ describe('live routes', () => {
     await fake.close();
   });
 });
+
+describe('live hub staleness', () => {
+  it('shows last-known data as unknown after three missed poll intervals', async () => {
+    const fake = await startFakeBeszel(demoLandscape(Date.now()));
+    let clock = Date.now();
+    const config = {
+      pollSeconds: 30,
+      beszel: { url: fake.url, email: fake.email, password: fake.password }
+    };
+    const hub = createLiveHub({
+      config,
+      client: createBeszelClient(config.beszel),
+      logger: silent,
+      now: () => new Date(clock)
+    });
+    await hub.syncNow();
+    await fake.close();
+
+    clock += 60_000; // two intervals: still trusted
+    await hub.syncNow();
+    const recent = hub.getSnapshot();
+    assert.notEqual(recent.systems[0]?.status, 'unknown');
+
+    clock += 60_000; // four intervals since the last good sync
+    const stale = hub.getSnapshot();
+    assert.ok(stale.systems.length > 0, 'numbers stay available');
+    for (const system of stale.systems) {
+      assert.equal(system.status, 'unknown');
+      for (const container of system.containers) {
+        assert.equal(container.status, 'unknown');
+      }
+    }
+  });
+});

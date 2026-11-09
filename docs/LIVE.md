@@ -10,6 +10,8 @@ FossFLOW works as a plain diagramming tool with no backend at all. If your team 
   - Stopped containers stay on the map as dimmed "ghosts", so you can see that something is missing.
 - **Server vitals.** Select a server to see CPU, memory and disk with recent history, plus network, load, uptime and temperature. Degraded servers show this card automatically.
 - **Read-only.** The map only reads from Beszel and never changes anything.
+- **Hide what you don't need.** Delete a container node to hide it, for example a sidecar. It stays hidden even while it keeps running. To bring hidden containers back, delete the server's plate: the next sync places everything that isn't on the map onto a fresh plate.
+- **Honest when blind.** If FossFLOW can't reach Beszel for three poll intervals, every live item turns grey ("unknown"). The last numbers stay readable, but nothing pretends to be healthy.
 
 ## How it works
 
@@ -78,6 +80,12 @@ The live snapshot is an inventory of your infrastructure: server names, containe
 | Pill reads "Live data unavailable" | Hover it for the error, e.g. `Beszel: Beszel login failed (HTTP 400)` (wrong credentials, or the user isn't verified) or `Beszel is unreachable (ECONNREFUSED)`. |
 | Servers appear, but no containers | The agent needs the Docker socket, and Beszel only reports **running** containers. |
 | Live data stays off in Docker | Configure `HTTP_AUTH_USER` and `HTTP_AUTH_PASSWORD`, or set `LIVE_ALLOW_UNAUTHENTICATED=true` on purpose. |
+
+## Good to know
+
+- **Bindings travel with the diagram.** Each discovered item stores its live key in the diagram, so JSON exports and server storage keep it. The *compact* export format has never included rectangles, so server plates are lost there; after re-importing a compact file, delete the server node and let discovery rebuild its plate.
+- **Hairline icons are always available.** The hairline pack (server, container, database, cache, queue, gateway, clients, cloud) is part of the core icons, so you can use it for hand-drawn landscapes without any live data.
+- **Running `server.js` directly** with live data on a non-loopback address prints a startup warning. Put it behind an authenticating proxy, or set `BACKEND_HOST=127.0.0.1`.
 
 ## Development
 

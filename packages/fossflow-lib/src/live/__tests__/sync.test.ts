@@ -262,7 +262,53 @@ describe('syncLiveInventory', () => {
     expect(plate.from.x - plate.from.y).toBeGreaterThan(4 - -1);
   });
 
-  it('does not scatter containers when a person deleted the plate', () => {
+  it('keeps a deleted container node deleted', () => {
+    const createId = ids();
+    const live = snapshot(
+      system('web', [container('web', 'app'), container('web', 'sidecar')])
+    );
+    const first = syncLiveInventory(emptyState(), VIEW, live, { createId })!;
+    const sidecar = first.model.items.find(
+      (i) => i.live?.key === 'beszel:web/sidecar'
+    )!;
+    const withoutSidecar: State = {
+      ...first,
+      model: {
+        ...first.model,
+        items: first.model.items.filter((i) => i.id !== sidecar.id),
+        views: [
+          {
+            ...view(first),
+            items: view(first).items.filter((v) => v.id !== sidecar.id)
+          }
+        ]
+      }
+    };
+    expect(
+      syncLiveInventory(withoutSidecar, VIEW, live, { createId })
+    ).toBeNull();
+  });
+
+  it('remembers containers it adds to an existing plate', () => {
+    const createId = ids();
+    const first = syncLiveInventory(
+      emptyState(),
+      VIEW,
+      snapshot(system('web', [])),
+      { createId }
+    )!;
+    const second = syncLiveInventory(
+      first,
+      VIEW,
+      snapshot(system('web', [container('web', 'late')])),
+      { createId }
+    )!;
+    expect(view(second).rectangles![0]!.live?.known).toEqual([
+      'beszel:web/late'
+    ]);
+  });
+
+  it('re-discovers onto a fresh plate when a person deleted the plate', () => {
     const createId = ids();
     const first = syncLiveInventory(
       emptyState(),
@@ -274,14 +320,30 @@ describe('syncLiveInventory', () => {
       ...first,
       model: { ...first.model, views: [{ ...view(first), rectangles: [] }] }
     };
+    const second = syncLiveInventory(
+      noPlate,
+      VIEW,
+      snapshot(system('web', [container('web', 'app')])),
+      { createId }
+    )!;
+    const plates = view(second).rectangles!;
+    expect(plates).toHaveLength(1);
+    // The server node is still on the map, so it is not placed twice.
     expect(
-      syncLiveInventory(
-        noPlate,
-        VIEW,
-        snapshot(system('web', [container('web', 'app')])),
-        { createId }
-      )
-    ).toBeNull();
+      second.model.items.filter((i) => i.live?.key === 'beszel:web')
+    ).toHaveLength(1);
+    expect(tileOf(second, 'beszel:web/app')).toBeDefined();
+  });
+
+  it('does not create an empty plate when everything is already on the map', () => {
+    const createId = ids();
+    const live = snapshot(system('web', [container('web', 'app')]));
+    const first = syncLiveInventory(emptyState(), VIEW, live, { createId })!;
+    const noPlate: State = {
+      ...first,
+      model: { ...first.model, views: [{ ...view(first), rectangles: [] }] }
+    };
+    expect(syncLiveInventory(noPlate, VIEW, live, { createId })).toBeNull();
   });
 
   it('places further servers to the right of existing plates', () => {

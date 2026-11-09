@@ -15,5 +15,7 @@ export const constrainedStrings = {
 
 /** Binds a node or rectangle to a live-data entity, e.g. `beszel:<systemId>/<container>`. */
 export const liveBinding = z.object({
-  key: z.string().min(1).max(300)
+  key: z.string().min(1).max(300),
+  /** On server plates: container keys already placed (deleted ones stay hidden). */
+  known: z.array(z.string().min(1).max(300)).max(2000).optional()
 });

@@ -6,6 +6,20 @@ Newest entries first.
 
 ---
 
+## 2026-11-09 — Review fixes for the live layer
+
+- **What:** Fixes for the findings of an independent code and security review (no critical or high issues; 8 medium):
+  1. **Deleted containers stay deleted.** Plates record placed container keys in `live.known` (schema: up to 2,000 keys of at most 300 characters). Deleting a container node hides it; deleting the plate re-discovers onto a fresh plate without duplicating the server node, and no empty plate is created.
+  2. **Stale data turns grey.** After 3 poll intervals without a good sync, the snapshot marks every system and container `unknown`; the numbers stay available.
+  3. **No redirects.** All Beszel requests use `redirect: 'error'`, so the password and token can't be re-sent to a redirect target.
+  4. **Stable, honest paging.** `sort=id` keeps pages stable; hitting the 20 × 500 cap sets `truncated` and logs a warning.
+  5. **Warning outside Docker.** `server.js` warns at startup when live data is served on a non-loopback host.
+  6. **No sync mid-gesture.** `LiveSync` skips a round while a mouse button is down or a drag, rectangle draw/resize or connector is in progress.
+  7. **Compose and docs.** `compose.yml` passes `BESZEL_PASSWORD_FILE`; `docs/LIVE.md` covers hiding and restoring containers, the grey-out on stale data, the compact-export limitation, the always-available hairline icons and the warning.
+- **Why:** Review findings; #1 contradicted the documentation and #2 could show a dead monitoring source as healthy.
+- **Security:** #3 prevents credential forwarding on redirects; #5 surfaces unauthenticated exposure outside Docker.
+- **Verified:** 41/41 backend tests pass (new: redirect target never contacted, page cap flagged at 10,001 records, stale snapshot after 4 intervals but not after 2). 233/233 lib tests pass (new: deleted container stays deleted, added containers remembered, deleted plate re-discovered without a duplicate server, no empty plate). `npm run lint` and `npm run build` pass. In the browser against real Beszel 0.21.1, a deleted container node stayed gone across 2 poll cycles while its neighbours remained. The startup warning was observed.
+
 ## 2026-11-09 — Real-Beszel fixes: faster stop detection, roomier plates
 
 - **What:**

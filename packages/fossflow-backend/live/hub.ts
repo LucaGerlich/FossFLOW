@@ -10,6 +10,8 @@ import type {
 } from './types.ts';
 
 export const HISTORY_SAMPLES = 60;
+/** After this many poll intervals without a good sync, data is shown as unknown. */
+export const STALE_AFTER_POLLS = 3;
 const SOURCE_ID = 'beszel';
 
 export interface LiveLogger {
@@ -31,6 +33,21 @@ export interface LiveHubOptions {
   client: BeszelClient;
   logger: LiveLogger;
   now?: () => Date;
+}
+
+/** Last-known data, re-labelled `unknown`: numbers stay readable, colours don't lie. */
+function markUnknown(snapshot: LiveSnapshot): LiveSnapshot {
+  return {
+    ...snapshot,
+    systems: snapshot.systems.map((system) => ({
+      ...system,
+      status: 'unknown',
+      containers: system.containers.map((container) => ({
+        ...container,
+        status: 'unknown'
+      }))
+    }))
+  };
 }
 
 function safeMessage(error: unknown): string {
@@ -92,6 +109,11 @@ export function createLiveHub(options: LiveHubOptions): LiveHub {
         if (!systems.some((system) => system.key === key)) history.delete(key);
       }
       if (!source.ok) options.logger.info('[live] Beszel sync OK');
+      if (inventory.truncated) {
+        options.logger.warn(
+          '[live] Beszel returned more records than the page cap; some are not shown'
+        );
+      }
       if (inventory.skipped > 0) {
         options.logger.warn(
           `[live] skipped ${inventory.skipped} malformed Beszel record(s)`
@@ -116,7 +138,14 @@ export function createLiveHub(options: LiveHubOptions): LiveHub {
   }
 
   return {
-    getSnapshot: () => snapshot,
+    getSnapshot: () => {
+      const staleAfterMs =
+        options.config.pollSeconds * 1000 * STALE_AFTER_POLLS;
+      const lastSync = source.lastSync ? Date.parse(source.lastSync) : null;
+      const stale =
+        lastSync !== null && now().getTime() - lastSync > staleAfterMs;
+      return stale ? markUnknown(snapshot) : snapshot;
+    },
     getStatus: () => ({ enabled: true, sources: [source] }),
     syncNow,
     start() {

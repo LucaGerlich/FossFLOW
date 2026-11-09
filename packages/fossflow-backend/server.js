@@ -245,6 +245,12 @@ app.listen(PORT, HOST, () => {
   console.log(`FossFLOW Backend Server running on ${HOST}:${PORT}`);
   console.log(`Server storage: ${STORAGE_ENABLED ? 'ENABLED' : 'DISABLED'}`);
   console.log(`Live data: ${live.summary}`);
+  if (live.hub && !['127.0.0.1', '::1', 'localhost'].includes(HOST)) {
+    console.warn(
+      `WARNING: live data is served on ${HOST}:${PORT} without authentication. ` +
+        'Put the backend behind an authenticating proxy or set BACKEND_HOST=127.0.0.1 (see docs/LIVE.md).'
+    );
+  }
   if (STORAGE_ENABLED) {
     console.log(`Storage path: ${STORAGE_PATH}`);
     console.log(`Git backup: ${ENABLE_GIT_BACKUP ? 'ENABLED' : 'DISABLED'}`);

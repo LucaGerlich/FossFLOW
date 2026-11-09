@@ -37,6 +37,8 @@ const PLATE_WIDTH = (PLATE_COLUMNS - 1) * SLOT_SPACING + 2 * PLATE_MARGIN;
 export const PLATE_GAP = 5;
 const PLATE_COLOR = '#f2f2f2';
 const MAX_NAME = 100;
+/** Cap on remembered container keys per plate. */
+const MAX_KNOWN = 2000;
 
 const KIND_ICON: Record<LiveContainerKind, string> = {
   container: HAIRLINE_ICON_IDS.container,
@@ -200,6 +202,17 @@ export function syncLiveInventory(
     return { ...plate, ...grown };
   };
 
+  /** Records that a plate has placed `key`, so a later deletion sticks. */
+  const remember = (plateId: string, key: string): void => {
+    const plate = (view().rectangles ?? []).find((rect) => rect.id === plateId);
+    if (!plate?.live) return;
+    const known = [...(plate.live.known ?? []), key].slice(-MAX_KNOWN);
+    next = updateRectangle(
+      { id: plateId, live: { ...plate.live, known } },
+      { viewId, state: next }
+    );
+  };
+
   const addContainerToPlate = (
     container: LiveContainer,
     plate: Rectangle
@@ -210,28 +223,56 @@ export function syncLiveInventory(
       target = growPlate(target);
       slot = freeSlot(target);
     }
-    if (slot)
-      placeNode(container.key, container.name, KIND_ICON[container.kind], slot);
+    if (!slot) return;
+    placeNode(container.key, container.name, KIND_ICON[container.kind], slot);
+    remember(plate.id, container.key);
   };
 
+  /**
+   * New server, or a plate a person deleted: put everything of this server
+   * that is not on the map yet on a fresh plate (deleting a plate is how to
+   * bring hidden containers back).
+   */
   const addSystem = (system: LiveSystem): void => {
+    const placeServer = !boundItems.has(system.key);
+    const containers = system.containers.filter(
+      (container) => !boundItems.has(container.key)
+    );
+    if (!placeServer && containers.length === 0) return;
+
     const origin = nextPlateOrigin(view());
-    const bounds = plateFor(origin.x, origin.y, system.containers.length + 1);
+    const bounds = plateFor(
+      origin.x,
+      origin.y,
+      containers.length + (placeServer ? 1 : 0)
+    );
     const plate: Rectangle = {
       id: createId(),
       customColor: PLATE_COLOR,
       from: { x: bounds.xMin, y: bounds.yMax },
       to: { x: bounds.xMax, y: bounds.yMin },
-      live: { key: system.key }
+      live: {
+        key: system.key,
+        known: system.containers.map((c) => c.key).slice(-MAX_KNOWN)
+      }
     };
     next = createRectangle(plate, { viewId, state: next });
     changed = true;
-    const [serverSlot, ...containerSlots] = plateSlots(bounds);
-    if (serverSlot)
-      placeNode(system.key, system.name, HAIRLINE_ICON_IDS.server, serverSlot);
-    system.containers.forEach((container, index) => {
-      const slot = containerSlots[index];
-      if (slot && !boundItems.has(container.key)) {
+    const slots = plateSlots(bounds);
+    if (placeServer) {
+      const serverSlot = slots.shift();
+      if (serverSlot) {
+        placeNode(
+          system.key,
+          system.name,
+          HAIRLINE_ICON_IDS.server,
+          serverSlot
+        );
+      }
+    }
+    containers.forEach((container, index) => {
+      const slot = slots[index];
+      if (slot) {
         placeNode(
           container.key,
           container.name,
@@ -244,13 +285,15 @@ export function syncLiveInventory(
 
   for (const system of snapshot.systems) {
     const plate = plateFind(system.key);
-    if (!plate && !boundItems.has(system.key)) {
+    if (!plate) {
       addSystem(system);
       continue;
     }
-    if (!plate) continue; // plate removed on purpose: don't place containers loose
+    // Containers this plate placed before and that are gone from the map
+    // were deleted on purpose: never bring them back.
+    const known = new Set(plate.live?.known ?? []);
     for (const container of system.containers) {
-      if (!boundItems.has(container.key)) {
+      if (!boundItems.has(container.key) && !known.has(container.key)) {
         addContainerToPlate(container, plateFind(system.key) ?? plate);
       }
     }
