@@ -1,8 +1,8 @@
 #!/bin/sh
 
 
-# Start Node.js backend if server storage is enabled
-if [ "$ENABLE_SERVER_STORAGE" = "true" ]; then
+# Start Node.js backend if server storage or a live data source is enabled
+if [ "$ENABLE_SERVER_STORAGE" = "true" ] || [ -n "$BESZEL_URL" ]; then
     echo "Starting FossFLOW backend server..."
     cd /app/packages/fossflow-backend
     if [ -n "$PUID" ] && [ -n "$PGID" ]; then
@@ -13,7 +13,7 @@ if [ "$ENABLE_SERVER_STORAGE" = "true" ]; then
         echo "Backend server started"
     fi
 else
-    echo "Server storage disabled, backend not started"
+    echo "Server storage and live data disabled, backend not started"
 fi
 
 # Start nginx

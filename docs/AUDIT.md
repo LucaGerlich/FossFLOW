@@ -6,6 +6,20 @@ Newest entries first.
 
 ---
 
+## 2026-11-09 — Deploy wiring for live data; service worker no longer caches the API
+
+- **What:**
+  - `public/service-worker.js` now ignores `/api/` and non-GET requests, and its cache name changed from `fossflow-v1` to `fossflow-v2`, which removes the old cache when the new worker activates.
+  - `docker-entrypoint.sh` starts the backend when storage is enabled **or** `BESZEL_URL` is set.
+  - The Dockerfile sets `BACKEND_HOST=127.0.0.1`. `compose.dev.yml` overrides it with `0.0.0.0` for its published dev port and passes the `BESZEL_*` variables.
+  - `compose.yml` and `.env.example` document `BESZEL_URL`, `BESZEL_EMAIL`, `BESZEL_PASSWORD` / `BESZEL_PASSWORD_FILE` and `LIVE_POLL_SECONDS`.
+- **Why:** The service worker served every same-origin GET from cache first, `/api/*` included, so live data would have frozen on its first response; diagram listings were also cached. Live data needs the backend even when diagram storage is off.
+- **Security:**
+  - Inside the image the backend now listens only on localhost, so the live inventory and diagram API are reachable only through nginx, behind Basic Auth when configured. Other containers on the same Docker network can no longer reach them on port 3001 directly.
+  - Stale cached API responses are removed from browsers.
+  - Not changed: `compose.dev.yml` still publishes 3001 directly, for development only.
+- **Verified:** `sh -n docker-entrypoint.sh`, `node --check service-worker.js` and `docker compose config` pass for both compose files. The full image is built and checked end to end in the verification step.
+
 ## 2026-11-09 — Backend: Beszel live source and `/api/live`
 
 - **What:**
