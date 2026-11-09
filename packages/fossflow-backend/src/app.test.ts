@@ -1,61 +1,47 @@
 import assert from 'node:assert/strict';
-import type { NestExpressApplication } from '@nestjs/platform-express';
-import type { StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import pg from 'pg';
-import request from 'supertest';
 import { afterAll, beforeAll, describe, it } from 'vitest';
 import { createApp } from './app.js';
-import { loadConfig } from './config/config.js';
-import { startPostgres } from './test/postgres.js';
+import { startTestApp, type TestApp } from './test/app.js';
 
 describe('app against real Postgres', () => {
-  let postgres: StartedPostgreSqlContainer;
-  let app: NestExpressApplication;
+  let t: TestApp;
 
   beforeAll(async () => {
-    postgres = await startPostgres();
-    app = await createApp(
-      loadConfig({ DATABASE_URL: postgres.getConnectionUri() })
-    );
-    await app.init();
+    t = await startTestApp();
   });
-
-  afterAll(async () => {
-    await app?.close();
-    await postgres?.stop();
-  });
+  afterAll(async () => t?.close());
 
   it('reports healthy once migrations have run', async () => {
-    const response = await request(app.getHttpServer()).get('/api/health');
+    const response = await t.browser().get('/api/health');
     assert.equal(response.status, 200);
     assert.deepEqual(response.body, { status: 'ok' });
   });
 
   it('applied the migrations on startup', async () => {
-    const client = new pg.Client({ connectionString: postgres.getConnectionUri() });
+    const client = new pg.Client({ connectionString: t.postgres.getConnectionUri() });
     await client.connect();
     try {
       const { rows } = await client.query<{ name: string }>(
         "select table_name as name from information_schema.tables where table_schema = 'public'"
       );
-      assert.ok(rows.some((row) => row.name === 'meta'));
+      const tables = rows.map((row) => row.name);
+      for (const table of ['meta', 'user', 'session', 'account', 'verification', 'invitation']) {
+        assert.ok(tables.includes(table), `missing table ${table}`);
+      }
     } finally {
       await client.end();
     }
   });
 
   it('starts a second time without re-running migrations', async () => {
-    const second = await createApp(
-      loadConfig({ DATABASE_URL: postgres.getConnectionUri() })
-    );
+    const second = await createApp(t.config);
     await second.init();
-    const response = await request(second.getHttpServer()).get('/api/health');
-    assert.equal(response.status, 200);
     await second.close();
   });
 
-  it('keeps the live routes working with no source configured', async () => {
-    const response = await request(app.getHttpServer()).get('/api/live/status');
-    assert.deepEqual(response.body, { enabled: false, sources: [] });
+  it('keeps live data behind sign-in', async () => {
+    const response = await t.browser().get('/api/live/status');
+    assert.equal(response.status, 401);
   });
 });

@@ -15,11 +15,14 @@
     "dev:fake-beszel": "nest build && node dist/live/testing/runFakeBeszel.js"
   },
   "dependencies": {
+    "@better-auth/drizzle-adapter": "^1.7.18",
     "@nestjs/common": "^12.4.2",
     "@nestjs/core": "^12.4.2",
     "@nestjs/platform-express": "^12.4.2",
     "@nestjs/throttler": "^6.7.1",
+    "better-auth": "^1.7.18",
     "drizzle-orm": "^0.45.4",
+    "nodemailer": "^10.4.0",
     "pg": "^8.23.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
@@ -33,6 +36,7 @@
     "@testcontainers/postgresql": "^12.2.1",
     "@types/express": "^5.0.6",
     "@types/node": "^25.9.9",
+    "@types/nodemailer": "^8.0.2",
     "@types/pg": "^8.23.1",
     "@types/supertest": "^7.2.1",
     "@vitest/coverage-v8": "^5.1.0",

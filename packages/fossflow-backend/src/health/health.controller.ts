@@ -6,11 +6,13 @@ import {
 } from '@nestjs/common';
 import { SkipThrottle } from '@nestjs/throttler';
 import { sql } from 'drizzle-orm';
+import { Public } from '../auth/guards.js';
 import { DB, type Database } from '../database/database.module.js';
 
 /** For container healthchecks: is the server up and can it reach Postgres? */
 @Controller('health')
 @SkipThrottle()
+@Public()
 export class HealthController {
   constructor(@Inject(DB) private readonly db: Database) {}
 

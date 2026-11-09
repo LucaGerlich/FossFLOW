@@ -1,7 +1,10 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
+import { toNodeHandler } from 'better-auth/node';
+import type { Express } from 'express';
 import { AppModule } from './app.module.js';
+import { AUTH, type Auth } from './auth/auth.js';
 import type { AppConfig } from './config/config.js';
 
 /** Builds the configured app without listening; shared by main.ts and tests. */
@@ -10,10 +13,19 @@ export async function createApp(
 ): Promise<NestExpressApplication> {
   const app = await NestFactory.create<NestExpressApplication>(
     AppModule.forRoot(config),
-    { logger: process.env.NODE_ENV === 'test' ? false : undefined }
+    {
+      // better-auth reads the raw body, so its handler goes before the JSON parser.
+      bodyParser: false,
+      logger: process.env.NODE_ENV === 'test' ? false : undefined
+    }
   );
   // nginx on the same host is the only proxy; trust its X-Forwarded-For.
   app.set('trust proxy', 'loopback');
+
+  const server = app.getHttpAdapter().getInstance() as Express;
+  server.all('/api/auth/*splat', toNodeHandler(app.get<Auth>(AUTH)));
+  app.useBodyParser('json', { limit: '10mb' });
+
   app.setGlobalPrefix('api');
   app.enableShutdownHooks();
   return app;
