@@ -8,19 +8,16 @@ if [ -n "$BESZEL_URL" ] && { [ -z "$HTTP_AUTH_USER" ] || [ -z "$HTTP_AUTH_PASSWO
     unset BESZEL_URL
 fi
 
-# Start Node.js backend if server storage or a live data source is enabled
-if [ "$ENABLE_SERVER_STORAGE" = "true" ] || [ -n "$BESZEL_URL" ]; then
-    echo "Starting FossFLOW backend server..."
-    cd /app/packages/fossflow-backend
-    if [ -n "$PUID" ] && [ -n "$PGID" ]; then
-        su-exec $PUID:$PGID node server.js &
-        echo "Backend server started as $PUID:$PGID"
-    else 
-        node server.js &
-        echo "Backend server started"
-    fi
+# Start the platform server. Without DATABASE_URL it exits with a clear
+# message and nginx still serves the app, which then runs in local mode.
+echo "Starting FossFLOW server..."
+cd /app/packages/fossflow-backend
+if [ -n "$PUID" ] && [ -n "$PGID" ]; then
+    su-exec "$PUID:$PGID" node dist/main.js &
+    echo "Server started as $PUID:$PGID"
 else
-    echo "Server storage and live data disabled, backend not started"
+    node dist/main.js &
+    echo "Server started"
 fi
 
 # Start nginx

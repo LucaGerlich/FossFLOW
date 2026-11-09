@@ -1,14 +1,34 @@
 services:
+  # Postgres for the platform. Also published on 127.0.0.1:54320 (not 5432,
+  # which other local projects often hold) so `npm run dev:backend` on the
+  # host can use it (see packages/fossflow-backend/.env.example).
+  db:
+    image: postgres:18-alpine
+    environment:
+      - POSTGRES_USER=fossflow
+      - POSTGRES_PASSWORD=fossflow-dev # development only
+      - POSTGRES_DB=fossflow
+    ports:
+      - "127.0.0.1:${FOSSFLOW_DB_PORT:-54320}:5432"
+    volumes:
+      - db-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fossflow -d fossflow"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   fossflow:
     build: .
+    depends_on:
+      db:
+        condition: service_healthy
     ports:
       - "3000:80"
       - "3001:3001"
     environment:
       - NODE_ENV=development
-      - ENABLE_SERVER_STORAGE=true
-      - STORAGE_PATH=/data/diagrams
-      - ENABLE_GIT_BACKUP=false
+      - DATABASE_URL=postgres://fossflow:fossflow-dev@db:5432/fossflow
       # Dev only: the published 3001 port bypasses nginx Basic Auth.
       - BACKEND_HOST=0.0.0.0
       - LIVE_ALLOW_UNAUTHENTICATED=true
@@ -19,5 +39,6 @@ services:
       - HTTP_AUTH_PASSWORD=${HTTP_AUTH_PASSWORD:-}
       - PUID=${PUID:-}
       - PGID=${PGID:-}
-    volumes:
-      - ./diagrams:/data/diagrams
+
+volumes:
+  db-data:
