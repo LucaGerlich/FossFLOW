@@ -13,6 +13,8 @@ fi
 echo "Starting FossFLOW server..."
 cd /app/packages/fossflow-backend
 if [ -n "$PUID" ] && [ -n "$PGID" ]; then
+    # The server writes its encryption key into the data volume.
+    mkdir -p /data && chown -R "$PUID:$PGID" /data
     su-exec "$PUID:$PGID" node dist/main.js &
     echo "Server started as $PUID:$PGID"
 else

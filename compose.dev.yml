@@ -29,6 +29,7 @@ services:
     environment:
       - NODE_ENV=development
       - DATABASE_URL=postgres://fossflow:fossflow-dev@db:5432/fossflow
+      - FOSSFLOW_URL=http://localhost:3000
       # Dev only: the published 3001 port bypasses nginx Basic Auth.
       - BACKEND_HOST=0.0.0.0
       - LIVE_ALLOW_UNAUTHENTICATED=true
@@ -39,6 +40,10 @@ services:
       - HTTP_AUTH_PASSWORD=${HTTP_AUTH_PASSWORD:-}
       - PUID=${PUID:-}
       - PGID=${PGID:-}
+    volumes:
+      # Holds the generated encryption key
+      - app-data:/data
 
 volumes:
   db-data:
+  app-data:

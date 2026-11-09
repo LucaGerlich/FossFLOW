@@ -26,7 +26,13 @@ COPY packages/fossflow-lib/package*.json ./packages/fossflow-lib/
 COPY packages/fossflow-app/package*.json ./packages/fossflow-app/
 COPY packages/fossflow-backend/package*.json ./packages/fossflow-backend/
 
-RUN npm ci --omit=dev --workspace=packages/fossflow-backend
+# --omit=optional/peer: better-auth lists dev tools (drizzle-kit, vitest, …) as
+# optional peers, and npm would otherwise ship them because they're installed
+# for development. Everything the server needs is a direct dependency.
+# npm hoists most packages to /app/node_modules but keeps some inside the
+# workspace (e.g. a second major of a shared dependency); ship both.
+RUN npm ci --omit=dev --omit=optional --omit=peer --workspace=packages/fossflow-backend && \
+    mkdir -p packages/fossflow-backend/node_modules
 
 # --- Runtime: nginx serves the app, the server runs behind it ----------------
 FROM node:24-alpine
@@ -36,6 +42,7 @@ RUN apk upgrade --no-cache && apk add --no-cache nginx openssl su-exec
 
 # Server: compiled code, SQL migrations and production dependencies (pure JS, no native addons)
 COPY --from=server-deps /app/node_modules /app/node_modules
+COPY --from=server-deps /app/packages/fossflow-backend/node_modules /app/packages/fossflow-backend/node_modules
 COPY --from=build /app/packages/fossflow-backend/package.json /app/packages/fossflow-backend/package.json
 COPY --from=build /app/packages/fossflow-backend/dist /app/packages/fossflow-backend/dist
 COPY --from=build /app/packages/fossflow-backend/drizzle /app/packages/fossflow-backend/drizzle
@@ -59,6 +66,8 @@ RUN mkdir -p /data
 EXPOSE 80
 
 ENV NODE_ENV=production
+# Generated encryption key lives here: mount it as a volume and back it up.
+ENV FOSSFLOW_DATA_DIR=/data
 ENV BACKEND_PORT=3001
 # nginx reaches the server on localhost; don't expose the API to other
 # containers around nginx. Override for direct access.
