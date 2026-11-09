@@ -28,7 +28,8 @@ import type {
 
 export const PLATE_COLUMNS = 4;
 export const SLOT_SPACING = 2;
-export const PLATE_GAP = 3;
+/** Horizontal gap between plates in half-tile units: room for a vitals card. */
+export const PLATE_GAP = 5;
 const PLATE_COLOR = '#f2f2f2';
 const MAX_NAME = 100;
 
@@ -78,25 +79,29 @@ export function plateFor(x0: number, y0: number, slotCount: number): Bounds {
   };
 }
 
-/** Where the next new plate goes: right of everything already on the view. */
-function nextPlateOrigin(view: View): Coords {
-  const xs: number[] = [];
-  const ys: number[] = [];
-  for (const item of view.items) {
-    xs.push(item.tile.x);
-    ys.push(item.tile.y);
-  }
-  for (const rect of view.rectangles ?? []) {
-    xs.push(rect.from.x, rect.to.x);
-    ys.push(rect.from.y, rect.to.y);
-  }
-  for (const box of view.textBoxes ?? []) {
-    xs.push(box.tile.x);
-    ys.push(box.tile.y);
-  }
-  // ponytail: plates line up along +x; wrap into rows once landscapes get big.
-  if (xs.length === 0) return { x: 0, y: 0 };
-  return { x: Math.max(...xs) + PLATE_GAP, y: Math.max(...ys) };
+/**
+ * Where the next new plate goes: on screen, to the right of everything already
+ * on the view, with its top level with the content's top, so plates form a
+ * horizontal row. On screen, `x - y` grows to the right and `x + y` upwards.
+ */
+export function nextPlateOrigin(view: View): Coords {
+  const points: Coords[] = [
+    ...view.items.map((item) => item.tile),
+    ...(view.textBoxes ?? []).map((box) => box.tile),
+    ...(view.rectangles ?? []).flatMap(({ from, to }) => [
+      from,
+      to,
+      { x: from.x, y: to.y },
+      { x: to.x, y: from.y }
+    ])
+  ];
+  // ponytail: one endless row; wrap into several rows once landscapes get big.
+  if (points.length === 0) return { x: 0, y: 0 };
+  let right = Math.max(...points.map(({ x, y }) => x - y)) + PLATE_GAP;
+  const top =
+    Math.max(...points.map(({ x, y }) => x + y)) - PLATE_COLUMNS * SLOT_SPACING;
+  if ((right + top) % 2 !== 0) right += 1; // tiles are integers
+  return { x: (top + right) / 2, y: (top - right) / 2 };
 }
 
 const truncate = (name: string): string =>

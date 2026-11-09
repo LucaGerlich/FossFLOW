@@ -1,7 +1,7 @@
 import type { State } from 'src/stores/reducers/types';
 import { modelSchema } from 'src/schemas';
 import { HAIRLINE_ICON_IDS } from '../hairlineIcons';
-import { plateFor, plateSlots, syncLiveInventory } from '../sync';
+import { PLATE_GAP, plateFor, plateSlots, syncLiveInventory } from '../sync';
 import type { LiveContainer, LiveSnapshot, LiveSystem } from '../types';
 
 const VIEW = 'view-1';
@@ -221,8 +221,9 @@ describe('syncLiveInventory', () => {
     const first = syncLiveInventory(state, VIEW, snapshot(system('web', [])), {
       createId: ids()
     })!;
-    const plateOrigin = view(first).rectangles![0]!.from;
-    expect(plateOrigin.x).toBe(3 + 3); // right of the manual item
+    const plate = view(first).rectangles![0]!;
+    // On screen, the plate's left corner (x - y) is right of the manual item.
+    expect(plate.from.x - plate.from.y).toBeGreaterThan(3 - -1);
   });
 
   it('does not scatter containers when a person deleted the plate', () => {
@@ -255,8 +256,14 @@ describe('syncLiveInventory', () => {
       { createId: ids() }
     )!;
     const [second, first] = view(result).rectangles!; // createRectangle prepends
-    expect(first!.from.x).toBe(0);
-    expect(second!.from.x).toBe(8 + 3);
+    expect(first!.from).toEqual({ x: 0, y: 0 });
+    // Screen-right of the first plate (x - y grows to the right) ...
+    const firstRight = first!.to.x - first!.to.y;
+    expect(second!.from.x - second!.from.y).toBeGreaterThanOrEqual(
+      firstRight + PLATE_GAP
+    );
+    // ... with the tops level, so plates form a horizontal row (x + y is height).
+    expect(second!.to.x + second!.from.y).toBe(first!.to.x + first!.from.y);
   });
 
   it('ignores unknown views', () => {

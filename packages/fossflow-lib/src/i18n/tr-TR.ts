@@ -194,6 +194,22 @@ const locale: LocaleProps = {
     configPath2: "sol üstteki Hamburger simgesine tıklayın.",
     canDisable: "İsterseniz bu davranışı devre dışı bırakabilirsiniz.",
     signature: "-Stan"
+  },
+  live: {
+    cpu: "CPU",
+    memory: "Bellek",
+    disk: "Disk",
+    network: "Ağ",
+    load: "Yük",
+    uptime: "Çalışma süresi",
+    temperature: "Sıcaklık",
+    stopped: "durdu",
+    unknown: "bilinmiyor",
+    unhealthy: "sağlıksız",
+    starting: "başlatılıyor",
+    down: "kapalı",
+    update: "Güncelleme",
+    live: "Canlı"
   }
 };
 

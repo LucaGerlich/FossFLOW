@@ -14,6 +14,7 @@ import { UiStateProvider, useUiStateStore } from 'src/stores/uiStateStore';
 import { INITIAL_DATA, MAIN_MENU_OPTIONS } from 'src/config';
 import { useInitialDataManager } from 'src/hooks/useInitialDataManager';
 import { LiveSync } from 'src/live/LiveSync';
+import { LiveProvider } from 'src/live/LiveContext';
 import enUS from 'src/i18n/en-US';
 
 const App = ({
@@ -89,8 +90,10 @@ const App = ({
           transform: 'translateZ(0)'
         }}
       >
-        <Renderer {...renderer} />
-        <UiOverlay />
+        <LiveProvider snapshot={live}>
+          <Renderer {...renderer} />
+          <UiOverlay />
+        </LiveProvider>
       </Box>
       {live && <LiveSync snapshot={live} />}
     </>

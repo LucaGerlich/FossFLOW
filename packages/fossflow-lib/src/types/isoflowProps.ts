@@ -202,6 +202,22 @@ export interface LocaleProps {
     canDisable: string;
     signature: string;
   };
+  live: {
+    cpu: string;
+    memory: string;
+    disk: string;
+    network: string;
+    load: string;
+    uptime: string;
+    temperature: string;
+    stopped: string;
+    unknown: string;
+    unhealthy: string;
+    starting: string;
+    down: string;
+    update: string;
+    live: string;
+  };
   // other namespaces can be added here
 }
 
