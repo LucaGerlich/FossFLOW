@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { ConflictException, Inject, Injectable } from '@nestjs/common';
 import { AUTH, type Auth, resetPasswordPage } from '../auth/auth.js';
 import { APP_CONFIG, type AppConfig } from '../config/config.js';
+import { ProjectsService } from '../projects/projects.service.js';
 import type { InstanceRole } from '../rbac/roles.js';
 
 const RESET_LINK_TTL_MS = 60 * 60 * 1000;
@@ -20,7 +21,8 @@ const isUniqueViolation = (error: unknown) =>
 export class AccountsService {
   constructor(
     @Inject(AUTH) private readonly auth: Auth,
-    @Inject(APP_CONFIG) private readonly config: AppConfig
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
+    private readonly projects: ProjectsService
   ) {}
 
   async createUser(input: {
@@ -66,6 +68,7 @@ export class AccountsService {
       await context.internalAdapter.deleteUser(user.id);
       throw error;
     }
+    await this.projects.createPersonalProject(user.id, input.name.trim());
     return { id: user.id };
   }
 

@@ -9,6 +9,7 @@ import { HealthController } from './health/health.controller.js';
 import { InvitationsController } from './invitations/invitations.controller.js';
 import { InvitationsService } from './invitations/invitations.service.js';
 import { LiveModule } from './live/live.module.js';
+import { ProjectsModule } from './projects/projects.module.js';
 import { ScopesGuard } from './rbac/scopes.guard.js';
 import { SetupController } from './setup/setup.controller.js';
 import { SetupService } from './setup/setup.service.js';
@@ -26,6 +27,7 @@ export class AppModule {
       imports: [
         ThrottlerModule.forRoot({ throttlers: [RATE_LIMIT] }),
         DatabaseModule,
+        ProjectsModule,
         AuthModule,
         LiveModule
       ],

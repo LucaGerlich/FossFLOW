@@ -23,6 +23,8 @@ export interface TestApp {
 export interface Browser {
   get: (url: string) => request.Test;
   post: (url: string, body?: object) => request.Test;
+  put: (url: string, body?: object) => request.Test;
+  patch: (url: string, body?: object) => request.Test;
   delete: (url: string) => request.Test;
 }
 
@@ -47,6 +49,8 @@ export async function startTestApp(env: NodeJS.ProcessEnv = {}): Promise<TestApp
     return {
       get: (url) => agent.get(url).set(headers),
       post: (url, body) => agent.post(url).set(headers).send(body ?? {}),
+      put: (url, body) => agent.put(url).set(headers).send(body ?? {}),
+      patch: (url, body) => agent.patch(url).set(headers).send(body ?? {}),
       delete: (url) => agent.delete(url).set(headers)
     };
   };

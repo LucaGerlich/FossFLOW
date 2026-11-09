@@ -1,4 +1,5 @@
-import { index, jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
+import { index, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 import { user } from './auth-schema.js';
 
 export * from './auth-schema.js';
@@ -29,4 +30,42 @@ export const invitation = pgTable(
     acceptedAt: timestamp('accepted_at', { withTimezone: true })
   },
   (table) => [index('invitation_email_idx').on(table.email)]
+);
+
+/**
+ * A project holds landscapes and credentials (n8n's model). Everyone has one
+ * personal project; team projects are created by owners and admins.
+ */
+export const project = pgTable('project', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  type: text('type', { enum: ['personal', 'team'] }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date())
+});
+
+/** Membership: one role per user per project. */
+export const projectRelation = pgTable(
+  'project_relation',
+  {
+    projectId: text('project_id')
+      .notNull()
+      .references(() => project.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    role: text('role').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [
+    primaryKey({ columns: [table.projectId, table.userId] }),
+    index('project_relation_user_idx').on(table.userId),
+    // At most one personal project per user.
+    uniqueIndex('project_relation_one_personal_idx')
+      .on(table.userId)
+      .where(sql`${table.role} = 'project:personalOwner'`)
+  ]
 );
