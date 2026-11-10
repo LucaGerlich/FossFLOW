@@ -4,7 +4,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router-dom';
 import { coreIcons, defaultColors, editorLocale, isImportedIcon } from '../../editorDefaults';
+import { LiveIndicator } from '../../components/LiveIndicator';
 import { useIconPackManager } from '../../services/iconPackManager';
+import { useLiveData } from '../../services/liveService';
+import { LiveSources } from '../components/LiveSources';
+import { useSources } from '../credentials';
 import { type LandscapeDetail, landscapeKey, type StoredModel, useLandscape } from '../landscapes';
 import { type SaveState, useAutosave } from '../useAutosave';
 
@@ -47,6 +51,10 @@ function EditorSession({
 }) {
   const { t, i18n } = useTranslation('app');
   const canEdit = landscape.scopes.includes('landscape:update');
+  const canPickSources = canEdit && landscape.scopes.includes('credential:use');
+  const sources = useSources(landscape.id);
+  const sourceIds = (sources.data ?? []).map((source) => source.id).join(',');
+  const live = useLiveData(sourceIds ? landscape.id : null, sourceIds);
   const iconPacks = useIconPackManager(coreIcons);
   const autosave = useAutosave(landscape.id, landscape);
   const [packsReady, setPacksReady] = useState(false);
@@ -134,6 +142,8 @@ function EditorSession({
           )}
         </div>
         <div className="editor-bar__end">
+          <LiveIndicator live={live} />
+          {canPickSources && <LiveSources landscape={landscape} attached={sources.data ?? []} />}
           <button className="btn btn--sm" type="button" onClick={exportJson}>
             {t('platform.landscapes.export')}
           </button>
@@ -164,6 +174,7 @@ function EditorSession({
             onModelUpdated={onModelUpdated}
             editorMode={canEdit ? 'EDITABLE' : 'EXPLORABLE_READONLY'}
             locale={editorLocale(i18n.language)}
+            live={live.snapshot}
             iconPackManager={{
               lazyLoadingEnabled: iconPacks.lazyLoadingEnabled,
               onToggleLazyLoading: iconPacks.toggleLazyLoading,

@@ -697,3 +697,60 @@
 .editor-banner > span {
   flex: 1 1 280px;
 }
+
+/* ── Credentials ─────────────────────────────────────────────────────── */
+
+.note--success {
+  background-color: var(--ds-ok-soft);
+}
+
+.credential-form {
+  max-width: 560px;
+}
+
+.credential-form .note {
+  margin-bottom: 0;
+}
+
+/* ── Live sources menu (editor bar) ──────────────────────────────────── */
+
+.sources-menu {
+  position: relative;
+}
+
+.sources-menu > summary {
+  list-style: none;
+}
+
+.sources-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.sources-menu__panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 300px;
+  padding: 16px;
+  background-color: var(--ds-canvas);
+  border-radius: var(--ds-radius-md);
+  box-shadow: var(--ds-ring), var(--ds-shadow-5);
+}
+
+.sources-menu__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sources-menu__option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--ds-ink);
+}

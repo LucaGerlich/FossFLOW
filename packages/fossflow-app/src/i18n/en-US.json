@@ -65,7 +65,10 @@
         "servers_one": "{{count}} server",
         "servers_other": "{{count}} servers",
         "noServers": "no servers",
-        "noServersHint": "Connected, but Beszel shares no servers with this user. Add the user to each server in Beszel's admin panel, or start the hub with SHARE_ALL_SYSTEMS=true."
+        "noServersHint": "Connected, but Beszel shares no servers with this user. Add the user to each server in Beszel's admin panel, or start the hub with SHARE_ALL_SYSTEMS=true.",
+        "connecting": "Connecting…",
+        "sources_one": "{{count}} source",
+        "sources_other": "{{count}} sources"
     },
     "platform": {
         "loading": "Loading…",
@@ -170,7 +173,8 @@
             "add": "Add",
             "delete": "Delete project",
             "deleteHint": "Deletes the project and everything in it. This can’t be undone.",
-            "deleteConfirm": "Delete “{{name}}”"
+            "deleteConfirm": "Delete “{{name}}”",
+            "credentials": "Credentials"
         },
         "landscapes": {
             "untitled": "Untitled landscape",
@@ -200,6 +204,35 @@
             "someone": "Someone",
             "reload": "Reload",
             "overwrite": "Overwrite with mine"
+        },
+        "credentials": {
+            "add": "Add {{connector}} credential",
+            "type": "Kind of source",
+            "new": "New {{connector}} credential",
+            "edit": "Edit {{connector}} credential",
+            "editButton": "Edit",
+            "name": "Credential name",
+            "secretKept": "Saved. Leave empty to keep it.",
+            "saveTest": "Save and test",
+            "testing": "Testing…",
+            "done": "Done",
+            "testFailed": "Saved, but the connection test failed: {{message}}",
+            "usedBy_zero": "not used yet",
+            "usedBy_one": "used by {{count}} landscape",
+            "usedBy_other": "used by {{count}} landscapes",
+            "deleteHint": "Delete this credential? This can’t be undone.",
+            "deleteUsed_one": "{{count}} landscape shows live data from this credential and will stop. Delete it anyway?",
+            "deleteUsed_other": "{{count}} landscapes show live data from this credential and will stop. Delete it anyway?",
+            "empty": "No credentials yet",
+            "emptyHint": "Credentials are logins for live sources, such as a Beszel hub. Landscapes in this project can then show live status."
+        },
+        "sources": {
+            "button": "Live data",
+            "buttonCount_one": "Live data · {{count}}",
+            "buttonCount_other": "Live data · {{count}}",
+            "hint": "Show live status from these credentials, then bind nodes to servers and containers.",
+            "none": "This project has no credentials yet.",
+            "manage": "Manage credentials"
         }
     }
 }

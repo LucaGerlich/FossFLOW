@@ -1,12 +1,13 @@
 import { useTranslation } from 'react-i18next';
 import { NavLink, Navigate, Route, Routes, useParams } from 'react-router-dom';
 import { can, useProject } from '../projects';
+import { ProjectCredentials } from '../components/ProjectCredentials';
 import { ProjectLandscapes } from '../components/ProjectLandscapes';
 import { ProjectSettings } from './ProjectSettings';
 
 const tabClass = ({ isActive }: { isActive: boolean }) => (isActive ? 'tab tab--active' : 'tab');
 
-/** A project, n8n-style: its landscapes, and settings for project admins. */
+/** A project, n8n-style: its landscapes, credentials, and settings for project admins. */
 export function ProjectPage() {
   const { t } = useTranslation('app');
   const { projectId = '' } = useParams();
@@ -26,6 +27,7 @@ export function ProjectPage() {
   const data = project.data;
   const showSettings =
     data.type === 'team' && (can(data, 'project:update') || can(data, 'projectMember:manage'));
+  const showCredentials = can(data, 'credential:read');
   const title = data.type === 'personal' ? t('platform.nav.personal') : data.name;
 
   return (
@@ -42,6 +44,11 @@ export function ProjectPage() {
         <NavLink to={base} end className={tabClass}>
           {t('platform.projects.landscapes')}
         </NavLink>
+        {showCredentials && (
+          <NavLink to={`${base}/credentials`} className={tabClass}>
+            {t('platform.projects.credentials')}
+          </NavLink>
+        )}
         {showSettings && (
           <NavLink to={`${base}/settings`} className={tabClass}>
             {t('platform.projects.settings')}
@@ -50,6 +57,9 @@ export function ProjectPage() {
       </nav>
       <Routes>
         <Route index element={<ProjectLandscapes project={data} />} />
+        {showCredentials && (
+          <Route path="credentials" element={<ProjectCredentials project={data} />} />
+        )}
         {showSettings && <Route path="settings" element={<ProjectSettings project={data} />} />}
         <Route path="*" element={<Navigate to={base} replace />} />
       </Routes>

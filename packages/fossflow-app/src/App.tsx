@@ -11,8 +11,6 @@ import { DiagramManager } from './components/DiagramManager';
 import { storageManager } from './services/storageService';
 import ChangeLanguage from './components/ChangeLanguage';
 import { useIconPackManager, IconPackName } from './services/iconPackManager';
-import { useLiveData } from './services/liveService';
-import { LiveIndicator } from './components/LiveIndicator';
 import './App.css';
 import { BrowserRouter, Route, Routes, useParams } from 'react-router-dom';
 import { routerBasename } from './basePath';
@@ -42,7 +40,6 @@ function EditorPage() {
   // Initialize icon pack manager with core icons
   const iconPackManager = useIconPackManager(coreIcons);
   const { readonlyDiagramId } = useParams<{ readonlyDiagramId: string }>();
-  const live = useLiveData();
 
   const [diagrams, setDiagrams] = useState<SavedDiagram[]>([]);
   const [isDiagramsInitialized, setIsDiagramsInitialized] = useState<boolean>(false);
@@ -762,7 +759,6 @@ function EditorPage() {
           )}
           <span className="toolbar__divider" aria-hidden="true" />
           <ChangeLanguage />
-          <LiveIndicator live={live} />
         </div>
       </header>
 
@@ -773,7 +769,6 @@ function EditorPage() {
           onModelUpdated={handleModelUpdated}
           editorMode={isReadonlyUrl ? 'EXPLORABLE_READONLY' : 'EDITABLE'}
           locale={currentLocale}
-          live={live.snapshot}
           iconPackManager={{
             lazyLoadingEnabled: iconPackManager.lazyLoadingEnabled,
             onToggleLazyLoading: iconPackManager.toggleLazyLoading,

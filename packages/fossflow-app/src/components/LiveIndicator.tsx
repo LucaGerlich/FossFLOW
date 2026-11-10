@@ -10,6 +10,15 @@ export function LiveIndicator({ live }: LiveIndicatorProps) {
   const { t } = useTranslation('app');
   if (live.connection === 'off') return null;
 
+  if (live.connection === 'connecting') {
+    return (
+      <span className="badge badge--muted">
+        <span className="badge__dot" />
+        {t('live.connecting')}
+      </span>
+    );
+  }
+
   if (live.connection !== 'ok' || !live.snapshot) {
     return (
       <span className="badge badge--warning" title={live.error ?? undefined}>
@@ -19,10 +28,12 @@ export function LiveIndicator({ live }: LiveIndicatorProps) {
     );
   }
 
-  const source = live.snapshot.sources[0]?.name ?? 'Live';
+  const sources = live.snapshot.sources;
+  const source =
+    sources.length > 1 ? t('live.sources', { count: sources.length }) : (sources[0]?.name ?? '');
   const servers = live.snapshot.systems.length;
   // Connected but empty almost always means the source shares nothing with
-  // this user, so say how to fix it. ponytail: hint names Beszel, the only source.
+  // this user, so say how to fix it. ponytail: hint names Beszel, the only connector.
   const empty = servers === 0;
 
   return (
