@@ -87,19 +87,13 @@ FossFLOW adalah aplikasi web progresif (PWA) open-source yang powerful untuk mem
 ## 🐳 Deploy Cepat dengan Docker
 
 ```bash
-# Menggunakan Docker Compose (disarankan - termasuk penyimpanan persisten)
-docker compose up
-
-# Atau jalankan langsung dari Docker Hub dengan penyimpanan persisten
-docker run -p 80:80 -v $(pwd)/diagrams:/data/diagrams stnsmith/fossflow:latest
+git clone https://github.com/LucaGerlich/FossFLOW.git
+cd FossFLOW
+cp .env.example .env        # POSTGRES_PASSWORD, FOSSFLOW_URL
+docker compose up -d --build
 ```
 
-Penyimpanan server diaktifkan secara default di Docker. Diagram Anda akan disimpan ke `./diagrams` di host.
-
-Untuk menonaktifkan penyimpanan server, set `ENABLE_SERVER_STORAGE=false`:
-```bash
-docker run -p 80:80 -e ENABLE_SERVER_STORAGE=false stnsmith/fossflow:latest
-```
+Pengaturan Docker kini mencakup login dan database; panduan lengkapnya ada di [PLATFORM.md](PLATFORM.md) (dalam bahasa Inggris).
 
 ## Mulai Cepat (Pengembangan Lokal)
 

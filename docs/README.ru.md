@@ -99,19 +99,13 @@ FossFLOW - это мощное прогрессивное веб-приложе�
 ## 🐳 Быстрое развертывание с Docker
 
 ```bash
-# Использование Docker Compose (рекомендуется - включает постоянное хранилище)
-docker compose up
-
-# Или запустите напрямую из Docker Hub с постоянным хранилищем
-docker run -p 80:80 -v $(pwd)/diagrams:/data/diagrams stnsmith/fossflow:latest
+git clone https://github.com/LucaGerlich/FossFLOW.git
+cd FossFLOW
+cp .env.example .env        # POSTGRES_PASSWORD, FOSSFLOW_URL
+docker compose up -d --build
 ```
 
-Хранилище сервера включено по умолчанию в Docker. Ваши диаграммы будут сохранены в `./diagrams` на хосте.
-
-Чтобы отключить хранилище сервера, установите `ENABLE_SERVER_STORAGE=false`:
-```bash
-docker run -p 80:80 -e ENABLE_SERVER_STORAGE=false stnsmith/fossflow:latest
-```
+Настройка Docker теперь включает вход в систему и базу данных; полное руководство находится в [PLATFORM.md](PLATFORM.md) (на английском).
 
 ## Быстрый старт (Локальная разработка)
 

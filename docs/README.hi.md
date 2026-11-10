@@ -99,19 +99,13 @@ FossFLOW सुंदर आइसोमेट्रिक आरेख बन�
 ## 🐳 Docker के साथ त्वरित डिप्लॉय
 
 ```bash
-# Docker Compose का उपयोग करना (अनुशंसित - स्थायी भंडारण शामिल)
-docker compose up
-
-# या स्थायी भंडारण के साथ Docker Hub से सीधे चलाएं
-docker run -p 80:80 -v $(pwd)/diagrams:/data/diagrams stnsmith/fossflow:latest
+git clone https://github.com/LucaGerlich/FossFLOW.git
+cd FossFLOW
+cp .env.example .env        # POSTGRES_PASSWORD, FOSSFLOW_URL
+docker compose up -d --build
 ```
 
-Docker में सर्वर स्टोरेज डिफ़ॉल्ट रूप से सक्षम है। आपके आरेख होस्ट पर `./diagrams` में सहेजे जाएंगे।
-
-सर्वर स्टोरेज अक्षम करने के लिए, `ENABLE_SERVER_STORAGE=false` सेट करें:
-```bash
-docker run -p 80:80 -e ENABLE_SERVER_STORAGE=false stnsmith/fossflow:latest
-```
+Docker सेटअप में अब साइन-इन और एक डेटाबेस शामिल है; पूरी गाइड [PLATFORM.md](PLATFORM.md) में है (अंग्रेज़ी में)।
 
 ## त्वरित प्रारंभ (स्थानीय विकास)
 

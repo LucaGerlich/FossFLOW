@@ -1,6 +1,8 @@
 # Live landscape (optional)
 
-FossFLOW works as a plain diagramming tool with no backend at all. If your team already runs [Beszel](https://github.com/henrygd/beszel), the map can also show **every server, the Docker containers running on it, and the server's vitals**, live, with nothing new installed on your servers.
+FossFLOW works as a plain diagramming tool with no backend at all. If your team already runs [Beszel](https://github.com/henrygd/beszel), a landscape can also show **every server, the Docker containers running on it, and the server's vitals**, live, with nothing new installed on your servers.
+
+Live data needs [platform mode](PLATFORM.md): the Docker setup with Postgres and sign-in. It isn't available in local mode.
 
 - **Automatic discovery.** New servers appear on their own plate, with their containers on it. New containers take the next free slot. Nothing you arrange by hand is ever moved or deleted, and your notes and connections stay attached across redeploys.
 - **Colour only for trouble.**
@@ -9,17 +11,17 @@ FossFLOW works as a plain diagramming tool with no backend at all. If your team 
   - Failures turn red and pulse: an unhealthy container, a server that is down, or a vital at 90 % or more.
   - Stopped containers stay on the map as dimmed "ghosts", so you can see that something is missing.
 - **Server vitals.** Select a server to see CPU, memory and disk with recent history, plus network, load, uptime and temperature. Degraded servers show this card automatically.
-- **Read-only.** The map only reads from Beszel and never changes anything.
+- **Read-only.** FossFLOW only reads from Beszel and never changes anything.
 - **Hide what you don't need.** Delete a container node to hide it, for example a sidecar. It stays hidden even while it keeps running. To bring hidden containers back, delete the server's plate: the next sync places everything that isn't on the map onto a fresh plate.
 - **Honest when blind.** If FossFLOW can't reach Beszel for three poll intervals, every live item turns grey ("unknown"). The last numbers stay readable, but nothing pretends to be healthy.
 
 ## How it works
 
 ```
-Beszel hub ──(read-only user)──▶ FossFLOW backend ──/api/live──▶ FossFLOW app
+Beszel hub ──(read-only user)──▶ FossFLOW server ──▶ FossFLOW app
 ```
 
-The backend logs in to Beszel with a read-only user, polls it every 30 s, and serves a normalised snapshot at `/api/live/snapshot`. Beszel's credentials never reach the browser.
+The server logs in to Beszel with the credential you saved, polls it every 30 seconds (`LIVE_POLL_SECONDS`), and gives the app a normalised snapshot. It polls each credential that at least one landscape uses, once, however many landscapes show it. The Beszel login never reaches the browser.
 
 ## Setup
 
@@ -36,69 +38,65 @@ Then give that user access to the servers you want on the map, in one of two way
 - add the user to each server's **users** field, or
 - start the Beszel hub with `SHARE_ALL_SYSTEMS=true`, which lets every logged-in user read every server.
 
-### 2. Configure FossFLOW
+### 2. Add a Beszel credential
 
-Live data needs an image built from this repository:
+1. Open the project that your landscapes live in, and go to its **Credentials** tab. You need to be an Admin or Editor of the project.
+2. Add a Beszel credential and give it a name.
+3. Fill in the hub URL (for example `https://beszel.example.com`), the read-only user's email and its password.
+4. Click **Save and test**. FossFLOW saves the credential, then reads from the hub. On success it reports how many servers are visible.
 
-```bash
-docker build -t fossflow .
-```
+The password is encrypted and never shown again. When you edit the credential later, leave the password empty to keep it. If you change the URL or the email, you must type the password again.
 
-Then set these variables, in `.env` next to `compose.yml` or in your orchestrator:
+### 3. Turn it on in a landscape
 
-| Variable | Required | Description |
-|---|---|---|
-| `BESZEL_URL` | yes | Hub URL, e.g. `https://beszel.example.com` (http or https; no credentials in the URL). |
-| `BESZEL_EMAIL` | yes | The read-only user's email. |
-| `BESZEL_PASSWORD` | one of these two | Its password. |
-| `BESZEL_PASSWORD_FILE` | one of these two | Or a file containing the password, e.g. a Docker secret at `/run/secrets/beszel_password`. |
-| `LIVE_POLL_SECONDS` | no | How often to poll Beszel, 10–3600 seconds. Default 30. |
-| `HTTP_AUTH_USER` / `HTTP_AUTH_PASSWORD` | yes (see below) | HTTP Basic Auth in front of the whole app, `/api/live` included. |
-| `LIVE_ALLOW_UNAUTHENTICATED` | no | `true` only if something else already protects the app, such as an SSO proxy or a VPN. |
+1. Open the landscape.
+2. In the editor bar, open the **Live data** menu and tick the credential. You need edit rights on the landscape.
+3. The live badge shows **Connecting…**, then **Live** with the number of sources. Your servers appear on the map.
 
-```bash
-docker compose up -d
-```
+Untick the credential to turn live data off for that landscape.
 
-The backend logs one line about live data at startup, e.g. `Live data: ENABLED (Beszel at beszel.example.com, every 30s)`. In the app, a `● Live · Beszel` pill appears in the toolbar and your servers appear on the map.
+### 4. How nodes are bound
+
+Discovered servers and containers are placed for you, and each one stores its live key in the landscape. The binding therefore survives moving things around and JSON export and import. You don't bind nodes by hand: there is no picker for that yet.
+
+- A container node you delete stays deleted: discovery won't bring it back.
+- If you move a landscape to another project, its live sources are detached, because credentials belong to a project. Tick the new project's credential again.
 
 ## Security
 
 The live snapshot is an inventory of your infrastructure: server names, container names, images and load. Treat it like internal documentation.
 
-- **Auth is required.** The Docker image keeps live data **off** unless HTTP Basic Auth is configured, or you explicitly set `LIVE_ALLOW_UNAUTHENTICATED=true` because another layer protects the app.
-- **Same-origin only.** `/api/live` sends no CORS headers, so other websites cannot read it from a visitor's browser.
-- **Localhost only inside the image.** The backend listens on `127.0.0.1` in the image, so it is reachable only through nginx. Never publish port 3001 in production. `compose.dev.yml` does publish it, and it is for local development only.
+- **Signed-in users only.** Live data is served only to people who can open the landscape.
+- **Secrets stay on the server.** The credential's password is encrypted at rest and never sent to the browser. Viewers of a project see the credential's name only.
 - **Least privilege.** Use a Beszel `readonly` user. It can't change anything, even if FossFLOW is compromised.
-- **Running `server.js` without Docker?** Put it behind your own authentication. The backend itself has no login.
+- **Outbound requests.** The server connects to whatever URL an editor saves in a credential. See [Security in PLATFORM.md](PLATFORM.md#security).
 
 ## Troubleshooting
 
 | Symptom | Check |
 |---|---|
-| No `Live` pill | `GET /api/live/status` should return `{"enabled": true, ...}`. If it returns `false`, check the backend's startup log for the reason; it never prints the password. |
-| Pill reads "Live data unavailable" | Hover it for the error, e.g. `Beszel: Beszel login failed (HTTP 400)` (wrong credentials, or the user isn't verified) or `Beszel is unreachable (ECONNREFUSED)`. |
-| Pill reads "Live · Beszel · no servers" (amber) | The login works but Beszel shares no servers with this user. Add the user to each server's **users** field in the admin panel, or start the hub with `SHARE_ALL_SYSTEMS=true` (step 1). |
-| Servers appear, but no containers | The agent needs the Docker socket, and Beszel only reports **running** containers. |
-| Live data stays off in Docker | Configure `HTTP_AUTH_USER` and `HTTP_AUTH_PASSWORD`, or set `LIVE_ALLOW_UNAUTHENTICATED=true` on purpose. |
-
-## Good to know
-
-- **Bindings travel with the diagram.** Each discovered item stores its live key in the diagram, so JSON exports and server storage keep it. The *compact* export format has never included rectangles, so server plates are lost there; after re-importing a compact file, delete the server node and let discovery rebuild its plate.
-- **Hairline icons are always available.** The hairline pack (server, container, database, cache, queue, gateway, clients, cloud) is part of the core icons, so you can use it for hand-drawn landscapes without any live data.
-- **Running `server.js` directly** with live data on a non-loopback address prints a startup warning. Put it behind an authenticating proxy, or set `BACKEND_HOST=127.0.0.1`.
+| **Save and test** fails | Read the message. A login error means the URL, email or password is wrong, or the Beszel user isn't **verified**. "Unreachable" means the FossFLOW server can't reach the hub: the URL must work from inside the container, so `localhost` is the container itself, not your machine. |
+| "0 servers visible" | The login works, but Beszel shares no servers with this user. Add the user to each server's **users** field in the admin panel, or start the hub with `SHARE_ALL_SYSTEMS=true` (step 1). |
+| Servers appear, but no containers | The Beszel agent needs the Docker socket, and Beszel only reports **running** containers. |
+| The badge stays on "Connecting…" | The first sync hasn't finished, or the hub is slow. Wait a few poll intervals, then run **Save and test** on the credential and check the server log (`docker compose logs fossflow`). |
+| Badge shows "Live data unavailable" | Hover it for the reason, for example a failed login or an unreachable hub. |
+| "Stored settings can’t be decrypted" | The encryption key changed since the credential was saved. Restore the old key (`FOSSFLOW_ENCRYPTION_KEY` or `./data/config/encryption-key`), or edit the credential and enter its secrets again. See [Backups and the encryption key](PLATFORM.md#backups-and-the-encryption-key). |
+| No **Live data** menu | The menu needs the right to edit the landscape and to use credentials. Viewers don't see it. A project with no credentials shows a link to add one. |
 
 ## Development
 
+You can try live data without a Beszel hub, using a fake one with demo data. Run it from the repository root:
+
 ```bash
-npm run dev:fake-beszel          # fake Beszel on :8090 with demo data
-BESZEL_URL=http://127.0.0.1:8090 BESZEL_EMAIL=demo@example.com \
-  BESZEL_PASSWORD=demo-password npm run dev:backend
-npm run dev                      # app on :3000; /api/live is proxied to :3001
+npm run dev:fake-beszel
 ```
 
+This is the same as running `node dist/live/testing/runFakeBeszel.js` in `packages/fossflow-backend` after a build. It prints `Fake Beszel on http://127.0.0.1:8090 (demo@example.com / demo-password). Ctrl+C to stop.` Server vitals drift every few seconds. Set `FAKE_BESZEL_PORT` to change the port.
+
+Then run the platform as described in [For developers](PLATFORM.md#for-developers), and add a Beszel credential with that URL, email and password. The fake hub runs on your machine, so the server must be able to reach it. When the server runs on the host, `http://127.0.0.1:8090` works.
+
 - **Where the code lives:**
-  - The backend source adapter is in `packages/fossflow-backend/live/`.
+  - Connectors are in `packages/fossflow-backend/src/connectors/`, and the Beszel client and polling are in `packages/fossflow-backend/src/live/`.
   - The map side is in `packages/fossflow-lib/src/live/`.
   - The wire contract is mirrored in both `types.ts` files.
-- **Adding a source** (Portainer, Kubernetes, Prometheus, …): write an adapter that produces the same `LiveSystem` and `LiveContainer` shapes. The map doesn't need to change.
+- **Adding a source** (Portainer, Kubernetes, Prometheus, …): write a connector that produces the same system and container shapes. The map doesn't need to change. See [Adding a connector](PLATFORM.md#adding-a-connector).

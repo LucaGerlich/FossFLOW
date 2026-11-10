@@ -6,6 +6,50 @@ Newest entries first.
 
 ---
 
+## 2026-11-10 — Platform phase 1, milestone 6: settings, deployment and docs
+
+- **What:**
+  - **Users (Settings → Users):**
+    - `PATCH /api/users/:id` changes an instance role (new scope `user:changeRole`). It follows the existing rules: the owner manages everyone, admins manage members, only the owner hands out admin, and nobody hands out owner or changes their own role. Sessions read the role from the database, so the change applies on the person's next request.
+    - `DELETE /api/users/:id?transferTo=` deletes an account (new scope `user:delete`). In one transaction, their personal landscapes and credentials move to the chosen person's personal space (live sources stay attached; credential ids don't change) or are deleted with the account. Then the personal project, the user, and by cascade their sessions, logins and memberships go. It refuses with 409 while they are the only admin of a team project, naming the projects. The owner can't be deleted.
+    - **Fixed on the way:** deleting a user used to cascade only the membership row, which would have orphaned their personal project and everything in it (`project` has no owner column).
+    - App: a role select (shown only where the server would allow the change) and Delete with a "Move their landscapes and credentials to" choice (me preselected, or nobody) on each row. The row is its own component, `UserRow.tsx`.
+  - **Account (Settings → Account, everyone):** change your name, and change your password (current plus new; other devices are signed out). Both use better-auth's own `update-user` and `change-password` routes. Changing your email is not offered: better-auth needs a verification mail for it, and many installs have no SMTP.
+  - **Password and name rules on better-auth's routes:** the `before` hook now also applies our password rule to `/change-password` (before, only better-auth's 8-character minimum applied there) and the name rule to `/update-user`, storing the trimmed name. The person-name rule is shared (`personName` in `common/validation.ts`) by setup, invitations and the hook.
+  - **Deployment:**
+    - `compose.yml` is rewritten for the platform. Postgres 18 with a healthcheck; the app built from this repo (`build: .`); required `POSTGRES_PASSWORD` and `FOSSFLOW_URL` (compose refuses to start without them); optional key, SMTP, Basic Auth and poll settings; `./data:/data` for the encryption key and old diagrams. Before, it pulled the old upstream image with no database (so it ran in local mode only) and kept no `/data`, so a generated key would have been lost with the container.
+    - `docker-entrypoint.sh`: the server runs as uid/gid 1000 by default (it ran as root unless `PUID`/`PGID` were set) and owns `/data`. nginx starts only after the server answers `/api/health`, so a half-started container can't make the app fall back to local mode. The container lives as long as the server (`restart: unless-stopped` brings it back), and SIGTERM reaches the server through a `trap`, so `docker stop` shuts it down cleanly. Without `DATABASE_URL` the image serves the plain local editor, as before.
+    - `main.ts` enables Nest's shutdown hooks, so live pollers stop on SIGTERM.
+    - `SMTP_SECURE=` (empty, as compose passes unset values) no longer fails the config check.
+    - `.env.example` lists the platform's variables; `ENABLE_SERVER_STORAGE`, `STORAGE_PATH` and `ENABLE_GIT_BACKUP` are gone. `compose.dev.yml` no longer passes `BESZEL_*`.
+  - **Legacy import:** the one-time import of `<data>/diagrams` now waits for the folder to exist. Before, a first start without it marked the import done, so moving old diagrams in later did nothing.
+  - **Old server-storage client removed (local mode):** `storageService.ts`, `StorageManager.tsx`, `DiagramManager.tsx`/`.css`, the `/display/:id` read-only route and its branches in `App.tsx`, and the dead `EditorPage.tsx` (572 lines, imported nowhere). Local mode no longer calls `/api/storage/status` on every load. Unused i18n keys (`nav.serverStorage`, `dialog.readOnly`) are removed from all locales of both trees; the "storage full" alerts no longer point to the removed Storage Manager. The e2e base-path test's copied snippet no longer mirrors the old `/display/` rule.
+  - **Local saving fix (upstream bug from `dd2b782`):** the saved-diagrams list was only written to localStorage once one already existed, so in a fresh browser every save vanished from Load after a reload. The flag that allows saving is now set after the read, whether or not anything was stored.
+  - **Docs:** new `docs/PLATFORM.md` (install, roles, projects, credentials, settings, email, backups and the encryption key, upgrading from the file-based version, configuration reference, security, developer notes including adding a connector). `docs/LIVE.md` is rewritten for credentials. `README.md` (Docker, Basic Auth, storage, live data), the Docker block of the 8 translated READMEs, and the stale server parts of `FOSSFLOW_ENCYCLOPEDIA.md` are updated.
+  - **Tests:** the invite-and-sign-in helper and `personalOf`, copied in three test files, now live in `src/test/people.ts`.
+- **Why:** Milestone 6, the last of platform phase 1: admins can manage people, everyone can manage their own account, and the documented Docker setup actually runs the platform.
+- **Security:**
+  - Role changes and deletion reuse `canManageUser` and `canGrantInstanceRole`; nobody can act on their own account, grant owner, or touch the owner. Every rule is covered by a test that expects the refusal.
+  - A deleted person's encrypted credentials move only to the personal space the deleting admin chose (or are deleted); they never become visible to anyone else.
+  - The server process no longer runs as root in the container.
+  - The password rule now also covers self-service password changes.
+  - Independent review (subagent) of the diff: no critical or high findings. Fixed from it:
+    - Role change and delete now re-check the role inside the write (a conditional `UPDATE`, and a `FOR UPDATE` re-read in the delete transaction). An admin who loaded the page before the owner promoted someone can no longer delete or demote that new admin; the request gets 409.
+    - Deleting two co-admins of a team project at the same moment can't leave it without an admin: the delete locks the project's admin rows before checking. A test holds one deletion open in a raw transaction and proves the other one waits and then gets 409 (it fails without the lock).
+    - The heir's membership row is locked too, so the heir can't be deleted mid-transfer.
+    - The `update-user` hook returns only the changed body; better-auth merges it into the request (checked in `better-auth/dist/api/dispatch.mjs`).
+    - Role changes and deletions are logged with ids (actor, target, heir), never names or emails.
+  - Accepted: any user can be chosen as heir, as in n8n. The heir can use the moved credentials but can't read them or point them at another address without re-entering the secrets (milestone 5 rule). The UI preselects the deleting admin.
+  - Accepted (operator-controlled): a `:` or newline in `HTTP_AUTH_USER`, special characters in `POSTGRES_PASSWORD` (documented: letters and digits), `PUID=0`. Secrets in compose environment variables are visible to `docker inspect`, as usual; `*_FILE` variants can come later.
+- **Verified:**
+  - Server: 131 tests pass (11 new in `users.test.ts`, 1 legacy-import, 1 config), `tsc` clean. Coverage of the new code: 91.7 % statements; `users.service.ts` 100 % lines. Lib: 243 tests, `tsc` clean. App: builds; `tsc` shows 7 old errors (13 before; 6 were in the deleted `EditorPage.tsx`).
+  - Browser, dev server on a throwaway database: rename (trimmed, sidebar updates), Users page role select and delete with hand-over (Mia's landscape, credential and live source end up with the owner, live data keeps flowing, her session gets 401), weak password refused with the rule, a good one keeps this browser signed in and signs the other session out.
+  - Local mode (static build): no `/api` call besides the platform probe, no Server Storage button, save → reload keeps the diagram in Load.
+  - Docker, real `compose.yml` in a throwaway folder: old diagram imported and `BESZEL_*` moved into an encrypted credential at setup, imported bindings live; invite, team project, viewer can read but not save or delete; the sole-admin refusal shows in the UI, then delete with hand-over works; server runs as `node`, nginx starts after the server; `docker compose restart` takes 1 s (clean SIGTERM), migrates nothing twice, keeps the key file, and the credential still decrypts. The image without `DATABASE_URL` serves the local editor. Everything removed afterwards; your dev database was never touched.
+- **Not done / later:** `ProjectsService`'s own one-admin rule (changing or removing a project member) has the same check-then-write race as the delete had, without the lock; changing your email; deleting your own account; handing over ownership; the toolbar's local-mode labels still say "(Session Only)" although saves persist (upstream wording in every locale); the translated READMEs' feature lists still mention server storage.
+
+---
+
 ## 2026-11-10 — Platform phase 1, milestone 5: credentials and connectors
 
 - **What:**
