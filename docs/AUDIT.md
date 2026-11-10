@@ -6,6 +6,71 @@ Newest entries first.
 
 ---
 
+## 2026-11-10 — Platform phase 1, milestone 5: credentials and connectors
+
+- **What:**
+  - **Credentials:** a `credential` table holds logins for live sources, one project each. Settings are encrypted with AES-256-GCM (`v1:` + base64 of nonce, tag and ciphertext), using a key derived with HKDF from the master key (purpose `credentials-v1`).
+  - **API:**
+    - `GET /api/connectors` lists the kinds of sources and their form fields.
+    - `GET`/`POST /api/projects/:id/credentials` list and create.
+    - `GET`/`PATCH`/`DELETE /api/credentials/:id` read the edit form, update and delete.
+    - `POST /api/credentials/:id/test` tests the connection.
+    - Saving also runs one real read and reports "Connected: N servers visible" or the reason it failed.
+  - **Connectors:** a registry of connectors. Each one describes its form (fields, which are secret), validates settings with zod and opens a client. Beszel is the first; the live hub and Beszel code became source-agnostic, so adding Portainer or Prometheus later is one new file.
+  - **Live data per landscape:**
+    - A `landscape_source` table links landscapes to credentials of their own project.
+    - `GET`/`PUT /api/landscapes/:id/sources` and `GET /api/landscapes/:id/live`.
+    - A source manager runs one poller per credential that at least one landscape shows. It restarts a poller when its credential changes and stops pollers nobody needs after any change: a credential edited or deleted, sources changed, a landscape deleted or moved, a project deleted.
+    - Live keys are now `<credential id>:<system>/<container>`.
+    - A source's first sync reports `error: null` until it finishes, so the app shows "Connecting…" instead of "unavailable".
+  - **Moving things:** a moved landscape drops its sources (credentials never leave their project). Deleting a project with `transferTo` now moves its credentials along with its landscapes.
+  - **One-time `.env` migration:**
+    - Once an owner exists, a valid `BESZEL_*` login becomes a "Beszel" credential in the owner's personal project.
+    - Every project with landscapes bound to it gets its own copy.
+    - Bound keys `beszel:…` are rewritten to the new credential, on nodes and on server plates, and those landscapes get it as their source.
+    - One transaction, claimed in `meta`, so it runs once and a failed run retries on the next start.
+    - It runs after the legacy diagram import, so imported diagrams are rebound too. Both run from one startup runner, which stops at the first failed step.
+  - **Removed:** the env-configured `/api/live/*` routes, the Docker entrypoint rule that disabled live data without Basic Auth, and `LIVE_ALLOW_UNAUTHENTICATED` (sign-in now protects everything). `.env.example` marks `BESZEL_*` as legacy. `docs/LIVE.md` still describes the old setup and is rewritten in milestone 6.
+  - **App:**
+    - **Credentials tab:** a project tab listing name, kind, how many landscapes use each credential, and when it was last updated. Editors and admins add, edit and delete credentials; viewers see names only.
+    - **Credential form:** built from the connector's field list. Secret fields stay empty, with "Saved. Leave empty to keep it." Saving tests the connection, and a new credential turns into an edit so a typo can be fixed right there.
+    - **Editor:** a "Live data" menu picks the project's credentials for this landscape. The bar shows the live pill, for example "Live · Demo hub · 2 servers" or "2 sources". The editor gets live data for its own sources only.
+    - **Local mode:** no live data any more, since it now belongs to platform landscapes.
+- **Why:** Milestone 5 of the platform plan. Live-data logins move out of `.env` into encrypted, per-project credentials, built for more connectors than Beszel.
+- **Security:**
+  - **Secrets stay on the server:** they never leave it. The list returns names only. The edit form returns non-secret settings plus which secrets are set, and needs edit rights (`no-store`). Errors name the field and the rule, never a value. A test checks every response body for the password.
+  - **Kept secrets stay put:** a kept secret can't be sent somewhere new. If an edit changes the URL or email, every secret must be entered again. Otherwise an editor could point the stored password at their own server and read it there. This was found in a security review before commit and is covered by a test.
+  - **Access:** every route checks the project of the credential or landscape, and anything you can't see answers 404.
+    - Attaching sources needs `landscape:update` and `credential:use`, and only credentials from the landscape's own project.
+    - The check runs inside the write transaction with the landscape row locked, so a concurrent move can't slip in between.
+  - **Encryption at rest:** a fresh random nonce per seal and a verified 16-byte tag. A wrong key or tampered data fails as a `DecryptionError` that carries no data, and the source then reports "can't be decrypted" instead of polling with garbage.
+  - **Outbound requests (accepted risk):** "test connection" and the pollers make the server call a URL that an editor chooses.
+    - **What limits it:** http(s) only, no credentials in the URL, no redirects followed, 10 s per request, 15 s for a whole test. Credential writes and tests are limited to 20 a minute per client. The path and body are fixed by the connector.
+    - **What stays open:** private addresses aren't blocked, because internal hubs are the normal case for a self-hosted tool. Error codes (e.g. `ECONNREFUSED`) are shown, which helps setup but lets editors probe internal ports. Response bodies have no size cap.
+    - **Upgrade path if that matters:** an allowlist environment variable.
+  - *ponytail:* ciphertext isn't bound to its row (no AAD), so a database writer could swap two credentials' data. Bind the credential id when rows are re-sealed for key rotation.
+- **Verified:**
+  - **Server:** **119** Vitest tests. New:
+    - cipher round trip, tamper and wrong-key cases;
+    - live-key rewriting;
+    - the hub with the Beszel connector, secret-free snapshots and staleness;
+    - 10 credential and live-source flow tests against real Postgres: the env migration with key rewrite and once only across restarts, the connectors list, encrypted storage, failed tests and bad settings (400), kept passwords, no kept password to a new address, viewer and outsider limits, same-project sources, merged live data, detaching on delete and move, and no password in any response.
+  - **Other checks:** lib **243** tests. Workspace lint and all builds pass; the app's `tsc` still shows only its 13 earlier errors.
+  - **Browser pane:**
+    - First-run setup moved your `.env` Beszel login into a credential. Its test reached your hub: "Connected: 0 servers visible". The hub still shares no servers with that read-only user.
+    - A demo credential against the fake hub tested OK and turned into an edit with the password kept.
+    - In the editor, attaching it showed "Live · Demo hub · 2 servers". Bindings were saved under the credential id, and a reload kept live data without a save.
+    - Two sources merged ("2 sources · 2 servers").
+    - Deleting the used credential warned first and detached it.
+    - The dev database was reset afterwards.
+  - **Docker image:** with an old diagram and `BESZEL_*` pointing at the fake hub:
+    - setup imported the diagram, moved the login and rebound the diagram's keys;
+    - the poller synced, and the stored data is `v1:` ciphertext without the password;
+    - a restart migrated nothing twice and kept the key.
+    - Container, database and image were removed afterwards.
+
+---
+
 ## 2026-11-10 — Platform phase 1, milestone 4: landscapes on the server
 
 - **What:**
