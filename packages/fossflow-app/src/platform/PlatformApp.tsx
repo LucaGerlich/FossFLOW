@@ -13,6 +13,7 @@ import { ProjectPage } from './pages/ProjectPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { SetupPage } from './pages/SetupPage';
 import { SignInPage } from './pages/SignInPage';
+import { PersonalSettings } from './pages/PersonalSettings';
 import { UsersPage } from './pages/UsersPage';
 import './platform.css';
 import { isAdmin, useSession } from './session';
@@ -64,6 +65,7 @@ function SignedIn() {
       <Route element={<Shell user={user} />}>
         <Route index element={<HomePage />} />
         <Route path="projects/:projectId/*" element={<ProjectPage />} />
+        <Route path="settings/personal" element={<PersonalSettings me={user} />} />
         <Route
           path="settings/users"
           element={<AdminOnly allowed={isAdmin(user)}><UsersPage me={user} /></AdminOnly>}

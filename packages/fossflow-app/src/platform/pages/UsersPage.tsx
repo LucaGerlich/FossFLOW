@@ -4,16 +4,9 @@ import { useTranslation } from 'react-i18next';
 import { api } from '../api';
 import { Field, FormError } from '../components/AuthCard';
 import { CopyLink } from '../components/CopyLink';
+import { type UserSummary, UserRow } from '../components/UserRow';
 import { type InstanceRole, roleLabelKey, type SessionUser } from '../session';
 import { useSubmit } from '../useSubmit';
-
-interface UserRow {
-  id: string;
-  name: string;
-  email: string;
-  instanceRole: InstanceRole;
-  createdAt: string;
-}
 
 interface PendingInvite {
   id: string;
@@ -27,17 +20,13 @@ interface CreatedInvite extends PendingInvite {
   emailed: boolean;
 }
 
-/** Mirrors the server rule: the owner manages everyone, admins manage members. */
-const canManage = (actor: InstanceRole, target: InstanceRole) =>
-  actor === 'global:owner' || (actor === 'global:admin' && target === 'global:member');
-
 export function UsersPage({ me }: { me: SessionUser }) {
   const { t, i18n } = useTranslation('app');
   const queryClient = useQueryClient();
   const formatDate = (iso: string) =>
     new Date(iso).toLocaleDateString(i18n.language, { dateStyle: 'medium' });
 
-  const users = useQuery({ queryKey: ['users'], queryFn: () => api<UserRow[]>('/api/users') });
+  const users = useQuery({ queryKey: ['users'], queryFn: () => api<UserSummary[]>('/api/users') });
   const invites = useQuery({
     queryKey: ['invitations'],
     queryFn: () => api<PendingInvite[]>('/api/invitations')
@@ -66,7 +55,7 @@ export function UsersPage({ me }: { me: SessionUser }) {
   });
 
   const makeResetLink = useMutation({
-    mutationFn: (user: UserRow) =>
+    mutationFn: (user: UserSummary) =>
       api<{ url: string }>(`/api/users/${user.id}/password-reset-link`, { method: 'POST' }),
     onSuccess: (result, user) => setResetLink({ name: user.name, url: result.url })
   });
@@ -136,31 +125,14 @@ export function UsersPage({ me }: { me: SessionUser }) {
 
       <section className="list" aria-label={t('platform.users.title')}>
         {users.data?.map((user) => (
-          <div className="list__row" key={user.id}>
-            <div className="list__main">
-              <span className="list__title">
-                {user.name}
-                {user.id === me.id && <span className="list__muted"> ({t('platform.users.you')})</span>}
-              </span>
-              <span className="list__meta">{user.email}</span>
-            </div>
-            <span className="badge">{t(roleLabelKey(user.instanceRole))}</span>
-            <span className="list__meta list__meta--fixed">
-              {t('platform.users.joined', { date: formatDate(user.createdAt) })}
-            </span>
-            <div className="list__actions">
-              {user.id !== me.id && canManage(me.instanceRole, user.instanceRole) && (
-                <button
-                  className="btn btn--sm"
-                  type="button"
-                  disabled={makeResetLink.isPending}
-                  onClick={() => makeResetLink.mutate(user)}
-                >
-                  {t('platform.users.resetLink')}
-                </button>
-              )}
-            </div>
-          </div>
+          <UserRow
+            key={user.id}
+            user={user}
+            me={me}
+            everyone={users.data}
+            onResetLink={(target) => makeResetLink.mutate(target)}
+            resetBusy={makeResetLink.isPending}
+          />
         ))}
       </section>
 

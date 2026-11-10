@@ -57,14 +57,17 @@ export function Shell({ user }: { user: SessionUser }) {
         </nav>
 
         <div className="sidebar__bottom">
-          {isAdmin(user) && (
-            <nav className="sidebar__nav" aria-label={t('platform.nav.settings')}>
-              <span className="sidebar__heading">{t('platform.nav.settings')}</span>
+          <nav className="sidebar__nav" aria-label={t('platform.nav.settings')}>
+            <span className="sidebar__heading">{t('platform.nav.settings')}</span>
+            <NavLink to="/settings/personal" className={navClass}>
+              {t('platform.nav.personalSettings')}
+            </NavLink>
+            {isAdmin(user) && (
               <NavLink to="/settings/users" className={navClass}>
                 {t('platform.nav.users')}
               </NavLink>
-            </nav>
-          )}
+            )}
+          </nav>
           <div className="user-chip">
             <div className="user-chip__text">
               <span className="user-chip__name">{user.name}</span>

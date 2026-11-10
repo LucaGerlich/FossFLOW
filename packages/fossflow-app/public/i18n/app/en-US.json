@@ -109,7 +109,8 @@
             "signOut": "Sign out",
             "personal": "Personal",
             "projects": "Projects",
-            "noProjects": "No team projects yet."
+            "noProjects": "No team projects yet.",
+            "personalSettings": "Account"
         },
         "roles": {
             "owner": "Owner",
@@ -144,7 +145,13 @@
             "resetTitle": "Password reset link",
             "resetHint": "Give this link to {{name}}. It works once and expires in 1 hour.",
             "you": "you",
-            "joined": "Joined {{date}}"
+            "joined": "Joined {{date}}",
+            "roleOf": "Role of {{name}}",
+            "delete": "Delete",
+            "transferLabel": "Move their landscapes and credentials to",
+            "transferToMe": "Me",
+            "transferNone": "Nobody: delete them too",
+            "deleteConfirm": "Delete {{name}}"
         },
         "errors": {
             "generic": "Something went wrong. Please try again."
@@ -228,6 +235,17 @@
             "hint": "Show live status from these credentials, then bind nodes to servers and containers.",
             "none": "This project has no credentials yet.",
             "manage": "Manage credentials"
+        },
+        "settings": {
+            "personalTitle": "Your account",
+            "profile": "Profile",
+            "emailHint": "You sign in with this address. Your role: {{role}}.",
+            "saved": "Saved.",
+            "password": "Password",
+            "passwordHint": "You stay signed in here; your other devices are signed out.",
+            "currentPassword": "Current password",
+            "changePassword": "Change password",
+            "passwordChanged": "Password changed. Your other devices are signed out."
         }
     }
 }
