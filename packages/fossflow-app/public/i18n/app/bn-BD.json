@@ -5,8 +5,7 @@
         "loadSessionOnly": "লোড করুন (শুধুমাত্র সেশন)",
         "importFile": "ফাইল আমদানি করুন",
         "exportFile": "ফাইল রপ্তানি করুন",
-        "quickSaveSession": "দ্রুত সংরক্ষণ (সেশন)",
-        "serverStorage": "সার্ভার স্টোরেজ"
+        "quickSaveSession": "দ্রুত সংরক্ষণ (সেশন)"
     },
     "status": {
         "current": "বর্তমান",
@@ -41,10 +40,6 @@
             "noteMessage": "রপ্তানি করা JSON ফাইলগুলি পরে আমদানি করা যেতে পারে বা অন্যদের সাথে শেয়ার করা যেতে পারে।",
             "btnDownload": "JSON ডাউনলোড করুন",
             "btnCancel": "বাতিল করুন"
-        },
-        "readOnly": {
-            "mode": "শুধুমাত্র দেখার মোড",
-            "failed": "ডায়াগ্রাম লোড করতে ব্যর্থ"
         }
     },
     "alert": {

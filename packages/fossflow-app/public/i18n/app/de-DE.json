@@ -5,8 +5,7 @@
     "loadSessionOnly": "Laden (nur Browser)",
     "importFile": "Datei importieren",
     "exportFile": "Datei exportieren",
-    "quickSaveSession": "Schnellspeichern (Browser)",
-    "serverStorage": "Server-Speicher"
+    "quickSaveSession": "Schnellspeichern (Browser)"
   },
   "status": {
     "current": "Aktuell",
@@ -41,10 +40,6 @@
       "noteMessage": "Exportierte JSON-Dateien können später importiert oder mit anderen geteilt werden.",
       "btnDownload": "JSON herunterladen",
       "btnCancel": "Abbrechen"
-    },
-    "readOnly": {
-      "mode": "Nur-Ansicht-Modus",
-      "failed": "Diagramm konnte nicht geladen werden"
     }
   },
   "alert": {

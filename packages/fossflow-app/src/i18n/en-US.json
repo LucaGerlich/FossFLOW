@@ -5,8 +5,7 @@
         "loadSessionOnly": "Load (Session Only)",
         "importFile": "Import File",
         "exportFile": "Export File",
-        "quickSaveSession": "Quick Save (Session)",
-        "serverStorage": "Server Storage"
+        "quickSaveSession": "Quick Save (Session)"
     },
     "status": {
         "current": "Current",
@@ -41,10 +40,6 @@
             "noteMessage": "Exported JSON files can be imported later or shared with others.",
             "btnDownload": "Download JSON",
             "btnCancel": "Cancel"
-        },
-        "readOnly": {
-            "mode": "View-Only Mode",
-            "failed": "Failed to load diagram"
         }
     },
     "alert": {
@@ -54,8 +49,8 @@
         "createNewDiagram": "Create a new diagram?",
         "unsavedChangesExport": "You have unsaved changes. Export your diagram first to save it. Continue?",
         "confirmDelete": "Are you sure you want to delete this diagram?",
-        "storageFull": "Storage full! Opening Storage Manager...",
-        "autoSaveFailed": "Storage full! Please use Storage Manager to free up space.",
+        "storageFull": "Browser storage is full. Export the diagrams you want to keep, then delete old ones from Load.",
+        "autoSaveFailed": "Auto-save failed: browser storage is full. Export the diagrams you want to keep, then delete old ones from Load.",
         "beforeUnload": "You have unsaved changes. Are you sure you want to leave?",
         "quotaExceeded": "Storage quota exceeded. Please export important diagrams and clear some space."
     },

@@ -5,8 +5,7 @@
         "loadSessionOnly": "Wczytaj (tylko bieżąca sesja)",
         "importFile": "Importuj Plik",
         "exportFile": "Eksportuj Plik",
-        "quickSaveSession": "Szybki zapis (Sesji)",
-        "serverStorage": "Dysk aplikacji"
+        "quickSaveSession": "Szybki zapis (Sesji)"
     },
     "status": {
         "current": "Obecny",
@@ -41,10 +40,6 @@
             "noteMessage": "Wyeksportowane pliki JSON można później zaimportować lub udostępnić innym osobom.",
             "btnDownload": "Pobierz plik JSON",
             "btnCancel": "Anuluj"
-        },
-        "readOnly": {
-            "mode": "Tryb tylko do odczytu",
-            "failed": "Nie udało się załadować diagramu"
         }
     },
     "alert": {
