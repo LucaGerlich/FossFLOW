@@ -6,6 +6,8 @@ import './index.css';
 import { applyDesignTokens, fontsReady } from './designTokens';
 import 'react-quill-new/dist/quill.snow.css';
 import App from './App';
+import { detectPlatform } from './platform/detect';
+import { PlatformApp } from './platform/PlatformApp';
 import reportWebVitals from './reportWebVitals';
 import * as serviceWorkerRegistration from './serviceWorkerRegistration';
 import { ErrorBoundary } from 'react-error-boundary';
@@ -18,20 +20,21 @@ applyDesignTokens();
 const root = ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement
 );
-// Wait briefly for Geist so canvas text boxes are measured with the real font.
-void fontsReady()
-  .catch(() => undefined)
-  .finally(() => {
+// Wait briefly for Geist (so canvas text is measured with the real font), and
+// ask whether a FossFLOW server is there: platform mode if so, else local mode.
+void Promise.all([fontsReady().catch(() => undefined), detectPlatform()]).then(
+  ([, platform]) => {
     root.render(
       <React.StrictMode>
         <I18nextProvider i18n={i18n}>
           <ErrorBoundary FallbackComponent={ErrorBoundaryFallbackUI}>
-            <App />
+            {platform ? <PlatformApp status={platform} /> : <App />}
           </ErrorBoundary>
         </I18nextProvider>
       </React.StrictMode>
     );
-  });
+  }
+);
 
 // If you want to start measuring performance in your app, pass a function
 // to log results (for example: reportWebVitals(console.log))

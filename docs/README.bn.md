@@ -99,19 +99,13 @@ FossFLOW হল সুন্দর আইসোমেট্রিক ডায�
 ## 🐳 Docker দিয়ে দ্রুত ডিপ্লয়
 
 ```bash
-# Docker Compose ব্যবহার করা (প্রস্তাবিত - স্থায়ী স্টোরেজ অন্তর্ভুক্ত)
-docker compose up
-
-# অথবা স্থায়ী স্টোরেজ সহ Docker Hub থেকে সরাসরি চালান
-docker run -p 80:80 -v $(pwd)/diagrams:/data/diagrams stnsmith/fossflow:latest
+git clone https://github.com/LucaGerlich/FossFLOW.git
+cd FossFLOW
+cp .env.example .env        # POSTGRES_PASSWORD, FOSSFLOW_URL
+docker compose up -d --build
 ```
 
-Docker-এ সার্ভার স্টোরেজ ডিফল্টভাবে সক্রিয়। আপনার ডায়াগ্রামগুলি হোস্টে `./diagrams`-এ সংরক্ষিত হবে।
-
-সার্ভার স্টোরেজ নিষ্ক্রিয় করতে, `ENABLE_SERVER_STORAGE=false` সেট করুন:
-```bash
-docker run -p 80:80 -e ENABLE_SERVER_STORAGE=false stnsmith/fossflow:latest
-```
+Docker সেটআপে এখন সাইন-ইন ও একটি ডাটাবেস রয়েছে; সম্পূর্ণ নির্দেশিকা [PLATFORM.md](PLATFORM.md)-এ আছে (ইংরেজিতে)।
 
 ## দ্রুত শুরু (স্থানীয় উন্নয়ন)
 

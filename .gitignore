@@ -2,6 +2,9 @@ node_modules/
 dist/
 build/
 diagrams/
+# Platform data: holds the generated encryption key. Never commit it.
+/data/
+packages/fossflow-backend/data/
 *.log
 .env
 .env.local

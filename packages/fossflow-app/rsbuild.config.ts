@@ -13,7 +13,7 @@ export default defineConfig({
     server: {
         // Live data is same-origin only (the backend sends no CORS headers for it).
         proxy: {
-            '/api/live': `http://localhost:${process.env.BACKEND_PORT || 3001}`,
+            '/api': `http://localhost:${process.env.BACKEND_PORT || 3001}`,
         },
     },
     resolve: {

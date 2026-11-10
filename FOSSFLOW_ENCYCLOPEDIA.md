@@ -70,9 +70,8 @@ fossflow-monorepo/
 │   │   └── tsconfig.json       # TypeScript config
 │   │
 │   └── fossflow-backend/        # Backend server (NEW - Added ~Aug 2025)
-│       ├── server.js           # Express server
-│       ├── package.json        # Backend dependencies
-│       └── .env.example        # Environment config template
+│       ├── src/                # NestJS server (auth, projects, landscapes, credentials, live data)
+│       └── package.json        # Backend dependencies
 │
 ├── package.json                 # Root workspace configuration
 ├── Dockerfile                   # Multi-stage Docker build
@@ -117,81 +116,34 @@ fossflow-monorepo/
 
 ## Backend Architecture (fossflow-backend)
 
-**Added**: August 2025 (commit bf3a30f)
-**Purpose**: Optional Express.js server for persistent diagram storage
+**Purpose**: NestJS server for platform mode: sign-in, projects, landscapes in PostgreSQL, encrypted credentials and live data
 
 ### Overview
 
-The backend package provides server-side storage capabilities, allowing diagrams to persist across browser sessions and devices. It's particularly useful in Docker deployments.
+The backend turns FossFLOW into a self-hosted platform. People sign in, landscapes are stored in Postgres per project, and live data (for example from a Beszel hub) is read through connectors. Without the backend (static build, or Docker without `DATABASE_URL`), the app runs in local mode: no sign-in, diagrams in the browser's localStorage.
 
-**Location**: `/packages/fossflow-backend/`
+**Location**: `/packages/fossflow-backend/src/`
 
-### Key Files
+The old file-based Express server (`server.js`, `/api/diagrams`, `ENABLE_SERVER_STORAGE`) no longer exists. Its diagrams are imported once into the Owner's personal space on upgrade.
 
-#### Server (`server.js`)
-- **Technology**: Express.js with ES modules
-- **Port**: 3001 (configurable via `BACKEND_PORT`)
-- **Host**: 0.0.0.0 (configurable via `BACKEND_HOST`)
-- **Features**:
-  - CORS enabled for cross-origin requests
-  - 10MB JSON payload limit for large diagrams
-  - Filesystem-based storage
-  - Optional Git backup support
+### Key folders
 
-### API Endpoints
+- `auth/`, `setup/`, `invitations/`, `users/`: sign-in (better-auth), first-run setup, invitations
+- `rbac/`: instance and project roles and their scopes (`roles.ts`)
+- `projects/`, `landscapes/`: projects and the landscapes in them
+- `credentials/`, `crypto/`: encrypted credentials and the master key
+- `connectors/`, `live/`: live sources (one file per connector, registered in `registry.ts`) and the polling hub
+- `config/`: environment variables, validated at startup
 
-#### Storage Status
-```
-GET /api/storage/status
-Response: { enabled: boolean, gitBackup: boolean, version: string }
-```
+### Documentation
 
-#### List Diagrams
-```
-GET /api/diagrams
-Response: Array<{ id, name, lastModified, size }>
-```
-
-#### Get Diagram
-```
-GET /api/diagrams/:id
-Response: Diagram JSON data
-```
-
-#### Save Diagram
-```
-POST /api/diagrams/:id
-Body: Diagram JSON data
-Response: { success: boolean, message: string }
-```
-
-#### Delete Diagram
-```
-DELETE /api/diagrams/:id
-Response: { success: boolean }
-```
-
-### Configuration
-
-**Environment Variables** (`.env`):
-- `ENABLE_SERVER_STORAGE`: Enable/disable storage endpoints (default: `true`)
-- `STORAGE_PATH`: Directory for diagram files (default: `/data/diagrams`)
-- `BACKEND_PORT`: Server port (default: `3001`)
-- `BACKEND_HOST`: Server host (default: `0.0.0.0`)
-- `ENABLE_GIT_BACKUP`: Enable Git version control (default: `false`)
-
-### Storage Format
-
-- **Directory**: `/data/diagrams/` (or `STORAGE_PATH`)
-- **File Format**: `{diagram-id}.json`
-- **Structure**: Full diagram data including icons, nodes, connectors
+- Install, roles, backups, all environment variables and adding a connector: [docs/PLATFORM.md](docs/PLATFORM.md)
+- Live data from Beszel: [docs/LIVE.md](docs/LIVE.md)
+- Security decisions and change history: [docs/AUDIT.md](docs/AUDIT.md)
 
 ### Integration with App
 
-**App Service** (`packages/fossflow-app/src/services/storageService.ts`):
-- Detects server availability on startup
-- Provides unified interface for server/local storage
-- Handles timeouts and error states
+The app asks `/api/platform/status` on startup to choose between local and platform mode. Platform pages are in `packages/fossflow-app/src/platform/`.
 
 ## State Management
 
@@ -272,11 +224,11 @@ The FossFLOW application is a Progressive Web App (PWA) built with RSBuild that 
 - Manages auto-save functionality
 - Handles import/export operations
 - Provides UI for session management
-- Server storage integration (NEW)
+- Platform mode detection (sign-in, projects, landscapes) (NEW)
 - i18n language switching (NEW)
 
 **Major Updates** (since Aug 2025):
-- Server storage detection and UI (commit bf3a30f)
+- Platform mode: sign-in, projects and landscapes in Postgres
 - Language switcher component (commit 5d6cf0e)
 - Enhanced diagram loading with icon persistence (commit 4e13033)
 
@@ -649,10 +601,11 @@ FossFLOW supports multiple languages using react-i18next with automatic language
 - **Jest** (^29.5.0): Testing framework
 
 ### Backend **[NEW]**
-- **Express** (^4.18.2): Web server
-- **CORS** (^2.8.5): Cross-origin support
-- **dotenv** (^16.0.3): Environment configuration
-- **UUID** (^9.0.0): ID generation
+- **NestJS**: Server framework
+- **better-auth**: Sign-in and sessions
+- **Drizzle ORM** with **pg**: PostgreSQL access
+- **zod**: Input and config validation
+- **nodemailer**: Optional invitation and reset emails
 
 ## Build System
 
@@ -784,8 +737,8 @@ npm run dev:backend
 - Hot reload updates the browser automatically
 
 5. **Making Backend Changes** (NEW):
-- Edit `packages/fossflow-backend/server.js`
-- Restart server or use nodemon for auto-reload
+- Edit files in `packages/fossflow-backend/src/`
+- `npm run dev:backend` restarts the server on change (see docs/PLATFORM.md)
 
 ### Key Development Files
 
@@ -941,7 +894,7 @@ transaction(() => {
 **Selection handles?** → `/src/components/TransformControlsManager/`
 **Undo/Redo?** → `/src/hooks/useHistory.ts` **[NEW]**
 **i18n translations?** → `/src/i18n/en-US.ts`, `/src/i18n/zh-CN.ts` **[NEW]**
-**Server storage?** → `/packages/fossflow-backend/server.js` **[NEW]**
+**Landscape storage?** → `/packages/fossflow-backend/src/landscapes/` **[NEW]**
 **Pan settings?** → `/src/config/panSettings.ts` + `/src/components/PanSettings/` **[NEW]**
 **Tooltips?** → Various `/src/components/*Tooltip/` components **[NEW]**
 
@@ -956,7 +909,7 @@ transaction(() => {
 **How labels are positioned?** → `/src/utils/connectorLabels.ts` **[NEW]**
 **How transactions work?** → `/src/hooks/useHistory.ts` **[NEW]**
 **How i18n works?** → `/src/i18n/`, `/src/stores/localeStore.tsx` **[NEW]**
-**Backend API?** → `/packages/fossflow-backend/server.js` **[NEW]**
+**Backend API?** → `/packages/fossflow-backend/src/` **[NEW]**
 
 ## Key Files Reference
 
@@ -979,7 +932,7 @@ transaction(() => {
 | Connector labels util | `/src/utils/connectorLabels.ts` | **[NEW]** |
 | History/Undo hook | `/src/hooks/useHistory.ts` | **[NEW]** |
 | Public API hook | `/src/hooks/useIsoflow.ts` | |
-| Backend server | `/packages/fossflow-backend/server.js` | **[NEW]** |
+| Backend server | `/packages/fossflow-backend/src/main.ts` | **[NEW]** |
 | App i18n config | `/packages/fossflow-app/src/i18n.ts` | **[NEW]** |
 | English translations | `/src/i18n/en-US.ts` | **[NEW]** |
 | Chinese translations | `/src/i18n/zh-CN.ts` | **[NEW]** |
@@ -987,7 +940,7 @@ transaction(() => {
 ## Recent Major Changes Summary
 
 ### August 2025
-- **Backend Storage**: Express server for persistent diagrams (bf3a30f)
+- **Backend**: NestJS server with Postgres storage, sign-in and live data (see docs/PLATFORM.md)
 - **i18n Support**: English + Chinese translations (2145981, 5d6cf0e)
 - **Hotkey System**: Configurable keyboard shortcuts (ef258df)
 - **Pan Controls**: Advanced pan configuration (83c9b3a)

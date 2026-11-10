@@ -5,8 +5,7 @@
         "loadSessionOnly": "Load (Session Only)",
         "importFile": "Import File",
         "exportFile": "Export File",
-        "quickSaveSession": "Quick Save (Session)",
-        "serverStorage": "Server Storage"
+        "quickSaveSession": "Quick Save (Session)"
     },
     "status": {
         "current": "Current",
@@ -41,10 +40,6 @@
             "noteMessage": "Exported JSON files can be imported later or shared with others.",
             "btnDownload": "Download JSON",
             "btnCancel": "Cancel"
-        },
-        "readOnly": {
-            "mode": "View-Only Mode",
-            "failed": "Failed to load diagram"
         }
     },
     "alert": {
@@ -54,8 +49,8 @@
         "createNewDiagram": "Create a new diagram?",
         "unsavedChangesExport": "You have unsaved changes. Export your diagram first to save it. Continue?",
         "confirmDelete": "Are you sure you want to delete this diagram?",
-        "storageFull": "Storage full! Opening Storage Manager...",
-        "autoSaveFailed": "Storage full! Please use Storage Manager to free up space.",
+        "storageFull": "Browser storage is full. Export the diagrams you want to keep, then delete old ones from Load.",
+        "autoSaveFailed": "Auto-save failed: browser storage is full. Export the diagrams you want to keep, then delete old ones from Load.",
         "beforeUnload": "You have unsaved changes. Are you sure you want to leave?",
         "quotaExceeded": "Storage quota exceeded. Please export important diagrams and clear some space."
     },
@@ -65,6 +60,192 @@
         "servers_one": "{{count}} server",
         "servers_other": "{{count}} servers",
         "noServers": "no servers",
-        "noServersHint": "Connected, but Beszel shares no servers with this user. Add the user to each server in Beszel's admin panel, or start the hub with SHARE_ALL_SYSTEMS=true."
+        "noServersHint": "Connected, but Beszel shares no servers with this user. Add the user to each server in Beszel's admin panel, or start the hub with SHARE_ALL_SYSTEMS=true.",
+        "connecting": "Connecting…",
+        "sources_one": "{{count}} source",
+        "sources_other": "{{count}} sources"
+    },
+    "platform": {
+        "loading": "Loading…",
+        "setup": {
+            "title": "Set up FossFLOW",
+            "intro": "Create the owner account. You can invite your team right after.",
+            "submit": "Create owner account"
+        },
+        "signIn": {
+            "title": "Sign in",
+            "submit": "Sign in",
+            "forgot": "Forgot your password?",
+            "forgotSubmit": "Send reset link",
+            "forgotSent": "If an account exists for this email, a reset link is on its way.",
+            "backToSignIn": "Back to sign in",
+            "noMail": "Forgot your password? Ask an admin for a reset link."
+        },
+        "invite": {
+            "title": "Join FossFLOW",
+            "intro": "You were invited as {{role}} with {{email}}. Choose your name and a password.",
+            "submit": "Create account",
+            "invalid": "This invitation is invalid, expired or already used. Ask an admin for a new one."
+        },
+        "reset": {
+            "title": "Choose a new password",
+            "submit": "Save password",
+            "done": "Your password is changed. You can sign in now.",
+            "invalid": "This reset link is invalid or has expired. Ask for a new one."
+        },
+        "fields": {
+            "name": "Name",
+            "email": "Email",
+            "password": "Password",
+            "newPassword": "New password",
+            "role": "Role"
+        },
+        "passwordHint": "At least 8 characters, with a number and a capital letter.",
+        "nav": {
+            "label": "Main",
+            "overview": "Overview",
+            "settings": "Settings",
+            "users": "Users",
+            "signOut": "Sign out",
+            "personal": "Personal",
+            "projects": "Projects",
+            "noProjects": "No team projects yet.",
+            "personalSettings": "Account"
+        },
+        "roles": {
+            "owner": "Owner",
+            "admin": "Admin",
+            "member": "Member",
+            "editor": "Editor",
+            "viewer": "Viewer",
+            "personalOwner": "Owner"
+        },
+        "home": {
+            "title": "Overview",
+            "empty": "No landscapes yet.",
+            "emptyHint": "Create a landscape, or import a FossFLOW JSON export."
+        },
+        "users": {
+            "title": "Users",
+            "invite": "Invite",
+            "inviteTitle": "Invite someone",
+            "inviteSubmit": "Create invitation",
+            "cancel": "Cancel",
+            "done": "Done",
+            "linkTitle": "Invitation link",
+            "linkHint": "Send this link to {{email}}. It works once and expires in 7 days. It is shown only now.",
+            "emailedHint": "We emailed the link to {{email}}. You can also share it yourself; it is shown only now.",
+            "copy": "Copy link",
+            "copied": "Copied",
+            "pending": "Pending invitations",
+            "noPending": "No pending invitations.",
+            "expires": "Expires {{date}}",
+            "revoke": "Revoke",
+            "resetLink": "Reset link",
+            "resetTitle": "Password reset link",
+            "resetHint": "Give this link to {{name}}. It works once and expires in 1 hour.",
+            "you": "you",
+            "joined": "Joined {{date}}",
+            "roleOf": "Role of {{name}}",
+            "delete": "Delete",
+            "transferLabel": "Move their landscapes and credentials to",
+            "transferToMe": "Me",
+            "transferNone": "Nobody: delete them too",
+            "deleteConfirm": "Delete {{name}}"
+        },
+        "errors": {
+            "generic": "Something went wrong. Please try again."
+        },
+        "projects": {
+            "create": "New project",
+            "createHint": "A shared space for one infrastructure or team, with its own landscapes, credentials and members.",
+            "createSubmit": "Create project",
+            "notFound": "This project doesn’t exist, or you don’t have access to it.",
+            "personalHint": "Only you can see what’s here.",
+            "landscapes": "Landscapes",
+            "landscapesHint": "Landscapes in this project will appear here.",
+            "settings": "Settings",
+            "name": "Project name",
+            "save": "Save",
+            "members": "Members",
+            "rolesHint": "Admins manage the project and its members, editors change landscapes and credentials, viewers only look.",
+            "remove": "Remove",
+            "addMember": "Add a member",
+            "pickPerson": "Choose a person…",
+            "add": "Add",
+            "delete": "Delete project",
+            "deleteHint": "Deletes the project and everything in it. This can’t be undone.",
+            "deleteConfirm": "Delete “{{name}}”",
+            "credentials": "Credentials"
+        },
+        "landscapes": {
+            "untitled": "Untitled landscape",
+            "new": "New landscape",
+            "import": "Import JSON",
+            "importInvalid": "That file isn’t a FossFLOW JSON export.",
+            "name": "Landscape name",
+            "rename": "Rename",
+            "move": "Move",
+            "moveTo": "Move to…",
+            "delete": "Delete",
+            "deleteHint": "Delete this landscape? This can’t be undone.",
+            "deleteConfirm": "Delete “{{name}}”",
+            "updated": "Updated {{date}}",
+            "updatedBy": "Updated by {{name}}, {{date}}",
+            "notFound": "This landscape doesn’t exist, or you don’t have access to it.",
+            "back": "Back to the overview",
+            "readOnly": "Read only",
+            "export": "Export JSON",
+            "saved": "Saved",
+            "unsaved": "Unsaved changes",
+            "saving": "Saving…",
+            "notSaved": "Not saved",
+            "saveFailed": "Couldn’t save.",
+            "retry": "Try again",
+            "conflict": "{{name}} saved this landscape while you were editing. Reload to see their version, or overwrite it with yours.",
+            "someone": "Someone",
+            "reload": "Reload",
+            "overwrite": "Overwrite with mine"
+        },
+        "credentials": {
+            "add": "Add {{connector}} credential",
+            "type": "Kind of source",
+            "new": "New {{connector}} credential",
+            "edit": "Edit {{connector}} credential",
+            "editButton": "Edit",
+            "name": "Credential name",
+            "secretKept": "Saved. Leave empty to keep it.",
+            "saveTest": "Save and test",
+            "testing": "Testing…",
+            "done": "Done",
+            "testFailed": "Saved, but the connection test failed: {{message}}",
+            "usedBy_zero": "not used yet",
+            "usedBy_one": "used by {{count}} landscape",
+            "usedBy_other": "used by {{count}} landscapes",
+            "deleteHint": "Delete this credential? This can’t be undone.",
+            "deleteUsed_one": "{{count}} landscape shows live data from this credential and will stop. Delete it anyway?",
+            "deleteUsed_other": "{{count}} landscapes show live data from this credential and will stop. Delete it anyway?",
+            "empty": "No credentials yet",
+            "emptyHint": "Credentials are logins for live sources, such as a Beszel hub. Landscapes in this project can then show live status."
+        },
+        "sources": {
+            "button": "Live data",
+            "buttonCount_one": "Live data · {{count}}",
+            "buttonCount_other": "Live data · {{count}}",
+            "hint": "Show live status from these credentials, then bind nodes to servers and containers.",
+            "none": "This project has no credentials yet.",
+            "manage": "Manage credentials"
+        },
+        "settings": {
+            "personalTitle": "Your account",
+            "profile": "Profile",
+            "emailHint": "You sign in with this address. Your role: {{role}}.",
+            "saved": "Saved.",
+            "password": "Password",
+            "passwordHint": "You stay signed in here; your other devices are signed out.",
+            "currentPassword": "Current password",
+            "changePassword": "Change password",
+            "passwordChanged": "Password changed. Your other devices are signed out."
+        }
     }
 }

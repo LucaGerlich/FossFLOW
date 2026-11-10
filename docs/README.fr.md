@@ -99,19 +99,13 @@ FossFLOW est une puissante Progressive Web App (PWA) open-source pour créer de 
 ## 🐳 Déploiement Rapide avec Docker
 
 ```bash
-# Utilisation de Docker Compose (recommandé - inclut le stockage persistant)
-docker compose up
-
-# Ou exécuter directement depuis Docker Hub avec stockage persistant
-docker run -p 80:80 -v $(pwd)/diagrams:/data/diagrams stnsmith/fossflow:latest
+git clone https://github.com/LucaGerlich/FossFLOW.git
+cd FossFLOW
+cp .env.example .env        # POSTGRES_PASSWORD, FOSSFLOW_URL
+docker compose up -d --build
 ```
 
-Le stockage serveur est activé par défaut dans Docker. Vos diagrammes seront enregistrés dans `./diagrams` sur l'hôte.
-
-Pour désactiver le stockage serveur, définissez `ENABLE_SERVER_STORAGE=false` :
-```bash
-docker run -p 80:80 -e ENABLE_SERVER_STORAGE=false stnsmith/fossflow:latest
-```
+La configuration Docker inclut désormais une connexion et une base de données ; le guide complet est dans [PLATFORM.md](PLATFORM.md) (en anglais).
 
 ## Démarrage Rapide (Développement Local)
 

@@ -235,6 +235,10 @@
   background-color: var(--ds-warning);
 }
 
+.badge--muted .badge__dot {
+  background-color: var(--ds-hairline-strong);
+}
+
 /* ── Canvas ──────────────────────────────────────────────────────────── */
 
 .fossflow-container {

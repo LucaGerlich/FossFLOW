@@ -5,8 +5,7 @@
         "loadSessionOnly": "लोड करें (केवल सत्र)",
         "importFile": "फ़ाइल आयात करें",
         "exportFile": "फ़ाइल निर्यात करें",
-        "quickSaveSession": "त्वरित सहेजें (सत्र)",
-        "serverStorage": "सर्वर स्टोरेज"
+        "quickSaveSession": "त्वरित सहेजें (सत्र)"
     },
     "status": {
         "current": "वर्तमान",
@@ -41,10 +40,6 @@
             "noteMessage": "निर्यात की गई JSON फ़ाइलों को बाद में आयात किया जा सकता है या दूसरों के साथ साझा किया जा सकता है।",
             "btnDownload": "JSON डाउनलोड करें",
             "btnCancel": "रद्द करें"
-        },
-        "readOnly": {
-            "mode": "केवल देखने का मोड",
-            "failed": "आरेख लोड करने में विफल"
         }
     },
     "alert": {

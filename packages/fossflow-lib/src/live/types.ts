@@ -2,7 +2,7 @@
  * Live data passed to `<Isoflow live={...} />`.
  *
  * Mirrors the backend wire contract in
- * `packages/fossflow-backend/live/types.ts`; keep both in sync. The lib is
+ * `packages/fossflow-backend/src/live/types.ts`; keep both in sync. The lib is
  * source-agnostic: it only knows keys, statuses and numbers.
  */
 
@@ -68,6 +68,7 @@ export interface LiveSourceHealth {
   name: string;
   ok: boolean;
   lastSync: string | null;
+  /** Null while `ok`, and while the first sync is still running (`lastSync` null). */
   error: string | null;
 }
 

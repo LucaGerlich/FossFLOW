@@ -203,9 +203,10 @@ def test_router_basename_detection(driver):
     # Check what basename React Router is using
     # This executes the same logic as in App.tsx
     detected_basename = driver.execute_script(r"""
-        // This replicates the basename detection logic from App.tsx
+        // This mirrors routerBasename() in src/basePath.ts: the basename comes from PUBLIC_URL,
+        // which for a sub-path deployment is the base path of the page URL.
         const pathname = window.location.pathname;
-        const basename = pathname.replace(/\/display\/.*$/, '').replace(/\/$/, '') || '/';
+        const basename = pathname.replace(/\/$/, '') || '/';
         return basename;
     """)
 

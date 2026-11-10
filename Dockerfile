@@ -1,36 +1,54 @@
-# Use the official Node.js runtime as the base image
+# --- Build: library, app and server ------------------------------------------
 FROM node:24 AS build
 
-# Set the working directory in the container
 WORKDIR /app
 
-# Copy package files for the monorepo
+# Package manifests first, so dependency layers cache across code changes
 COPY package*.json ./
 COPY packages/fossflow-lib/package*.json ./packages/fossflow-lib/
 COPY packages/fossflow-app/package*.json ./packages/fossflow-app/
+COPY packages/fossflow-backend/package*.json ./packages/fossflow-backend/
 
-# Install dependencies for the entire workspace
-RUN npm install
+# Reproducible install from the lockfile
+RUN npm ci
 
-# Copy the entire monorepo code
 COPY . .
 
-# Build the library first, then the app
-RUN npm run build:lib && npm run build:app
+RUN npm run build:lib && npm run build:app && npm run build --workspace=packages/fossflow-backend
 
-# Use Node with nginx for production
+# --- Server production dependencies only, from the same lockfile -------------
+FROM node:24 AS server-deps
+
+WORKDIR /app
+
+COPY package*.json ./
+COPY packages/fossflow-lib/package*.json ./packages/fossflow-lib/
+COPY packages/fossflow-app/package*.json ./packages/fossflow-app/
+COPY packages/fossflow-backend/package*.json ./packages/fossflow-backend/
+
+# --omit=optional/peer: better-auth lists dev tools (drizzle-kit, vitest, …) as
+# optional peers, and npm would otherwise ship them because they're installed
+# for development. Everything the server needs is a direct dependency.
+# npm hoists most packages to /app/node_modules but keeps some inside the
+# workspace (e.g. a second major of a shared dependency); ship both.
+RUN npm ci --omit=dev --omit=optional --omit=peer --workspace=packages/fossflow-backend && \
+    mkdir -p packages/fossflow-backend/node_modules
+
+# --- Runtime: nginx serves the app, the server runs behind it ----------------
 FROM node:24-alpine
 
 # Install web server packages, with the Alpine fixes released after the base image
 RUN apk upgrade --no-cache && apk add --no-cache nginx openssl su-exec
 
-# Copy backend code
-COPY --from=build /app/packages/fossflow-backend /app/packages/fossflow-backend
+# Server: compiled code, SQL migrations and production dependencies (pure JS, no native addons)
+COPY --from=server-deps /app/node_modules /app/node_modules
+COPY --from=server-deps /app/packages/fossflow-backend/node_modules /app/packages/fossflow-backend/node_modules
+COPY --from=build /app/packages/fossflow-backend/package.json /app/packages/fossflow-backend/package.json
+COPY --from=build /app/packages/fossflow-backend/dist /app/packages/fossflow-backend/dist
+COPY --from=build /app/packages/fossflow-backend/drizzle /app/packages/fossflow-backend/drizzle
 
-WORKDIR /app/packages/fossflow-backend
-# npm is only needed to install the backend dependencies: remove it, and the packages it bundles
-RUN npm install --omit=dev && npm cache clean --force && \
-    rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
+# npm isn't needed at runtime: remove it, and the packages it bundles
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
 # Copy the built React app to Nginx's web server directory
 COPY --from=build /app/packages/fossflow-app/build /usr/share/nginx/html
@@ -42,19 +60,17 @@ COPY nginx.conf /etc/nginx/http.d/default.conf
 COPY docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
 
-# Create data directory for persistent storage
-RUN mkdir -p /data/diagrams
+# Persistent data (encryption key, legacy diagrams to import)
+RUN mkdir -p /data
 
-# Expose ports
-EXPOSE 80 3001
+EXPOSE 80
 
-# Environment variables with defaults
-ENV ENABLE_SERVER_STORAGE=true
-ENV STORAGE_PATH=/data/diagrams
+ENV NODE_ENV=production
+# Generated encryption key lives here: mount it as a volume and back it up.
+ENV FOSSFLOW_DATA_DIR=/data
 ENV BACKEND_PORT=3001
-# nginx reaches the backend on localhost; don't expose the API (live inventory)
-# to other containers around nginx's Basic Auth. Override for direct access.
+# nginx reaches the server on localhost; don't expose the API to other
+# containers around nginx. Override for direct access.
 ENV BACKEND_HOST=127.0.0.1
 
-# Start services
 ENTRYPOINT ["/docker-entrypoint.sh"]

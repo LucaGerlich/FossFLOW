@@ -33,48 +33,44 @@ FossFLOW is a powerful, open-source Progressive Web App (PWA) for creating beaut
 
 ## 🛰️ Live landscape (optional)
 
-Map your systems by hand as always, or connect a [Beszel](https://github.com/henrygd/beszel) hub. The map then discovers your servers and the Docker containers running on them, and shows live status and server vitals:
-- Colour appears only when something needs attention.
-- Stopped containers stay on the map as dimmed ghosts.
-- Selecting a server opens a vitals card with recent history.
+In platform mode (the Docker setup below), a landscape can show the servers and Docker containers from a [Beszel](https://github.com/henrygd/beszel) hub, with live status and server vitals. You add the hub as a credential in a project and pick it in the landscape's **Live data** menu. A new **hairline** icon pack (server, container, database, cache, queue, gateway, clients, cloud) is available for hand-drawn diagrams too.
 
-It reads Beszel with a read-only user, credentials stay on the server, and the Docker image keeps live data off unless HTTP Basic Auth is configured. A new **hairline** icon pack (server, container, database, cache, queue, gateway, clients, cloud) is available for hand-drawn diagrams too.
-
-Setup, security notes and troubleshooting: **[docs/LIVE.md](docs/LIVE.md)**.
+Setup and troubleshooting: **[docs/LIVE.md](docs/LIVE.md)**.
 
 ## 🐳 Quick Deploy with Docker
 
-```bash
-# Using Docker Compose (recommended - includes persistent storage)
-docker compose up
+The Docker setup runs FossFLOW as a small platform: a sign-in, Postgres, and projects that teams share.
 
-# Or run directly from Docker Hub with persistent storage
-docker run -p 80:80 -v $(pwd)/diagrams:/data/diagrams abrar74774/fossflow:latest
+```bash
+git clone https://github.com/LucaGerlich/FossFLOW.git
+cd FossFLOW
+cp .env.example .env        # set POSTGRES_PASSWORD (openssl rand -hex 24) and FOSSFLOW_URL
+docker compose up -d --build
 ```
 
-Server storage is enabled by default in Docker. Your diagrams will be saved (as root by default) to `./diagrams` on the host. To change user or group id for saving as, set the `PUID` and `PGID` env variables.
+Open the address you set as `FOSSFLOW_URL`. The first start shows a setup page where you create the Owner account. Everyone else joins by invitation.
 
-To disable server storage, set `ENABLE_SERVER_STORAGE=false`:
+The full guide (roles, backups, email, upgrading from the file-based version, all settings) is in **[docs/PLATFORM.md](docs/PLATFORM.md)**.
+
+The image also runs as the plain local editor, with no sign-in and no database, when it is started without `DATABASE_URL`:
+
 ```bash
-docker run -p 80:80 -e ENABLE_SERVER_STORAGE=false abrar74774/fossflow:latest
+docker build -t fossflow .
+docker run -p 80:80 fossflow
 ```
+
+Diagrams are then saved in the browser.
 
 ### HTTP Basic Authentication (Optional)
 
-Protect your FossFLOW instance with HTTP Basic Auth:
+You can add an extra password prompt in front of the whole app, the sign-in page included. It doesn't replace the sign-in. Set both variables in `.env`:
 
 ```bash
-# With Docker Compose
-HTTP_AUTH_USER=admin HTTP_AUTH_PASSWORD=secret docker compose up
-
-# Or with docker run
-docker run -p 80:80 \
-  -e HTTP_AUTH_USER=admin \
-  -e HTTP_AUTH_PASSWORD=secret \
-  abrar74774/fossflow:latest
+HTTP_AUTH_USER=admin
+HTTP_AUTH_PASSWORD=<a long random password>
 ```
 
-> **Note**: Both variables must be set to enable authentication. If either is empty, the app is accessible without login.
+> **Note**: Both variables must be set to enable it. If either is empty, there is no extra prompt.
 
 ## Quick Start (Local Development)
 
@@ -142,15 +138,14 @@ npm run publish:lib  # Publish library to npm
    - Switch modes in Settings → Connectors tab
 
 3. **Save Your Work**:
-   - **Quick Save** - Saves to browser session
+   - **Quick Save** - Saves to your browser's storage (kept until you clear it)
    - **Export** - Download as JSON file
    - **Import** - Load from JSON file
 
 ### Storage Options
 
-- **Session Storage**: Temporary saves cleared when browser closes
-- **Export/Import**: Permanent storage as JSON files
-- **Auto-Save**: Automatically saves changes every 5 seconds to session
+- **Local mode** (static build, or Docker without a database): diagrams are saved in your browser's localStorage and stay across sessions, but only in that browser. Use **Export/Import** to keep JSON files or move diagrams between browsers.
+- **Platform mode** (Docker with Postgres): landscapes are saved in Postgres, per project, and autosave shortly after each change. You can still import and export JSON.
 
 ## Recently added
 
@@ -167,6 +162,8 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guid
 
 ## Documentation
 
+- [docs/PLATFORM.md](docs/PLATFORM.md) - Self-hosting guide: install, roles, backups, configuration
+- [docs/LIVE.md](docs/LIVE.md) - Live data from Beszel
 - [FOSSFLOW_ENCYCLOPEDIA.md](FOSSFLOW_ENCYCLOPEDIA.md) - Comprehensive guide to the codebase
 - [CONTRIBUTING.md](CONTRIBUTING.md) - Contributing guidelines
 

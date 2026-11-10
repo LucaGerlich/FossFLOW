@@ -5,8 +5,7 @@
         "loadSessionOnly": "Yükle (Yalnızca Oturum)",
         "importFile": "Dosya İçe Aktar",
         "exportFile": "Dosya Dışa Aktar",
-        "quickSaveSession": "Hızlı Kaydet (Oturum)",
-        "serverStorage": "Sunucu Depolama"
+        "quickSaveSession": "Hızlı Kaydet (Oturum)"
     },
     "status": {
         "current": "Mevcut",
@@ -41,10 +40,6 @@
             "noteMessage": "Dışa aktarılan JSON dosyaları daha sonra içe aktarılabilir veya başkalarıyla paylaşılabilir.",
             "btnDownload": "JSON İndir",
             "btnCancel": "İptal"
-        },
-        "readOnly": {
-            "mode": "Yalnızca Görüntüleme Modu",
-            "failed": "Diyagram yüklenemedi"
         }
     },
     "alert": {

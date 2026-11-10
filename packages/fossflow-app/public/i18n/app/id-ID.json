@@ -5,8 +5,7 @@
         "loadSessionOnly": "Muat (Hanya Sesi)",
         "importFile": "Impor File",
         "exportFile": "Ekspor File",
-        "quickSaveSession": "Simpan Cepat (Sesi)",
-        "serverStorage": "Penyimpanan Server"
+        "quickSaveSession": "Simpan Cepat (Sesi)"
     },
     "status": {
         "current": "Saat Ini",
@@ -41,10 +40,6 @@
             "noteMessage": "File JSON yang diekspor dapat diimpor nanti atau dibagikan dengan orang lain.",
             "btnDownload": "Unduh JSON",
             "btnCancel": "Batal"
-        },
-        "readOnly": {
-            "mode": "Mode Hanya Baca",
-            "failed": "Gagal memuat diagram"
         }
     },
     "alert": {

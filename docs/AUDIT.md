@@ -6,6 +6,331 @@ Newest entries first.
 
 ---
 
+## 2026-11-10 — Platform phase 1, milestone 6: settings, deployment and docs
+
+- **What:**
+  - **Users (Settings → Users):**
+    - `PATCH /api/users/:id` changes an instance role (new scope `user:changeRole`). It follows the existing rules: the owner manages everyone, admins manage members, only the owner hands out admin, and nobody hands out owner or changes their own role. Sessions read the role from the database, so the change applies on the person's next request.
+    - `DELETE /api/users/:id?transferTo=` deletes an account (new scope `user:delete`). In one transaction, their personal landscapes and credentials move to the chosen person's personal space (live sources stay attached; credential ids don't change) or are deleted with the account. Then the personal project, the user, and by cascade their sessions, logins and memberships go. It refuses with 409 while they are the only admin of a team project, naming the projects. The owner can't be deleted.
+    - **Fixed on the way:** deleting a user used to cascade only the membership row, which would have orphaned their personal project and everything in it (`project` has no owner column).
+    - App: a role select (shown only where the server would allow the change) and Delete with a "Move their landscapes and credentials to" choice (me preselected, or nobody) on each row. The row is its own component, `UserRow.tsx`.
+  - **Account (Settings → Account, everyone):** change your name, and change your password (current plus new; other devices are signed out). Both use better-auth's own `update-user` and `change-password` routes. Changing your email is not offered: better-auth needs a verification mail for it, and many installs have no SMTP.
+  - **Password and name rules on better-auth's routes:** the `before` hook now also applies our password rule to `/change-password` (before, only better-auth's 8-character minimum applied there) and the name rule to `/update-user`, storing the trimmed name. The person-name rule is shared (`personName` in `common/validation.ts`) by setup, invitations and the hook.
+  - **Deployment:**
+    - `compose.yml` is rewritten for the platform. Postgres 18 with a healthcheck; the app built from this repo (`build: .`); required `POSTGRES_PASSWORD` and `FOSSFLOW_URL` (compose refuses to start without them); optional key, SMTP, Basic Auth and poll settings; `./data:/data` for the encryption key and old diagrams. Before, it pulled the old upstream image with no database (so it ran in local mode only) and kept no `/data`, so a generated key would have been lost with the container.
+    - `docker-entrypoint.sh`: the server runs as uid/gid 1000 by default (it ran as root unless `PUID`/`PGID` were set) and owns `/data`. nginx starts only after the server answers `/api/health`, so a half-started container can't make the app fall back to local mode. The container lives as long as the server (`restart: unless-stopped` brings it back), and SIGTERM reaches the server through a `trap`, so `docker stop` shuts it down cleanly. Without `DATABASE_URL` the image serves the plain local editor, as before.
+    - `main.ts` enables Nest's shutdown hooks, so live pollers stop on SIGTERM.
+    - `SMTP_SECURE=` (empty, as compose passes unset values) no longer fails the config check.
+    - `.env.example` lists the platform's variables; `ENABLE_SERVER_STORAGE`, `STORAGE_PATH` and `ENABLE_GIT_BACKUP` are gone. `compose.dev.yml` no longer passes `BESZEL_*`.
+  - **Legacy import:** the one-time import of `<data>/diagrams` now waits for the folder to exist. Before, a first start without it marked the import done, so moving old diagrams in later did nothing.
+  - **Old server-storage client removed (local mode):** `storageService.ts`, `StorageManager.tsx`, `DiagramManager.tsx`/`.css`, the `/display/:id` read-only route and its branches in `App.tsx`, and the dead `EditorPage.tsx` (572 lines, imported nowhere). Local mode no longer calls `/api/storage/status` on every load. Unused i18n keys (`nav.serverStorage`, `dialog.readOnly`) are removed from all locales of both trees; the "storage full" alerts no longer point to the removed Storage Manager. The e2e base-path test's copied snippet no longer mirrors the old `/display/` rule.
+  - **Local saving fix (upstream bug from `dd2b782`):** the saved-diagrams list was only written to localStorage once one already existed, so in a fresh browser every save vanished from Load after a reload. The flag that allows saving is now set after the read, whether or not anything was stored.
+  - **Docs:** new `docs/PLATFORM.md` (install, roles, projects, credentials, settings, email, backups and the encryption key, upgrading from the file-based version, configuration reference, security, developer notes including adding a connector). `docs/LIVE.md` is rewritten for credentials. `README.md` (Docker, Basic Auth, storage, live data), the Docker block of the 8 translated READMEs, and the stale server parts of `FOSSFLOW_ENCYCLOPEDIA.md` are updated.
+  - **Tests:** the invite-and-sign-in helper and `personalOf`, copied in three test files, now live in `src/test/people.ts`.
+- **Why:** Milestone 6, the last of platform phase 1: admins can manage people, everyone can manage their own account, and the documented Docker setup actually runs the platform.
+- **Security:**
+  - Role changes and deletion reuse `canManageUser` and `canGrantInstanceRole`; nobody can act on their own account, grant owner, or touch the owner. Every rule is covered by a test that expects the refusal.
+  - A deleted person's encrypted credentials move only to the personal space the deleting admin chose (or are deleted); they never become visible to anyone else.
+  - The server process no longer runs as root in the container.
+  - The password rule now also covers self-service password changes.
+  - Independent review (subagent) of the diff: no critical or high findings. Fixed from it:
+    - Role change and delete now re-check the role inside the write (a conditional `UPDATE`, and a `FOR UPDATE` re-read in the delete transaction). An admin who loaded the page before the owner promoted someone can no longer delete or demote that new admin; the request gets 409.
+    - Deleting two co-admins of a team project at the same moment can't leave it without an admin: the delete locks the project's admin rows before checking. A test holds one deletion open in a raw transaction and proves the other one waits and then gets 409 (it fails without the lock).
+    - The heir's membership row is locked too, so the heir can't be deleted mid-transfer.
+    - The `update-user` hook returns only the changed body; better-auth merges it into the request (checked in `better-auth/dist/api/dispatch.mjs`).
+    - Role changes and deletions are logged with ids (actor, target, heir), never names or emails.
+  - Accepted: any user can be chosen as heir, as in n8n. The heir can use the moved credentials but can't read them or point them at another address without re-entering the secrets (milestone 5 rule). The UI preselects the deleting admin.
+  - Accepted (operator-controlled): a `:` or newline in `HTTP_AUTH_USER`, special characters in `POSTGRES_PASSWORD` (documented: letters and digits), `PUID=0`. Secrets in compose environment variables are visible to `docker inspect`, as usual; `*_FILE` variants can come later.
+- **Verified:**
+  - Server: 131 tests pass (11 new in `users.test.ts`, 1 legacy-import, 1 config), `tsc` clean. Coverage of the new code: 91.7 % statements; `users.service.ts` 100 % lines. Lib: 243 tests, `tsc` clean. App: builds; `tsc` shows 7 old errors (13 before; 6 were in the deleted `EditorPage.tsx`).
+  - Browser, dev server on a throwaway database: rename (trimmed, sidebar updates), Users page role select and delete with hand-over (Mia's landscape, credential and live source end up with the owner, live data keeps flowing, her session gets 401), weak password refused with the rule, a good one keeps this browser signed in and signs the other session out.
+  - Local mode (static build): no `/api` call besides the platform probe, no Server Storage button, save → reload keeps the diagram in Load.
+  - Docker, real `compose.yml` in a throwaway folder: old diagram imported and `BESZEL_*` moved into an encrypted credential at setup, imported bindings live; invite, team project, viewer can read but not save or delete; the sole-admin refusal shows in the UI, then delete with hand-over works; server runs as `node`, nginx starts after the server; `docker compose restart` takes 1 s (clean SIGTERM), migrates nothing twice, keeps the key file, and the credential still decrypts. The image without `DATABASE_URL` serves the local editor. Everything removed afterwards; your dev database was never touched.
+- **Not done / later:** `ProjectsService`'s own one-admin rule (changing or removing a project member) has the same check-then-write race as the delete had, without the lock; changing your email; deleting your own account; handing over ownership; the toolbar's local-mode labels still say "(Session Only)" although saves persist (upstream wording in every locale); the translated READMEs' feature lists still mention server storage.
+
+---
+
+## 2026-11-10 — Platform phase 1, milestone 5: credentials and connectors
+
+- **What:**
+  - **Credentials:** a `credential` table holds logins for live sources, one project each. Settings are encrypted with AES-256-GCM (`v1:` + base64 of nonce, tag and ciphertext), using a key derived with HKDF from the master key (purpose `credentials-v1`).
+  - **API:**
+    - `GET /api/connectors` lists the kinds of sources and their form fields.
+    - `GET`/`POST /api/projects/:id/credentials` list and create.
+    - `GET`/`PATCH`/`DELETE /api/credentials/:id` read the edit form, update and delete.
+    - `POST /api/credentials/:id/test` tests the connection.
+    - Saving also runs one real read and reports "Connected: N servers visible" or the reason it failed.
+  - **Connectors:** a registry of connectors. Each one describes its form (fields, which are secret), validates settings with zod and opens a client. Beszel is the first; the live hub and Beszel code became source-agnostic, so adding Portainer or Prometheus later is one new file.
+  - **Live data per landscape:**
+    - A `landscape_source` table links landscapes to credentials of their own project.
+    - `GET`/`PUT /api/landscapes/:id/sources` and `GET /api/landscapes/:id/live`.
+    - A source manager runs one poller per credential that at least one landscape shows. It restarts a poller when its credential changes and stops pollers nobody needs after any change: a credential edited or deleted, sources changed, a landscape deleted or moved, a project deleted.
+    - Live keys are now `<credential id>:<system>/<container>`.
+    - A source's first sync reports `error: null` until it finishes, so the app shows "Connecting…" instead of "unavailable".
+  - **Moving things:** a moved landscape drops its sources (credentials never leave their project). Deleting a project with `transferTo` now moves its credentials along with its landscapes.
+  - **One-time `.env` migration:**
+    - Once an owner exists, a valid `BESZEL_*` login becomes a "Beszel" credential in the owner's personal project.
+    - Every project with landscapes bound to it gets its own copy.
+    - Bound keys `beszel:…` are rewritten to the new credential, on nodes and on server plates, and those landscapes get it as their source.
+    - One transaction, claimed in `meta`, so it runs once and a failed run retries on the next start.
+    - It runs after the legacy diagram import, so imported diagrams are rebound too. Both run from one startup runner, which stops at the first failed step.
+  - **Removed:** the env-configured `/api/live/*` routes, the Docker entrypoint rule that disabled live data without Basic Auth, and `LIVE_ALLOW_UNAUTHENTICATED` (sign-in now protects everything). `.env.example` marks `BESZEL_*` as legacy. `docs/LIVE.md` still describes the old setup and is rewritten in milestone 6.
+  - **App:**
+    - **Credentials tab:** a project tab listing name, kind, how many landscapes use each credential, and when it was last updated. Editors and admins add, edit and delete credentials; viewers see names only.
+    - **Credential form:** built from the connector's field list. Secret fields stay empty, with "Saved. Leave empty to keep it." Saving tests the connection, and a new credential turns into an edit so a typo can be fixed right there.
+    - **Editor:** a "Live data" menu picks the project's credentials for this landscape. The bar shows the live pill, for example "Live · Demo hub · 2 servers" or "2 sources". The editor gets live data for its own sources only.
+    - **Local mode:** no live data any more, since it now belongs to platform landscapes.
+- **Why:** Milestone 5 of the platform plan. Live-data logins move out of `.env` into encrypted, per-project credentials, built for more connectors than Beszel.
+- **Security:**
+  - **Secrets stay on the server:** they never leave it. The list returns names only. The edit form returns non-secret settings plus which secrets are set, and needs edit rights (`no-store`). Errors name the field and the rule, never a value. A test checks every response body for the password.
+  - **Kept secrets stay put:** a kept secret can't be sent somewhere new. If an edit changes the URL or email, every secret must be entered again. Otherwise an editor could point the stored password at their own server and read it there. This was found in a security review before commit and is covered by a test.
+  - **Access:** every route checks the project of the credential or landscape, and anything you can't see answers 404.
+    - Attaching sources needs `landscape:update` and `credential:use`, and only credentials from the landscape's own project.
+    - The check runs inside the write transaction with the landscape row locked, so a concurrent move can't slip in between.
+  - **Encryption at rest:** a fresh random nonce per seal and a verified 16-byte tag. A wrong key or tampered data fails as a `DecryptionError` that carries no data, and the source then reports "can't be decrypted" instead of polling with garbage.
+  - **Outbound requests (accepted risk):** "test connection" and the pollers make the server call a URL that an editor chooses.
+    - **What limits it:** http(s) only, no credentials in the URL, no redirects followed, 10 s per request, 15 s for a whole test. Credential writes and tests are limited to 20 a minute per client. The path and body are fixed by the connector.
+    - **What stays open:** private addresses aren't blocked, because internal hubs are the normal case for a self-hosted tool. Error codes (e.g. `ECONNREFUSED`) are shown, which helps setup but lets editors probe internal ports. Response bodies have no size cap.
+    - **Upgrade path if that matters:** an allowlist environment variable.
+  - *ponytail:* ciphertext isn't bound to its row (no AAD), so a database writer could swap two credentials' data. Bind the credential id when rows are re-sealed for key rotation.
+- **Verified:**
+  - **Server:** **119** Vitest tests. New:
+    - cipher round trip, tamper and wrong-key cases;
+    - live-key rewriting;
+    - the hub with the Beszel connector, secret-free snapshots and staleness;
+    - 10 credential and live-source flow tests against real Postgres: the env migration with key rewrite and once only across restarts, the connectors list, encrypted storage, failed tests and bad settings (400), kept passwords, no kept password to a new address, viewer and outsider limits, same-project sources, merged live data, detaching on delete and move, and no password in any response.
+  - **Other checks:** lib **243** tests. Workspace lint and all builds pass; the app's `tsc` still shows only its 13 earlier errors.
+  - **Browser pane:**
+    - First-run setup moved your `.env` Beszel login into a credential. Its test reached your hub: "Connected: 0 servers visible". The hub still shares no servers with that read-only user.
+    - A demo credential against the fake hub tested OK and turned into an edit with the password kept.
+    - In the editor, attaching it showed "Live · Demo hub · 2 servers". Bindings were saved under the credential id, and a reload kept live data without a save.
+    - Two sources merged ("2 sources · 2 servers").
+    - Deleting the used credential warned first and detached it.
+    - The dev database was reset afterwards.
+  - **Docker image:** with an old diagram and `BESZEL_*` pointing at the fake hub:
+    - setup imported the diagram, moved the login and rebound the diagram's keys;
+    - the poller synced, and the stored data is `v1:` ciphertext without the password;
+    - a restart migrated nothing twice and kept the key.
+    - Container, database and image were removed afterwards.
+
+---
+
+## 2026-11-10 — Platform phase 1, milestone 4: landscapes on the server
+
+- **What:**
+  - **Storage:** a `landscape` table: project, name, model (jsonb), an integer `version`, and who created and last saved it.
+  - **API:**
+    - `GET /api/landscapes` is the Overview across your projects.
+    - `GET`/`POST /api/projects/:id/landscapes` list, create and import.
+    - `GET`/`PUT`/`PATCH`/`DELETE /api/landscapes/:id` load, save, rename and delete.
+    - `POST /api/landscapes/:id/move` moves a landscape.
+  - **Access:** each route uses the milestone 3 guard on the landscape's project; it learned to look that project up from a landscape id. Viewers read, editors change, and only project admins and personal owners move. Moving also needs create rights in the target project.
+  - **Conflicts:** a save names the version it's based on. A stale save gets **409** with who saved last, so nothing is silently overwritten.
+  - **Model checks:** the server checks the outline of every model, bounds every collection, and requires every position to be a real number (see the bug below). Unknown fields are dropped, and built-in icon packs are never stored; the editor re-adds them on load, as the local save always did.
+  - **Deleting a team project:** `?transferTo=<project>` moves its landscapes to a project you can add landscapes to; otherwise they're deleted with it.
+  - **Legacy import:** diagrams from the old file storage (`<data dir>/diagrams/*.json`) are imported once into the owner's personal project, right after first-run setup or at startup. The run is claimed in `meta`, so it never happens twice. Unreadable files are skipped and logged, and the files themselves are never changed.
+  - **App:**
+    - **Lists:** the Overview and each project's Landscapes tab list landscapes, with project, last editor and time. Rename, move and delete appear only when your role allows. "New landscape" and "Import JSON" sit above the list.
+    - **Editor:** a full-screen editor with a slim bar showing the project, the name and the save status, plus Export JSON.
+      - **Autosave:** 1.5 s after the last change, one request at a time.
+      - **Conflicts:** a banner offers Reload or "Overwrite with mine".
+      - **Leaving the page:** a warning while changes are unsaved, and a last save on the way out.
+      - **Viewers:** see a read-only badge, and the canvas can be explored but not edited.
+    - **Shared defaults:** the core icon set, default colours and language lookup moved to `editorDefaults.ts`, shared by the local and platform editors.
+- **Why:** Milestone 4 of the platform plan: no more export and import to share landscapes.
+- **Bugs found and fixed while testing the editor with real mouse input:**
+  1. **Nodes dropped onto a new landscape got no position (lib).** When the editor loaded data before its canvas was measured, `getFitToViewParams` divided by a zero viewport and clamped zoom to **0**. Every mouse position became NaN, so dropped nodes were saved at `{x: null, y: null}` and the landscape could no longer be opened ("There is an error in your model"). The fit now keeps zoom 1 until the canvas has a size and never goes below `MIN_ZOOM`. A lib test fails on the old code. As a second safeguard, the server now refuses non-numeric positions, also with a test.
+  2. **Opening a landscape saved it.** The editor reports its tidied model on load (a default view, default colours). That counted as a change, so viewers with edit rights became "last editor", and two people opening a new landscape could get a false conflict. Until the first click or key press, the editor's model is now adopted as the baseline instead of saved. Verified: opening leaves version 1.
+- **Security:**
+  - Every landscape route is checked against the landscape's project. Landscapes you can't see answer 404.
+  - Models are validated and size-bounded.
+  - Moving requires rights on both projects.
+  - Import parsing never executes anything.
+- **Verified:**
+  - Server: **101** Vitest tests, including 11 landscape-flow tests against real Postgres:
+    - the legacy import, once only, skipping a broken file;
+    - create and import storing only imported icons;
+    - malformed, oversized and NaN-position models refused;
+    - lists and overview visibility;
+    - save, then stale save 409 with who saved, then overwrite;
+    - viewer and outsider limits;
+    - rename keeping the title in step;
+    - move rules;
+    - project delete with and without transfer;
+    - editor delete.
+  - Lib: **243** tests, including 3 new fit-to-view tests. Lint and app build pass; the app's `tsc` shows only the 13 earlier errors.
+  - **Editor with real input (Playwright, Chromium):**
+    - opening a new landscape doesn't save (version 1);
+    - dropping a node saves (version 2, real tile);
+    - a simulated colleague's save, then a second node, brings up the conflict banner;
+    - overwrite gives version 4 with 2 nodes;
+    - a reload shows both nodes with no model warning and 0 console errors.
+  - **Browser pane:** the Overview list and the editor bar look right. The dev database was reset afterwards.
+  - **Docker image:** with an old `diagrams/` folder mounted, setup imports it into the owner's space and the file stays untouched. Saving works, and a stale save is refused.
+- **Not yet:** the local-mode app still carries the old server-storage client and the `/display/:id` route. No server serves them any more, so they're cleanup for milestone 6.
+
+## 2026-11-09 — Platform phase 1, milestone 3: projects and project roles
+
+- **What:**
+  - **Projects (n8n's model):** a `project` table, plus `project_relation` holding one role per member per project.
+    - **Personal projects:** everyone has exactly one. It's created with the account, and at startup for any account that predates projects. A partial unique index guarantees one per user, even when two requests race.
+    - **Team projects:** created only by owners and admins. The creator becomes project admin.
+  - **Roles and scopes:** project roles Admin, Editor and Viewer, plus `personalOwner` for your own space. Each maps to n8n-style scopes:
+    - Admin: every scope.
+    - Editor: content only (`landscape:*` and `credential:*`, including `credential:use`), but not members, settings or moving.
+    - Viewer: `project:read`, `landscape:read` and `credential:read` only, and can't use credentials.
+    - Personal owner: all content, but the project can't be renamed, deleted or shared.
+  - **Instance level:** a new `project:create` scope. Instance owners and admins get `project:manageAll`: they see every team project and hold full scopes in any project, like n8n's owner and admin.
+  - **Enforcement:** one guard, `@RequireProjectScope(scope)`, resolves your role for the project in the route and answers **404** for projects you can't see, so their existence doesn't leak, and 403 for missing scopes. Milestones 4 and 5 reuse it for landscapes and credentials.
+  - **API:**
+    - `GET /api/projects` returns yours (owners and admins also get every team project), each with your role and scopes.
+    - `POST`, `GET`, `PATCH` and `DELETE /api/projects/:id`.
+    - `GET /api/projects/:id/candidates`.
+    - `PUT` and `DELETE /api/projects/:id/members/:userId`.
+    - A team project always keeps at least one admin (409 otherwise).
+  - **App:**
+    - The sidebar shows Overview, Personal and Projects, with a "+" for owners and admins that opens a new-project dialog.
+    - The project page has n8n-style tabs: Landscapes, and Settings for project admins. Settings cover the name, members with role pickers, adding people, and deleting the project behind a confirmation step.
+- **Why:** Milestone 3 of the platform plan. Projects are the "multiple infrastructures" you asked for, and landscapes and credentials are stored inside them from milestone 4.
+- **Fixed during browser testing:** the project tabs used relative links. React Router 7 resolves those against the full URL inside a splat route, so "Landscapes" stayed highlighted on the Settings page. The tabs now use absolute paths.
+- **Security:**
+  - Projects you can't see answer 404.
+  - Editors and viewers can't touch settings or members (tested for every route).
+  - Personal projects can't be shared, renamed or deleted.
+  - Unknown roles are refused.
+  - Instance-level and project-level checks share one scope vocabulary, ready for custom roles.
+- **Verified:**
+  - Server `tsc` clean. **90** Vitest tests, including 9 project-flow tests against real Postgres:
+    - one personal project per account;
+    - privacy;
+    - who can create team projects;
+    - visibility for owners and admins;
+    - role scopes for editors and viewers;
+    - settings refused for non-admins;
+    - the last-admin protection;
+    - rename and delete rules;
+    - personal projects created at startup for older accounts.
+  - Plus 5 role-mapping tests.
+  - Lib 240 tests, lint and app build pass; the app's `tsc` shows only the 13 earlier errors.
+  - **Browser:**
+    - as owner: the project appears in the sidebar; the Settings tab works; a member added as Viewer is listed with role pickers.
+    - as that Viewer: only the Landscapes tab, no "+", and the settings URL redirects.
+    - The dev database was reset afterwards.
+  - **Docker image through nginx:** setup creates the personal project, and team project creation and listing work.
+
+## 2026-11-09 — Platform phase 1, milestone 2: logins, owner setup and invitations
+
+- **What:**
+  - **Identity:** better-auth 1.7 handles email and password plus sessions, through its Drizzle adapter. Its tables (`user`, `session`, `account`, `verification`) were generated with its CLI, with an `instanceRole` field that clients can't set.
+    - Public sign-up is off; accounts come only from owner setup and invitations.
+    - better-auth is mounted at `/api/auth/*` ahead of the JSON body parser. Its own route rate limit is on, keyed by `X-Real-IP`, which nginx overwrites, so clients can't spoof it.
+  - **Owner setup:** `POST /api/setup/owner` works only on an empty instance. A `meta` row is claimed first, so two simultaneous setups can't both become owner.
+  - **Invitations:**
+    - Owners and admins invite by email. Only the owner can create admins (n8n warns about admins minting admins).
+    - The link's token is 256 random bits; only its SHA-256 hash is stored. It's valid for 7 days, works once (claimed atomically) and can be revoked. It's shown to the admin once, and emailed too when SMTP is set.
+    - Accepting sets name and password and signs in.
+  - **Password reset:**
+    - Admins can copy a one-hour reset link: the owner for anyone, admins for members only.
+    - With SMTP, people can request one themselves.
+    - Resets revoke existing sessions.
+  - **Password rule (n8n's):** 8+ characters with a number and a capital letter. It is enforced on setup, invitations and resets.
+  - **Access control:**
+    - Every API route needs a session unless marked public (health, platform status, setup, invitation acceptance). Live data now needs a session too.
+    - Instance roles Owner, Admin and Member map to n8n-style scopes (`user:list`, `user:invite`, `user:resetPassword`), checked by a guard.
+    - Guard order: rate limit, CSRF origin check (every write must carry FossFLOW's own `Origin`), session, scopes.
+  - **Encryption key:**
+    - One master key, from `FOSSFLOW_ENCRYPTION_KEY` (32 bytes, base64) or generated once into `FOSSFLOW_DATA_DIR/config/encryption-key` with mode 0600. A "back it up" warning is logged then.
+    - A damaged key file is refused, never replaced.
+    - Per-purpose keys are derived with HKDF; the better-auth secret is the first.
+  - **Mail:** optional SMTP via nodemailer (`SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`).
+  - **App:**
+    - **Mode detection:** at startup the app asks `/api/platform/status`. With a server it runs the platform; without one, the plain local editor as before.
+    - **New screens** in the design system: owner setup, sign-in (with "forgot password" only when mail is set up), accepting an invitation, password reset, and an n8n-style shell with a sidebar.
+    - **Users page:** invite people, show the link once with a copy button, revoke pending invitations, copy reset links.
+    - **Data and strings:** TanStack Query for data. English strings under `platform.*`; other languages fall back to English for now.
+  - **Deploy:** the image sets `FOSSFLOW_DATA_DIR=/data`. With `PUID`/`PGID`, the entrypoint gives that user `/data`. `compose.dev.yml` sets `FOSSFLOW_URL` and a data volume. `/data/` and `packages/fossflow-backend/data/` are gitignored.
+- **Why:** Milestone 2 of the platform plan: n8n-style accounts, with no public sign-up, before projects and landscapes.
+- **How users are created:** with sign-up off, better-auth refuses its own `signUpEmail`, even server-side; that was confirmed in its source. Owner setup and invitations therefore create users through the same internal adapter calls its sign-up route uses (hash, `createUser`, `linkAccount`), then sign in through the normal API to set the cookie. Reset links use the same `reset-password:` verification record as its reset route. Integration tests run each flow end to end, so a better-auth upgrade that changes these internals fails loudly.
+- **Security:**
+  - No public sign-up.
+  - CSRF origin check on all writes.
+  - Brute-force limit on sign-in (a test makes repeated attempts from one address and expects a 429).
+  - Invite tokens stored hashed, single use and expiring.
+  - Admins can't create admins or reset the owner's password.
+  - Lists never contain password material.
+  - Config and key errors never echo values.
+  - The key file is 0600 and never committed.
+  - While building this, a test without a data dir wrote a key into the package folder, which wasn't gitignored. It was deleted, both data locations are now ignored, and tests use temporary folders.
+- **Verified:**
+  - Server `tsc` clean. **76** Vitest tests, including 17 auth-flow tests against real Postgres 18:
+    - setup once, and the setup race;
+    - sign-up closed;
+    - CSRF;
+    - the password rule;
+    - sign-in and its brute-force limit;
+    - invitations: once, expiry, revocation, existing emails, role limits;
+    - reset links: weak password refused, link reuse refused;
+    - members kept out.
+  - Lib 240 tests, lint and the app build pass; the app's `tsc` shows only the 13 earlier errors in untouched files.
+  - **Browser click-through (dev):** setup screen; weak password refused with the rule shown; owner created and signed in; Users page; member invited and link copied; signed out; link opened as the invitee; account created and signed in as Member, with no Settings in the sidebar; `/api/users` and `/api/invitations` answer 403. Narrow-width layout fixed with container queries.
+  - The dev database was reset afterwards, so the first real setup is yours.
+  - **Docker image, through nginx:**
+    - status reports setup required;
+    - setup without the app's Origin returns 403, with it 201;
+    - the session has the owner role;
+    - anonymous live data returns 401;
+    - the key file is created with mode 0600;
+    - with `PUID=1000`, the server runs as that user and owns its key.
+  - **Image fix found by this test:** npm keeps some server packages inside the workspace's own `node_modules` (better-auth, zod 4), so the image now ships that folder too. Before the fix, the server didn't start in the image.
+  - **Leaner image:**
+    - better-auth lists dev tools as optional peers: drizzle-kit, Vitest, and through them Vite, jsdom, tsx, esbuild and Babel.
+    - Because those were installed for development, `npm ci --omit=dev` shipped them: about 70 MB, including an old esbuild with a dev-server advisory (GHSA-67mh-4wv8-2f99).
+    - The image now installs with `--omit=dev --omit=optional --omit=peer`; every package the server needs is a direct dependency. That cut server dependencies from about 150 MB to about 70 MB.
+    - `npm audit` of exactly that set finds 0 vulnerabilities.
+    - The slim image passed setup, invitation, sign-out and sign-in through nginx. The image is 341 MB.
+
+## 2026-11-09 — Platform phase 1, milestone 1: NestJS server with PostgreSQL
+
+- **What:** First step of the platform: n8n-style projects, users, server-stored landscapes and encrypted credentials. The design is in `docs/superpowers/specs/2026-11-09-platform-foundation-design.md`.
+  - **Server:**
+    - `packages/fossflow-backend` is rewritten as a NestJS 12 ESM app under `src/`, built with the Nest CLI and SWC with type checking on.
+    - Express `server.js` is removed.
+    - Configuration is validated with zod at startup (`DATABASE_URL`, `BACKEND_HOST`, `BACKEND_PORT`).
+    - PostgreSQL through Drizzle 0.45 and `pg`; SQL migrations live in `drizzle/` and are applied on boot before any request is served. The first table, `meta`, holds instance flags.
+    - `GET /api/health` is added, and the API answers under `/api`.
+    - A global rate limit of 120 requests per minute per client IP; health checks are exempt.
+  - **Live module:**
+    - Moved to `src/live`, behaviour unchanged.
+    - The Express router became a Nest controller with the same routes, the same `no-store` header and still no CORS headers.
+    - Still configured from `BESZEL_*` until milestone 5 moves it to credentials.
+  - **Tests:**
+    - The `node:test` suites moved to Vitest, the default for ESM Nest apps.
+    - New tests for configuration, CORS and the app against a real Postgres 18 started by Testcontainers (Docker required): health, migrations, a clean second start, and live routes.
+  - **Docker and dev setup:**
+    - The Dockerfile builds the server and installs only its production dependencies from the lockfile (`npm ci --omit=dev --workspace`) instead of an unlocked `npm install`.
+    - The entrypoint always starts the server.
+    - `compose.dev.yml` has a Postgres 18 service on 127.0.0.1:54320.
+    - `npm run dev:db`, and `packages/fossflow-backend/.env.example`.
+    - The dev proxy forwards all of `/api`, so the old storage client uses relative URLs.
+    - The root `build` includes the server.
+- **Why:** The platform needs a database, structure for many modules (auth, roles, projects, landscapes, credentials, connectors) and enforceable permissions. NestJS, PostgreSQL, Drizzle and better-auth were agreed as the stack.
+- **Temporary gap on this branch:** the old file-based "server storage" endpoints are gone. Landscapes return as proper server storage in milestone 4. The app falls back to session saving meanwhile.
+- **Security:**
+  - **Image leak:** `.dockerignore` excluded only the root `.env`. Building the image locally copied `packages/fossflow-backend/.env`, which holds the Beszel password, into the image. It now excludes `**/.env*` (except `.env.example`) and `**/node_modules`. The rebuilt image contains no `.env`.
+  - **zod:** the server moved to zod 4.6.7, because zod below 4.6.6 can exhaust memory when validating oversized collections (GHSA-mrhx-c7xc-m3w5). Adapted for zod 4: `z.ZodType<T, unknown>`, `.loose()`, and plain `z.number()`, which rejects infinite values in zod 4.
+  - **Config errors** name the variable, never its value. `DATABASE_URL` carries the database password.
+  - **Server production dependencies:** `npm audit --omit=dev` finds 0 vulnerabilities.
+  - **Pre-existing advisories, not from this change:** the app, lib and release tooling have their own (quill, i18next-http-backend, uuid, the lib's zod 3, undici through `@actions/*`). These are left for a separate clean-up.
+- **Packaging note:** npm kept installing drizzle-orm inside the backend workspace, where the hoisted drizzle-kit can't find it. Listing `drizzle-orm` in the root `devDependencies` hoists it to a single copy; the server still declares it as its own dependency.
+- **Verified:**
+  - Server `tsc` is clean, and the Vitest suite passes 51 of 51 against a real Postgres 18.
+  - Lib: 240 tests. The full `npm run build` (lib, app, server) and `npm run lint` pass.
+  - Dev: the new server on Postgres 18 applies migrations, `/api/health` is OK, and live data syncs from the real Beszel hub.
+  - The app works through the dev proxy: the live pill reads "Live · Beszel · no servers", and the console has no errors.
+  - Docker image: Node 24.22.2, 321 MB.
+    - With a database: the app is served, migrations run and health is OK; only port 80 is published.
+    - Without `DATABASE_URL`: the app is still served, the API returns 502, and the log says "DATABASE_URL is required".
+
 ## 2026-11-09 — Live pill shows the server count, and says so when there are none
 
 - **What:** The toolbar's live pill now reads "Live · Beszel · 3 servers". When the source is reachable but returns no servers, it turns amber, reads "Live · Beszel · no servers" and explains the fix in its tooltip: share the servers with the read-only user, or set `SHARE_ALL_SYSTEMS=true`. The new strings (`live.servers` with plural forms, `live.noServers`, `live.noServersHint`) are translated in all 13 app languages and mirrored in `src/i18n`. `docs/LIVE.md` gained a troubleshooting row.
