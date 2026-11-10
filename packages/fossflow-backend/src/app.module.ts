@@ -16,6 +16,7 @@ import { SetupController } from './setup/setup.controller.js';
 import { SetupService } from './setup/setup.service.js';
 import { StartupMigrations } from './setup/startup-migrations.js';
 import { UsersController } from './users/users.controller.js';
+import { UsersService } from './users/users.service.js';
 
 /** Per client IP; nginx forwards the real IP and the app trusts loopback only. */
 const RATE_LIMIT = { ttl: 60_000, limit: 120 };
@@ -38,6 +39,7 @@ export class AppModule {
       providers: [
         { provide: APP_CONFIG, useValue: config },
         SetupService,
+        UsersService,
         StartupMigrations,
         InvitationsService,
         // Guards run in this order: rate limit, CSRF origin, session, role scopes.

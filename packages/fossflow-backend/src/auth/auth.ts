@@ -1,6 +1,8 @@
 import { drizzleAdapter } from '@better-auth/drizzle-adapter';
 import { betterAuth } from 'better-auth';
 import { APIError, createAuthMiddleware } from 'better-auth/api';
+import type { z } from 'zod';
+import { personName } from '../common/validation.js';
 import type { AppConfig } from '../config/config.js';
 import type { Database } from '../database/database.module.js';
 import * as schema from '../database/schema.js';
@@ -60,17 +62,28 @@ export function createAuth(options: {
     },
     rateLimit: { enabled: true, window: 60, max: 100 },
     hooks: {
+      // better-auth's own routes only know a length rule; ours apply on top.
       before: createAuthMiddleware(async (ctx) => {
-        if (ctx.path !== '/reset-password') return;
-        const result = passwordSchema.safeParse(ctx.body?.newPassword);
-        if (!result.success) {
-          throw new APIError('BAD_REQUEST', {
-            message: result.error.issues[0]?.message ?? 'Invalid password'
-          });
+        if (ctx.path === '/reset-password' || ctx.path === '/change-password') {
+          check(passwordSchema, ctx.body?.newPassword);
+        }
+        if (ctx.path === '/update-user' && ctx.body?.name !== undefined) {
+          const name = check(personName, ctx.body.name);
+          // better-auth merges a returned context into the request's; only the body changes.
+          return { context: { body: { ...ctx.body, name } } };
         }
       })
     }
   });
+}
+
+/** Parses a value or answers 400 with the rule, never the value. */
+function check<T extends z.ZodType>(schema: T, value: unknown): z.infer<T> {
+  const result = schema.safeParse(value);
+  if (!result.success) {
+    throw new APIError('BAD_REQUEST', { message: result.error.issues[0]?.message ?? 'Invalid value' });
+  }
+  return result.data;
 }
 
 export type Auth = ReturnType<typeof createAuth>;

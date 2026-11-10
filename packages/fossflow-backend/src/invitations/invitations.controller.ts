@@ -16,7 +16,7 @@ import { z } from 'zod';
 import type { AuthSession } from '../auth/auth.js';
 import { CurrentSession, Public } from '../auth/guards.js';
 import { passwordSchema } from '../auth/password-policy.js';
-import { parseBody } from '../common/validation.js';
+import { parseBody, personName } from '../common/validation.js';
 import { RequireScopes } from '../rbac/scopes.guard.js';
 import { AccountsService } from '../users/accounts.service.js';
 import { InvitationsService, type PendingInvitation } from './invitations.service.js';
@@ -27,7 +27,7 @@ const createSchema = z.object({
 });
 
 const acceptSchema = z.object({
-  name: z.string().trim().min(1, 'Name is required').max(100, 'Name is too long'),
+  name: personName,
   password: passwordSchema
 });
 

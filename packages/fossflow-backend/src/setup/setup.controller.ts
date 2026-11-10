@@ -4,13 +4,13 @@ import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { Public } from '../auth/guards.js';
 import { passwordSchema } from '../auth/password-policy.js';
-import { parseBody } from '../common/validation.js';
+import { parseBody, personName } from '../common/validation.js';
 import { MAILER, type Mailer } from '../mail/mailer.js';
 import { AccountsService } from '../users/accounts.service.js';
 import { SetupService } from './setup.service.js';
 
 export const accountSchema = z.object({
-  name: z.string().trim().min(1, 'Name is required').max(100, 'Name is too long'),
+  name: personName,
   email: z.email('Enter a valid email address').max(254),
   password: passwordSchema
 });

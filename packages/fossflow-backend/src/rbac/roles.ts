@@ -13,6 +13,8 @@ export type InstanceScope =
   | 'user:list'
   | 'user:invite'
   | 'user:resetPassword'
+  | 'user:changeRole'
+  | 'user:delete'
   | 'project:create'
   /** See every project, and act in it with full project rights. */
   | 'project:manageAll';
@@ -21,6 +23,8 @@ const INSTANCE_ADMIN_SCOPES: readonly InstanceScope[] = [
   'user:list',
   'user:invite',
   'user:resetPassword',
+  'user:changeRole',
+  'user:delete',
   'project:create',
   'project:manageAll'
 ];
@@ -40,8 +44,8 @@ export function hasInstanceScope(role: string, scope: InstanceScope): boolean {
 }
 
 /**
- * Who may act on another account (reset its password; later: change its
- * role or delete it). The owner manages everyone; admins manage members.
+ * Who may act on another account (reset its password, change its role,
+ * delete it). The owner manages everyone; admins manage members.
  */
 export function canManageUser(actor: string, target: string): boolean {
   if (actor === 'global:owner') return true;
