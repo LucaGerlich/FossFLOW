@@ -65,10 +65,12 @@ export interface LiveSystem {
 
 export interface LiveSourceHealth {
   id: string;
-  type: 'beszel';
+  /** The connector, e.g. `beszel`. */
+  type: string;
   name: string;
   ok: boolean;
   lastSync: string | null;
+  /** Null while `ok`, and while the first sync is still running (`lastSync` null). */
   error: string | null;
 }
 

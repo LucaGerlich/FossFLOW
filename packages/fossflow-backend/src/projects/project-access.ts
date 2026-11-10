@@ -14,7 +14,7 @@ import { Reflector } from '@nestjs/core';
 import { and, eq } from 'drizzle-orm';
 import type { AuthenticatedRequest } from '../auth/guards.js';
 import { DB, type Database } from '../database/database.module.js';
-import { landscape, project, projectRelation } from '../database/schema.js';
+import { credential, landscape, project, projectRelation } from '../database/schema.js';
 import { type ProjectScope, projectScopesFor } from '../rbac/roles.js';
 
 export interface ProjectAccessInfo {
@@ -58,7 +58,13 @@ export class ProjectAccess {
 const PROJECT_SCOPE_KEY = 'fossflow:projectScope';
 
 /** Which record the route parameter names; its project decides access. */
-type ScopeTarget = 'project' | 'landscape';
+type ScopeTarget = 'project' | 'landscape' | 'credential';
+
+const NOT_FOUND: Record<ScopeTarget, string> = {
+  project: 'Project not found',
+  landscape: 'Landscape not found',
+  credential: 'Credential not found'
+};
 
 interface ProjectScopeRule {
   scope: ProjectScope;
@@ -79,10 +85,10 @@ class ProjectScopeGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<ProjectRequest>();
     const viewer = request.auth?.user;
     const id = request.params[rule.param];
-    const notFound = rule.target === 'landscape' ? 'Landscape not found' : 'Project not found';
+    const notFound = NOT_FOUND[rule.target];
     if (!viewer || typeof id !== 'string') throw new NotFoundException({ error: notFound });
 
-    const projectId = rule.target === 'landscape' ? await this.projectOfLandscape(id) : id;
+    const projectId = rule.target === 'project' ? id : await this.projectOf(rule.target, id);
     const access = projectId ? await this.access.resolve(viewer, projectId) : null;
     if (!access) throw new NotFoundException({ error: notFound });
     if (!access.scopes.has(rule.scope)) {
@@ -92,19 +98,20 @@ class ProjectScopeGuard implements CanActivate {
     return true;
   }
 
-  private async projectOfLandscape(landscapeId: string): Promise<string | null> {
+  private async projectOf(target: 'landscape' | 'credential', id: string): Promise<string | null> {
+    const table = target === 'landscape' ? landscape : credential;
     const [row] = await this.db
-      .select({ projectId: landscape.projectId })
-      .from(landscape)
-      .where(eq(landscape.id, landscapeId));
+      .select({ projectId: table.projectId })
+      .from(table)
+      .where(eq(table.id, id));
     return row?.projectId ?? null;
   }
 }
 
 /**
  * The signed-in user needs `scope` in the project named by the route
- * parameter (default `:id`), or in the project that holds the landscape it
- * names. Anything you can't see answers 404, not 403.
+ * parameter (default `:id`), or in the project that holds the landscape or
+ * credential it names. Anything you can't see answers 404, not 403.
  */
 export const RequireProjectScope = (
   scope: ProjectScope,

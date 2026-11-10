@@ -4,6 +4,7 @@ import type { AuthSession } from '../auth/auth.js';
 import { CurrentSession } from '../auth/guards.js';
 import { parseBody } from '../common/validation.js';
 import { CurrentProject, type ProjectAccessInfo, RequireProjectScope } from '../projects/project-access.js';
+import { LiveSourcesService } from '../live/live-sources.service.js';
 import { LandscapesService } from './landscapes.service.js';
 import { landscapeModelSchema } from './model.js';
 
@@ -22,7 +23,10 @@ const onLandscape = { target: 'landscape' as const };
 
 @Controller()
 export class LandscapesController {
-  constructor(private readonly landscapes: LandscapesService) {}
+  constructor(
+    private readonly landscapes: LandscapesService,
+    private readonly sources: LiveSourcesService
+  ) {}
 
   @Get('landscapes')
   overview(@CurrentSession() session: AuthSession) {
@@ -78,6 +82,7 @@ export class LandscapesController {
   @HttpCode(204)
   async remove(@Param('id') id: string): Promise<void> {
     await this.landscapes.remove(id);
+    await this.sources.refresh();
   }
 
   @Post('landscapes/:id/move')
@@ -89,6 +94,7 @@ export class LandscapesController {
     @Body() raw: unknown
   ): Promise<{ ok: true }> {
     await this.landscapes.move(id, session.user, parseBody(moveSchema, raw).projectId);
+    await this.sources.refresh();
     return { ok: true };
   }
 }

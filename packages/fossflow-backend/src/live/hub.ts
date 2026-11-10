@@ -1,27 +1,45 @@
-import { LiveSourceError, type BeszelClient } from './beszel.js';
-import type { LiveConfig } from './config.js';
-import { normalizeInventory } from './normalize.js';
+import { LiveSourceError } from './source-error.js';
 import type {
   LiveHistory,
   LiveSnapshot,
   LiveSourceHealth,
-  LiveStatusResponse,
+  LiveSystem,
   LiveVitals
 } from './types.js';
 
 export const HISTORY_SAMPLES = 60;
 /** After this many poll intervals without a good sync, data is shown as unknown. */
 export const STALE_AFTER_POLLS = 3;
-const SOURCE_ID = 'beszel';
 
 export interface LiveLogger {
   info: (message: string) => void;
   warn: (message: string) => void;
 }
 
+/** What a connector's client gets for one poll. */
+export interface FetchContext {
+  /** Prefix for every binding key, so two sources never collide. */
+  sourceId: string;
+  historyFor: (systemKey: string, vitals: LiveVitals) => LiveHistory;
+  nowMs: number;
+}
+
+export interface FetchResult {
+  systems: LiveSystem[];
+  /** Records the source sent that couldn't be read. */
+  skipped: number;
+  /** The source had more records than one poll reads. */
+  truncated: boolean;
+}
+
+/** A connected source, e.g. one Beszel hub with its login. */
+export interface SourceClient {
+  fetch: (context: FetchContext) => Promise<FetchResult>;
+}
+
 export interface LiveHub {
   getSnapshot: () => LiveSnapshot;
-  getStatus: () => LiveStatusResponse;
+  getHealth: () => LiveSourceHealth;
   /** Runs one sync; never throws (failures are recorded on the source). */
   syncNow: () => Promise<void>;
   start: () => void;
@@ -29,8 +47,10 @@ export interface LiveHub {
 }
 
 export interface LiveHubOptions {
-  config: LiveConfig;
-  client: BeszelClient;
+  /** `id` is the credential id; `type` the connector; `name` what people see. */
+  source: { id: string; type: string; name: string };
+  client: SourceClient;
+  pollSeconds: number;
   logger: LiveLogger;
   now?: () => Date;
 }
@@ -69,12 +89,10 @@ export function createLiveHub(options: LiveHubOptions): LiveHub {
   let inFlight: Promise<void> | null = null;
   let snapshot: LiveSnapshot = { updatedAt: null, systems: [], sources: [] };
   let source: LiveSourceHealth = {
-    id: SOURCE_ID,
-    type: 'beszel',
-    name: 'Beszel',
+    ...options.source,
     ok: false,
     lastSync: null,
-    error: 'not synced yet'
+    error: null
   };
 
   function pushHistory(systemKey: string, vitals: LiveVitals): LiveHistory {
@@ -96,34 +114,32 @@ export function createLiveHub(options: LiveHubOptions): LiveHub {
 
   async function runSync(): Promise<void> {
     try {
-      const inventory = await options.client.fetchInventory();
       const at = now();
-      const systems = normalizeInventory({
-        sourceId: SOURCE_ID,
-        systems: inventory.systems,
-        containers: inventory.containers,
+      const inventory = await options.client.fetch({
+        sourceId: options.source.id,
         historyFor: pushHistory,
         nowMs: at.getTime()
       });
+      const { systems } = inventory;
       for (const key of history.keys()) {
         if (!systems.some((system) => system.key === key)) history.delete(key);
       }
-      if (!source.ok) options.logger.info('Beszel sync OK');
+      if (!source.ok) options.logger.info(`${source.name}: sync OK`);
       if (inventory.truncated) {
         options.logger.warn(
-          'Beszel returned more records than the page cap; some are not shown'
+          `${source.name}: more records than one poll reads; some are not shown`
         );
       }
       if (inventory.skipped > 0) {
         options.logger.warn(
-          `skipped ${inventory.skipped} malformed Beszel record(s)`
+          `${source.name}: skipped ${inventory.skipped} unreadable record(s)`
         );
       }
       source = { ...source, ok: true, lastSync: at.toISOString(), error: null };
       snapshot = { updatedAt: at.toISOString(), systems, sources: [source] };
     } catch (error) {
       const message = safeMessage(error);
-      if (source.error !== message) options.logger.warn(message);
+      if (source.error !== message) options.logger.warn(`${source.name}: ${message}`);
       source = { ...source, ok: false, error: message };
       // Keep the last good systems so the map does not blank out on a blip.
       snapshot = { ...snapshot, sources: [source] };
@@ -139,22 +155,18 @@ export function createLiveHub(options: LiveHubOptions): LiveHub {
 
   return {
     getSnapshot: () => {
-      const staleAfterMs =
-        options.config.pollSeconds * 1000 * STALE_AFTER_POLLS;
+      const staleAfterMs = options.pollSeconds * 1000 * STALE_AFTER_POLLS;
       const lastSync = source.lastSync ? Date.parse(source.lastSync) : null;
       const stale =
         lastSync !== null && now().getTime() - lastSync > staleAfterMs;
       return stale ? markUnknown(snapshot) : snapshot;
     },
-    getStatus: () => ({ enabled: true, sources: [source] }),
+    getHealth: () => source,
     syncNow,
     start() {
       if (timer) return;
       void syncNow();
-      timer = setInterval(
-        () => void syncNow(),
-        options.config.pollSeconds * 1000
-      );
+      timer = setInterval(() => void syncNow(), options.pollSeconds * 1000);
       timer.unref();
     },
     stop() {

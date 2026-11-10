@@ -101,3 +101,43 @@ export const landscape = pgTable(
   },
   (table) => [index('landscape_project_idx').on(table.projectId)]
 );
+
+/**
+ * Login data for a live source (n8n's credential). `data` holds the
+ * connector's settings sealed with AES-256-GCM; it is never returned.
+ */
+export const credential = pgTable(
+  'credential',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => project.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    /** The connector, e.g. `beszel`. */
+    type: text('type').notNull(),
+    data: text('data').notNull(),
+    createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
+    updatedBy: text('updated_by').references(() => user.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [index('credential_project_idx').on(table.projectId)]
+);
+
+/** Which credentials' live data a landscape shows. */
+export const landscapeSource = pgTable(
+  'landscape_source',
+  {
+    landscapeId: text('landscape_id')
+      .notNull()
+      .references(() => landscape.id, { onDelete: 'cascade' }),
+    credentialId: text('credential_id')
+      .notNull()
+      .references(() => credential.id, { onDelete: 'cascade' })
+  },
+  (table) => [
+    primaryKey({ columns: [table.landscapeId, table.credentialId] }),
+    index('landscape_source_credential_idx').on(table.credentialId)
+  ]
+);

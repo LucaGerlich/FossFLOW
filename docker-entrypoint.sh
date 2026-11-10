@@ -1,13 +1,6 @@
 #!/bin/sh
 
 
-# Live data exposes the server/container inventory: fail closed without auth in front.
-if [ -n "$BESZEL_URL" ] && { [ -z "$HTTP_AUTH_USER" ] || [ -z "$HTTP_AUTH_PASSWORD" ]; } && [ "$LIVE_ALLOW_UNAUTHENTICATED" != "true" ]; then
-    echo "WARNING: BESZEL_URL is set but HTTP Basic Auth is not configured, so live data stays disabled."
-    echo "         Set HTTP_AUTH_USER and HTTP_AUTH_PASSWORD, or LIVE_ALLOW_UNAUTHENTICATED=true if another layer protects this deployment."
-    unset BESZEL_URL
-fi
-
 # Start the platform server. Without DATABASE_URL it exits with a clear
 # message and nginx still serves the app, which then runs in local mode.
 echo "Starting FossFLOW server..."

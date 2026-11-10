@@ -41,7 +41,7 @@ describe('app against real Postgres', () => {
   });
 
   it('keeps live data behind sign-in', async () => {
-    const response = await t.browser().get('/api/live/status');
+    const response = await t.browser().get('/api/landscapes/any/live');
     assert.equal(response.status, 401);
   });
 });

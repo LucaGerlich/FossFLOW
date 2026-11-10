@@ -24,7 +24,9 @@ export interface AppConfig {
   encryptionKey: string | undefined;
   /** Optional: without it, invite and reset links are only shown to admins. */
   smtp: SmtpConfig | null;
-  /** Environment-configured live source. Replaced by credentials in phase 1, milestone 5. */
+  /** How often each live source is polled, in seconds. */
+  livePollSeconds: number;
+  /** BESZEL_* from before credentials existed; moved into a credential once, then unused. */
   live: LiveConfigResult;
 }
 
@@ -51,7 +53,8 @@ const envSchema = z.object({
   SMTP_SECURE: z.enum(['true', 'false']).optional(),
   SMTP_USER: optional,
   SMTP_PASSWORD: optional,
-  SMTP_FROM: optional
+  SMTP_FROM: optional,
+  LIVE_POLL_SECONDS: z.coerce.number().int().min(10).max(3600).default(30)
 });
 
 export class ConfigError extends Error {
@@ -94,6 +97,7 @@ export function loadConfig(env: NodeJS.ProcessEnv): AppConfig {
             from: data.SMTP_FROM
           }
         : null,
+    livePollSeconds: data.LIVE_POLL_SECONDS,
     live: readLiveConfig(env)
   };
 }

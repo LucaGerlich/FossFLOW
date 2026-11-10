@@ -18,8 +18,6 @@ services:
       - BESZEL_PASSWORD=${BESZEL_PASSWORD:-}
       - BESZEL_PASSWORD_FILE=${BESZEL_PASSWORD_FILE:-}
       - LIVE_POLL_SECONDS=${LIVE_POLL_SECONDS:-30}
-      # Live data requires HTTP Basic Auth unless another layer protects the app.
-      - LIVE_ALLOW_UNAUTHENTICATED=${LIVE_ALLOW_UNAUTHENTICATED:-false}
       - PUID=${PUID:-}
       - PGID=${PGID:-}
     volumes:

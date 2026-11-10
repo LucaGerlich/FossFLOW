@@ -1,11 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { readdir, readFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
-import { Inject, Injectable, Logger, type OnApplicationBootstrap } from '@nestjs/common';
-import { and, asc, eq } from 'drizzle-orm';
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import { eq } from 'drizzle-orm';
 import { APP_CONFIG, type AppConfig } from '../config/config.js';
 import { DB, type Database } from '../database/database.module.js';
-import { landscape, meta, projectRelation, user } from '../database/schema.js';
+import { landscape, meta } from '../database/schema.js';
+import { findOwnerHome } from '../projects/projects.service.js';
 import { landscapeModelSchema, withoutBuiltInIcons } from './model.js';
 
 const FLAG = 'migration.legacyDiagrams';
@@ -15,9 +16,10 @@ const MAX_FILE_BYTES = 10 * 1024 * 1024;
  * One-time import of diagrams saved by the old file-based "server storage"
  * (`<data dir>/diagrams/*.json`) into the owner's personal project. Runs once
  * an owner exists; the files are only read, never changed or deleted.
+ * Started by `StartupMigrations`.
  */
 @Injectable()
-export class LegacyImportService implements OnApplicationBootstrap {
+export class LegacyImportService {
   private readonly logger = new Logger('LegacyImport');
 
   constructor(
@@ -25,26 +27,9 @@ export class LegacyImportService implements OnApplicationBootstrap {
     @Inject(APP_CONFIG) private readonly config: AppConfig
   ) {}
 
-  async onApplicationBootstrap(): Promise<void> {
-    await this.importIfPending();
-  }
-
   async importIfPending(): Promise<void> {
-    const [owner] = await this.db
-      .select({ id: user.id })
-      .from(user)
-      .where(eq(user.instanceRole, 'global:owner'))
-      .orderBy(asc(user.createdAt))
-      .limit(1);
-    if (!owner) return; // Waits for the first-run setup.
-
-    const [personal] = await this.db
-      .select({ projectId: projectRelation.projectId })
-      .from(projectRelation)
-      .where(
-        and(eq(projectRelation.userId, owner.id), eq(projectRelation.role, 'project:personalOwner'))
-      );
-    if (!personal) return;
+    const home = await findOwnerHome(this.db);
+    if (!home) return; // Waits for the first-run setup.
 
     // Claim the run first, so two starts can't import twice.
     const claimed = await this.db
@@ -54,7 +39,7 @@ export class LegacyImportService implements OnApplicationBootstrap {
       .returning({ key: meta.key });
     if (claimed.length === 0) return;
 
-    const result = await this.importFrom(join(this.config.dataDir, 'diagrams'), personal.projectId, owner.id);
+    const result = await this.importFrom(join(this.config.dataDir, 'diagrams'), home.projectId, home.ownerId);
     await this.db
       .update(meta)
       .set({ value: { status: 'done', ...result }, updatedAt: new Date() })

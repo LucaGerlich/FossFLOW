@@ -1,20 +1,18 @@
-import { ConflictException, Inject, Injectable, Logger } from '@nestjs/common';
+import { ConflictException, Inject, Injectable } from '@nestjs/common';
 import { count, eq } from 'drizzle-orm';
 import { DB, type Database } from '../database/database.module.js';
 import { meta, user } from '../database/schema.js';
-import { LegacyImportService } from '../landscapes/legacy-import.service.js';
 import { AccountsService } from '../users/accounts.service.js';
+import { StartupMigrations } from './startup-migrations.js';
 
 const SETUP_KEY = 'setup.owner';
 
 @Injectable()
 export class SetupService {
-  private readonly logger = new Logger('Setup');
-
   constructor(
     @Inject(DB) private readonly db: Database,
     private readonly accounts: AccountsService,
-    private readonly legacyImport: LegacyImportService
+    private readonly migrations: StartupMigrations
   ) {}
 
   async isSetupRequired(): Promise<boolean> {
@@ -46,13 +44,7 @@ export class SetupService {
       throw error;
     }
 
-    // Diagrams from the old file storage now have an owner to go to.
-    try {
-      await this.legacyImport.importIfPending();
-    } catch (error) {
-      this.logger.warn(
-        `Old diagrams were not imported: ${error instanceof Error ? error.message : String(error)}`
-      );
-    }
+    // Old diagrams and the BESZEL_* login now have an owner to go to.
+    await this.migrations.runPending();
   }
 }

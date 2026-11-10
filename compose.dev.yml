@@ -32,7 +32,6 @@ services:
       - FOSSFLOW_URL=http://localhost:3000
       # Dev only: the published 3001 port bypasses nginx Basic Auth.
       - BACKEND_HOST=0.0.0.0
-      - LIVE_ALLOW_UNAUTHENTICATED=true
       - BESZEL_URL=${BESZEL_URL:-}
       - BESZEL_EMAIL=${BESZEL_EMAIL:-}
       - BESZEL_PASSWORD=${BESZEL_PASSWORD:-}

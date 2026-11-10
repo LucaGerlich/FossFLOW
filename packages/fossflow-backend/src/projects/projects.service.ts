@@ -11,7 +11,7 @@ import {
 } from '@nestjs/common';
 import { and, asc, desc, eq, isNotNull, ne, notExists, or, sql } from 'drizzle-orm';
 import { DB, type Database } from '../database/database.module.js';
-import { landscape, project, projectRelation, user } from '../database/schema.js';
+import { credential, landscape, project, projectRelation, user } from '../database/schema.js';
 import { ProjectAccess } from './project-access.js';
 import { hasInstanceScope, projectScopesFor, type TeamProjectRole } from '../rbac/roles.js';
 
@@ -136,7 +136,7 @@ export class ProjectsService implements OnApplicationBootstrap {
   }
 
   /**
-   * Deletes a team project. Its landscapes move to `transferTo` when given
+   * Deletes a team project. Its landscapes and credentials move to `transferTo` when given
    * (you need to be able to add landscapes there); otherwise they go too.
    */
   async remove(projectId: string, viewer: Viewer, transferTo?: string): Promise<void> {
@@ -157,6 +157,11 @@ export class ProjectsService implements OnApplicationBootstrap {
           .update(landscape)
           .set({ projectId: transferTo })
           .where(eq(landscape.projectId, projectId));
+        // Credentials go along, so the moved landscapes keep their live sources.
+        await tx
+          .update(credential)
+          .set({ projectId: transferTo })
+          .where(eq(credential.projectId, projectId));
       }
       await tx.delete(project).where(eq(project.id, projectId));
     });
@@ -255,4 +260,21 @@ export class ProjectsService implements OnApplicationBootstrap {
       throw new BadRequestException({ error: 'Personal projects can’t be renamed, deleted or shared' });
     }
   }
+}
+
+/** The first owner and their personal project, where one-time imports land. */
+export async function findOwnerHome(
+  db: Database
+): Promise<{ ownerId: string; projectId: string } | null> {
+  const [row] = await db
+    .select({ ownerId: user.id, projectId: projectRelation.projectId })
+    .from(user)
+    .innerJoin(
+      projectRelation,
+      and(eq(projectRelation.userId, user.id), eq(projectRelation.role, 'project:personalOwner'))
+    )
+    .where(eq(user.instanceRole, 'global:owner'))
+    .orderBy(asc(user.createdAt))
+    .limit(1);
+  return row ?? null;
 }

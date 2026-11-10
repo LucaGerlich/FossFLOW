@@ -27,7 +27,7 @@ const pollSchema = z.coerce.number().int().min(10).max(3600);
 
 type UrlResult = { ok: true; url: string } | { ok: false; problem: string };
 
-function parseSourceUrl(value: string): UrlResult {
+export function parseSourceUrl(value: string): UrlResult {
   let parsed: URL;
   try {
     parsed = new URL(value.trim());

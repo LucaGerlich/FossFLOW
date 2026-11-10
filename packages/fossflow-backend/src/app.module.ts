@@ -4,16 +4,17 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AuthModule } from './auth/auth.module.js';
 import { OriginGuard, SessionGuard } from './auth/guards.js';
 import { APP_CONFIG, type AppConfig } from './config/config.js';
+import { CredentialsModule } from './credentials/credentials.module.js';
 import { DatabaseModule } from './database/database.module.js';
 import { HealthController } from './health/health.controller.js';
 import { InvitationsController } from './invitations/invitations.controller.js';
 import { InvitationsService } from './invitations/invitations.service.js';
 import { LandscapesModule } from './landscapes/landscapes.module.js';
-import { LiveModule } from './live/live.module.js';
 import { ProjectsModule } from './projects/projects.module.js';
 import { ScopesGuard } from './rbac/scopes.guard.js';
 import { SetupController } from './setup/setup.controller.js';
 import { SetupService } from './setup/setup.service.js';
+import { StartupMigrations } from './setup/startup-migrations.js';
 import { UsersController } from './users/users.controller.js';
 
 /** Per client IP; nginx forwards the real IP and the app trusts loopback only. */
@@ -31,12 +32,13 @@ export class AppModule {
         ProjectsModule,
         LandscapesModule,
         AuthModule,
-        LiveModule
+        CredentialsModule
       ],
       controllers: [HealthController, SetupController, InvitationsController, UsersController],
       providers: [
         { provide: APP_CONFIG, useValue: config },
         SetupService,
+        StartupMigrations,
         InvitationsService,
         // Guards run in this order: rate limit, CSRF origin, session, role scopes.
         { provide: APP_GUARD, useClass: ThrottlerGuard },

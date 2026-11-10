@@ -36,7 +36,8 @@ describe('auth flows against real Postgres', () => {
     assert.equal((await anon.get('/api/health')).status, 200);
     assert.equal((await anon.get('/api/users')).status, 401);
     assert.equal((await anon.get('/api/invitations')).status, 401);
-    assert.equal((await anon.get('/api/live/status')).status, 401);
+    assert.equal((await anon.get('/api/connectors')).status, 401);
+    assert.equal((await anon.get('/api/landscapes/any/live')).status, 401);
   });
 
   it('refuses writes from other origins (CSRF)', async () => {

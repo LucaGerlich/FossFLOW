@@ -1,4 +1,7 @@
 import { z } from 'zod';
+import { LiveSourceError } from './source-error.js';
+
+export { LiveSourceError };
 import type { BeszelConfig } from './config.js';
 
 /**
@@ -73,10 +76,6 @@ export interface BeszelClient {
   fetchInventory(): Promise<BeszelInventory>;
 }
 
-/** Error whose message is safe to show to API clients and logs. */
-export class LiveSourceError extends Error {
-  override name = 'LiveSourceError';
-}
 
 const authResponseSchema = z.object({ token: z.string().min(1) });
 const pageSchema = z.object({ items: z.array(z.unknown()) });
@@ -128,7 +127,7 @@ export function createBeszelClient(
     );
     if (!response.ok) {
       throw new LiveSourceError(
-        `Beszel login failed (HTTP ${response.status}); check BESZEL_EMAIL and BESZEL_PASSWORD`
+        `Beszel login failed (HTTP ${response.status}); check the email and password`
       );
     }
     const parsed = authResponseSchema.safeParse(await response.json());

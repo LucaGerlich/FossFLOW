@@ -9,7 +9,7 @@ import {
 import { and, desc, eq, isNotNull, or } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { DB, type Database } from '../database/database.module.js';
-import { landscape, project, projectRelation, user } from '../database/schema.js';
+import { landscape, landscapeSource, project, projectRelation, user } from '../database/schema.js';
 import { ProjectAccess } from '../projects/project-access.js';
 import { hasInstanceScope } from '../rbac/roles.js';
 import { emptyModel, type LandscapeModel, withoutBuiltInIcons } from './model.js';
@@ -153,16 +153,22 @@ export class LandscapesService {
     await this.db.delete(landscape).where(eq(landscape.id, id));
   }
 
-  /** Moves a landscape; you need to be able to create landscapes in the target. */
+  /**
+   * Moves a landscape; you need to be able to create landscapes in the target.
+   * Its live sources are detached: credentials never leave their project.
+   */
   async move(id: string, viewer: Viewer, targetProjectId: string): Promise<void> {
     const target = await this.access.resolve(viewer, targetProjectId);
     if (!target) throw new NotFoundException({ error: 'Project not found' });
     if (!target.scopes.has('landscape:create')) {
       throw new ForbiddenException({ error: 'You can’t add landscapes to that project' });
     }
-    await this.db
-      .update(landscape)
-      .set({ projectId: targetProjectId, updatedAt: new Date() })
-      .where(eq(landscape.id, id));
+    await this.db.transaction(async (tx) => {
+      await tx
+        .update(landscape)
+        .set({ projectId: targetProjectId, updatedAt: new Date() })
+        .where(eq(landscape.id, id));
+      await tx.delete(landscapeSource).where(eq(landscapeSource.landscapeId, id));
+    });
   }
 }

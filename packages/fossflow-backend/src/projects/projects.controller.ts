@@ -6,6 +6,7 @@ import { parseBody } from '../common/validation.js';
 import { TEAM_PROJECT_ROLES } from '../rbac/roles.js';
 import { RequireScopes } from '../rbac/scopes.guard.js';
 import { CurrentProject, type ProjectAccessInfo, RequireProjectScope } from './project-access.js';
+import { LiveSourcesService } from '../live/live-sources.service.js';
 import { ProjectsService } from './projects.service.js';
 
 const nameSchema = z.object({
@@ -15,7 +16,10 @@ const memberSchema = z.object({ role: z.enum(TEAM_PROJECT_ROLES) });
 
 @Controller('projects')
 export class ProjectsController {
-  constructor(private readonly projects: ProjectsService) {}
+  constructor(
+    private readonly projects: ProjectsService,
+    private readonly sources: LiveSourcesService
+  ) {}
 
   @Get()
   list(@CurrentSession() session: AuthSession) {
@@ -58,6 +62,8 @@ export class ProjectsController {
     @Query('transferTo') transferTo?: string
   ): Promise<void> {
     await this.projects.remove(id, session.user, transferTo || undefined);
+    // Credentials deleted with the project must stop polling.
+    await this.sources.refresh();
   }
 
   @Get(':id/candidates')
