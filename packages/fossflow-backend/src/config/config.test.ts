@@ -47,4 +47,9 @@ describe('loadConfig', () => {
       /BACKEND_PORT/
     );
   });
+
+  it('treats empty optional values as unset, as compose passes them', () => {
+    const config = loadConfig({ DATABASE_URL, SMTP_SECURE: '', SMTP_HOST: '', FOSSFLOW_ENCRYPTION_KEY: '' });
+    assert.equal(config.encryptionKey, undefined);
+  });
 });

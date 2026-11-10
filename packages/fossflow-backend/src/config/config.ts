@@ -50,7 +50,7 @@ const envSchema = z.object({
   FOSSFLOW_ENCRYPTION_KEY: optional,
   SMTP_HOST: optional,
   SMTP_PORT: z.coerce.number().int().min(1).max(65_535).default(465),
-  SMTP_SECURE: z.enum(['true', 'false']).optional(),
+  SMTP_SECURE: optional.pipe(z.enum(['true', 'false']).optional()),
   SMTP_USER: optional,
   SMTP_PASSWORD: optional,
   SMTP_FROM: optional,
