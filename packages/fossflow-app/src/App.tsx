@@ -103,8 +103,10 @@ function EditorPage() {
     const savedDiagrams = localStorage.getItem('fossflow-diagrams');
     if (savedDiagrams) {
       setDiagrams(JSON.parse(savedDiagrams));
-      setIsDiagramsInitialized(true);
     }
+    // Read (or nothing to read): saving may start. Gating this on an existing
+    // list meant a fresh browser never stored its first saves.
+    setIsDiagramsInitialized(true);
 
     // Load last opened diagram metadata (data is already loaded in state initialization)
     const lastOpenedId = localStorage.getItem('fossflow-last-opened');
