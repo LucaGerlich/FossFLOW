@@ -1,24 +1,59 @@
+# FossFLOW platform: the app behind a sign-in, with Postgres. See docs/PLATFORM.md.
+#   cp .env.example .env   # then set POSTGRES_PASSWORD and FOSSFLOW_URL
+#   docker compose up -d --build
 services:
+  db:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=fossflow
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      - POSTGRES_DB=fossflow
+    volumes:
+      - db-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fossflow -d fossflow"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   fossflow:
-    image: abrar74774/fossflow:latest
-    pull_policy: always
+    build: .
+    image: fossflow:local
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
     ports:
-      - 80:80
+      - "${PORT:-80}:80"
     environment:
       - NODE_ENV=production
-      - ENABLE_SERVER_STORAGE=${ENABLE_SERVER_STORAGE:-true}
-      - STORAGE_PATH=/data/diagrams
-      - ENABLE_GIT_BACKUP=${ENABLE_GIT_BACKUP:-false}
+      - DATABASE_URL=postgres://fossflow:${POSTGRES_PASSWORD}@db:5432/fossflow
+      # The address people open in the browser; sign-in only works from there.
+      - FOSSFLOW_URL=${FOSSFLOW_URL:?Set FOSSFLOW_URL in .env}
+      # Optional. Unset: a key is generated in ./data/config. Back up either one.
+      - FOSSFLOW_ENCRYPTION_KEY=${FOSSFLOW_ENCRYPTION_KEY:-}
+      # Optional mail for invitations and password resets; without it, admins copy links.
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-465}
+      - SMTP_SECURE=${SMTP_SECURE:-}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - SMTP_FROM=${SMTP_FROM:-}
+      # Optional Basic Auth in front of the sign-in page.
       - HTTP_AUTH_USER=${HTTP_AUTH_USER:-}
       - HTTP_AUTH_PASSWORD=${HTTP_AUTH_PASSWORD:-}
-      # Optional live data from a Beszel hub (see docs/LIVE.md). Needs an image
-      # built from this repository (`docker build -t fossflow .`).
+      - LIVE_POLL_SECONDS=${LIVE_POLL_SECONDS:-30}
+      # Legacy: read once on first start and moved into a "Beszel" credential.
       - BESZEL_URL=${BESZEL_URL:-}
       - BESZEL_EMAIL=${BESZEL_EMAIL:-}
       - BESZEL_PASSWORD=${BESZEL_PASSWORD:-}
-      - BESZEL_PASSWORD_FILE=${BESZEL_PASSWORD_FILE:-}
-      - LIVE_POLL_SECONDS=${LIVE_POLL_SECONDS:-30}
+      # The server runs as this user and owns ./data (default 1000:1000).
       - PUID=${PUID:-}
       - PGID=${PGID:-}
     volumes:
-      - ./diagrams:/data/diagrams
+      # Encryption key (config/), and old diagrams to import once (diagrams/).
+      - ./data:/data
+
+volumes:
+  db-data:

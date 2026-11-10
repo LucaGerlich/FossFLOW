@@ -9,6 +9,8 @@ async function bootstrap(): Promise<void> {
   if (existsSync('.env')) process.loadEnvFile('.env');
   const config = loadConfig(process.env);
   const app = await createApp(config);
+  // SIGTERM (docker stop) runs onApplicationShutdown, so live hubs stop cleanly.
+  app.enableShutdownHooks();
   await app.listen(config.port, config.host);
   logger.log(`FossFLOW server listening on ${config.host}:${config.port}`);
 }
