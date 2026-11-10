@@ -3,6 +3,7 @@ import pg from 'pg';
 import { afterAll, beforeAll, describe, it } from 'vitest';
 import { createApp } from '../app.js';
 import { type Browser, startTestApp, type TestApp } from '../test/app.js';
+import { joinAs, type Person } from '../test/people.js';
 
 interface ProjectSummary {
   id: string;
@@ -10,33 +11,6 @@ interface ProjectSummary {
   type: 'personal' | 'team';
   role: string | null;
   scopes: string[];
-}
-
-interface Person {
-  browser: Browser;
-  id: string;
-}
-
-const tokenOf = (url: string) => url.split('/invite/')[1] ?? '';
-
-/** Invites someone and signs them in through the link. */
-async function join(
-  t: TestApp,
-  inviter: Browser,
-  name: string,
-  instanceRole: 'global:member' | 'global:admin' = 'global:member'
-): Promise<Person> {
-  const invite = await inviter.post('/api/invitations', {
-    email: `${name.toLowerCase()}@example.com`,
-    instanceRole
-  });
-  const browser = t.browser();
-  await browser.post(`/api/invitations/accept/${tokenOf(invite.body.url)}`, {
-    name,
-    password: `${name}-pass-1A`
-  });
-  const session = await browser.get('/api/auth/get-session');
-  return { browser, id: session.body.user.id };
 }
 
 const projectsOf = async (browser: Browser) =>
@@ -62,10 +36,10 @@ describe('projects and project roles', () => {
       email: 'owner@example.com',
       password: 'Owner-pass-1'
     });
-    admin = await join(t, owner, 'Ada', 'global:admin');
-    mia = await join(t, owner, 'Mia');
-    vic = await join(t, owner, 'Vic');
-    eve = await join(t, owner, 'Eve');
+    admin = await joinAs(t, owner, 'Ada', 'global:admin');
+    mia = await joinAs(t, owner, 'Mia');
+    vic = await joinAs(t, owner, 'Vic');
+    eve = await joinAs(t, owner, 'Eve');
   });
   afterAll(async () => t?.close());
 

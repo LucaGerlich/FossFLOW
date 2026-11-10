@@ -9,32 +9,7 @@ import { credential, meta } from '../database/schema.js';
 import { demoLandscape, type FakeBeszel, startFakeBeszel } from '../live/testing/fakeBeszel.js';
 import type { LiveSnapshot } from '../live/types.js';
 import { type Browser, startTestApp, type TestApp } from '../test/app.js';
-
-interface Person {
-  browser: Browser;
-  id: string;
-}
-
-const tokenOf = (url: string) => url.split('/invite/')[1] ?? '';
-
-async function joinAs(t: TestApp, inviter: Browser, name: string): Promise<Person> {
-  const invite = await inviter.post('/api/invitations', {
-    email: `${name.toLowerCase()}@example.com`,
-    instanceRole: 'global:member'
-  });
-  const browser = t.browser();
-  await browser.post(`/api/invitations/accept/${tokenOf(invite.body.url)}`, {
-    name,
-    password: `${name}-pass-1A`
-  });
-  const session = await browser.get('/api/auth/get-session');
-  return { browser, id: session.body.user.id };
-}
-
-const personalOf = async (browser: Browser): Promise<string> =>
-  ((await browser.get('/api/projects')).body as { id: string; type: string }[]).find(
-    (p) => p.type === 'personal'
-  )?.id ?? '';
+import { joinAs, type Person, personalOf } from '../test/people.js';
 
 /** Polls the live endpoint until the first sync landed. */
 async function liveOnce(browser: Browser, landscapeId: string): Promise<LiveSnapshot> {
