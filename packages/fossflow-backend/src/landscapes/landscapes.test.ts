@@ -194,3 +194,30 @@ describe('landscapes against real Postgres', () => {
     assert.equal((await mia.browser.get(`/api/landscapes/${draft}`)).status, 404);
   });
 });
+
+describe('old file storage moved in after setup', () => {
+  it('imports it on the first start that finds the folder', async () => {
+    const t = await startTestApp();
+    try {
+      const owner = t.browser();
+      await owner.post('/api/setup/owner', {
+        name: 'Olivia',
+        email: 'owner@example.com',
+        password: 'Owner-pass-1'
+      });
+      const legacy = join(t.config.dataDir, 'diagrams');
+      mkdirSync(legacy, { recursive: true });
+      writeFileSync(join(legacy, 'late.json'), JSON.stringify({ ...model('Late'), name: 'Moved in later' }));
+
+      const restarted = await createApp(t.config);
+      await restarted.init();
+      await restarted.close();
+
+      const personal = await personalOf(owner);
+      const list = (await owner.get(`/api/projects/${personal}/landscapes`)).body as { name: string }[];
+      assert.deepEqual(list.map((l) => l.name), ['Moved in later']);
+    } finally {
+      await t.close();
+    }
+  });
+});

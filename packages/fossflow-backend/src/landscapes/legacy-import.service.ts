@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { Inject, Injectable, Logger } from '@nestjs/common';
@@ -30,6 +31,9 @@ export class LegacyImportService {
   async importIfPending(): Promise<void> {
     const home = await findOwnerHome(this.db);
     if (!home) return; // Waits for the first-run setup.
+    // No old storage (yet): leave the flag alone, so moving the folder in later still works.
+    const dir = join(this.config.dataDir, 'diagrams');
+    if (!existsSync(dir)) return;
 
     // Claim the run first, so two starts can't import twice.
     const claimed = await this.db
@@ -39,7 +43,7 @@ export class LegacyImportService {
       .returning({ key: meta.key });
     if (claimed.length === 0) return;
 
-    const result = await this.importFrom(join(this.config.dataDir, 'diagrams'), home.projectId, home.ownerId);
+    const result = await this.importFrom(dir, home.projectId, home.ownerId);
     await this.db
       .update(meta)
       .set({ value: { status: 'done', ...result }, updatedAt: new Date() })
