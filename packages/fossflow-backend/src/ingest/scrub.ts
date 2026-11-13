@@ -18,8 +18,11 @@ export const cap = (value: string, max: number = DEFAULT_MAX): string =>
 const MAX_DECODE_ROUNDS = 3;
 const LONG_PLAIN_TOKEN = /^[A-Za-z0-9_=-]{32,}$/;
 
-/** Decodes until stable, so double-encoded values cannot hide an id. */
-const decodeSegment = (segment: string): string => {
+/**
+ * Decodes until stable, so multi-encoded values cannot hide an id. Returns
+ * null when the value still changes after the last round.
+ */
+const decodeSegment = (segment: string): string | null => {
   let current = segment;
   for (let round = 0; round < MAX_DECODE_ROUNDS; round += 1) {
     let next: string;
@@ -31,10 +34,14 @@ const decodeSegment = (segment: string): string => {
     if (next === current) return current;
     current = next;
   }
-  return current;
+  try {
+    return decodeURIComponent(current) === current ? current : null;
+  } catch {
+    return current;
+  }
 };
 
-const looksLikeId = (segment: string): boolean =>
+export const looksLikeId = (segment: string): boolean =>
   ALL_DIGITS.test(segment) ||
   UUID.test(segment) ||
   LONG_HEX.test(segment) ||
@@ -50,8 +57,8 @@ export const templatePath = (path: string): string =>
     .map((raw) => {
       // Matrix parameters (`;jsessionid=...`) are dropped.
       const segment = raw.split(';')[0] ?? '';
-      return segment !== '' && looksLikeId(decodeSegment(segment))
-        ? '{id}'
-        : segment;
+      if (segment === '') return segment;
+      const decoded = decodeSegment(segment);
+      return decoded === null || looksLikeId(decoded) ? '{id}' : segment;
     })
     .join('/');

@@ -3,7 +3,7 @@ import type {
   OtlpSpan,
   OtlpTraceRequest
 } from './otlp-decode.js';
-import { cap, templatePath } from './scrub.js';
+import { cap, looksLikeId, templatePath } from './scrub.js';
 
 export type TrafficEvent = {
   kind: 'call' | 'incoming';
@@ -33,10 +33,10 @@ const MAX_SPAN_NAME = 60;
 const METHOD = /^[A-Z]{1,10}$/;
 const ERROR_TYPE = /^[\w.:-]{1,60}$/;
 const SPAN_NAME_OPERATION = /^[A-Za-z][\w.:-]*( [A-Za-z_][\w.]*)?$/;
-const QUERY_SUMMARY = /^[A-Za-z][\w.$:-]*( [\w.$:-]+){0,5}$/;
+const QUERY_SUMMARY = /^[A-Za-z][\w.$:-]*( [A-Za-z_][\w.$:-]*){0,5}$/;
 const MAX_QUERY_SUMMARY = 100;
 const SAFE_HOST = /^[a-z0-9._:[\]-]{1,253}$/;
-const SAFE_NAMESPACE = /^[\w.$|-]{1,128}$/;
+const SAFE_NAMESPACE = /^[\w.$|-]{1,64}$/;
 const HTTP_STATUS = /^\d{3}$/;
 const URL_PREFIX = /^[a-z][a-z0-9+.-]*:\/\/[^/?#]*/i;
 
@@ -101,7 +101,12 @@ const dbCallee = (attributes: Attributes): string | undefined => {
   const host = target ? cleanHost(target) : undefined;
   if (!host) return undefined;
   const namespace = pick(attributes, 'db.namespace', 'db.name');
-  const safe = namespace && SAFE_NAMESPACE.test(namespace) ? namespace : '';
+  const safe =
+    namespace && SAFE_NAMESPACE.test(namespace)
+      ? looksLikeId(namespace)
+        ? '{id}'
+        : namespace
+      : '';
   return `db:${host}${safe ? `/${safe}` : ''}`;
 };
 
@@ -140,6 +145,13 @@ const incomingOperation = (attributes: Attributes): string => {
   return joinOperation(methodOf(attributes), templatePath(path));
 };
 
+/** Replaces any id-like word of a DB operation with `{id}`. */
+const scrubWords = (operation: string): string =>
+  operation
+    .split(' ')
+    .map((word) => (looksLikeId(word) ? '{id}' : word))
+    .join(' ');
+
 const dbOperation = (
   attributes: Attributes,
   name: string | undefined
@@ -150,7 +162,7 @@ const dbOperation = (
     summary.length <= MAX_QUERY_SUMMARY &&
     QUERY_SUMMARY.test(summary)
   ) {
-    return summary;
+    return scrubWords(summary);
   }
   const operation = pick(attributes, 'db.operation.name', 'db.operation');
   if (operation) {
@@ -160,10 +172,10 @@ const dbOperation = (
       'db.sql.table',
       'db.mongodb.collection'
     );
-    return collection ? `${operation} ${collection}` : operation;
+    return scrubWords(collection ? `${operation} ${collection}` : operation);
   }
   if (name && name.length <= MAX_SPAN_NAME && SPAN_NAME_OPERATION.test(name)) {
-    return name;
+    return scrubWords(name);
   }
   return 'query';
 };

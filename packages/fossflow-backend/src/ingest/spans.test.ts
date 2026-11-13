@@ -437,6 +437,40 @@ describe('toTraffic', () => {
     );
   });
 
+  it('keeps ids out of DB operations and namespaces', () => {
+    const longName = `${'ab.'.repeat(21)}a`;
+    const db = { 'db.system': 'postgresql', 'net.peer.name': 'db' };
+    const summary = only(
+      request('a', [
+        span(3, { ...db, 'db.query.summary': 'SELECT members 4711' })
+      ])
+    );
+    assert.doesNotMatch(summary.operation, /4711/);
+    const collection = only(
+      request('a', [
+        span(3, {
+          ...db,
+          'db.operation.name': 'SELECT',
+          'db.collection.name': 'orders_123456'
+        })
+      ])
+    );
+    assert.equal(collection.operation, 'SELECT {id}');
+    assert.equal(
+      only(request('a', [span(3, { ...db, 'db.name': 'shop_48213' })])).callee,
+      'db:db/{id}'
+    );
+    assert.equal(
+      only(request('a', [span(3, { ...db, 'db.name': 'n'.repeat(65) })]))
+        .callee,
+      'db:db'
+    );
+    assert.equal(
+      only(request('a', [span(3, { ...db, 'db.name': longName })])).callee,
+      `db:db/${longName}`
+    );
+  });
+
   it('caps identities at 300 characters', () => {
     const event = only(
       request('s'.repeat(400), [

@@ -21,6 +21,7 @@ describe('templatePath', () => {
     ['/users/jane%2540example.com', '/users/{id}'],
     ['/x;jsessionid=abc/orders', '/x/orders'],
     ['/t/abcdefghijklmnopqrstuvwxyzabcdef', '/t/{id}'],
+    ['/users/jane%25252540example.com', '/users/{id}'],
     ['/', '/']
   ])('templates %s', (input, expected) => {
     assert.equal(templatePath(input), expected);
