@@ -6,6 +6,30 @@ Newest entries first.
 
 ---
 
+## 2026-11-13 — fossflow-lib: zod 3 → 4
+
+- **What:**
+  - `fossflow-lib` now depends on `zod` `^4.6.7` instead of `^3.25.76`, the same version as the server. The lockfile no longer contains zod 3. The lib and the server each get their own copy of 4.6.7, because `npm dedupe` stops on unrelated peer-dependency conflicts.
+  - API updates for zod 4:
+    - The model's reference checks raise `'custom'` issues instead of using the deprecated `z.ZodIssueCode`.
+    - `view.lastUpdated` uses `z.iso.datetime()` instead of the deprecated `z.string().datetime()`.
+    - On import, the validation log reads `error.issues`. zod 4 removed `error.errors`, so the log would have printed `undefined`.
+  - A new test pins the date rule for `lastUpdated`.
+- **Why:** zod versions before 4.6.6 are in the range of advisory GHSA-mrhx-c7xc-m3w5 ("Zod can exhaust memory while validating oversized constrained collections"). The production `npm audit` flagged the lib during live traffic milestone 1. The server already used 4.6.7, so its ingest path was never affected.
+- **Behaviour changes:**
+  - **Rejected by zod 4:**
+    - A `lastUpdated` without seconds, such as `2024-01-01T00:00Z`. zod 3 accepted it; zod 4.6 follows RFC 3339 and requires seconds next to `Z`. The editor always writes `toISOString()`, so only hand-edited or externally generated files are affected. Such a file now fails to open with the usual "There is an error in your model." alert. This was decided on purpose instead of keeping the old rule with a union.
+    - `Infinity` as a number, for example a coordinate. A JSON file can't contain it, so only data passed to `load()` from code is affected.
+  - **Unchanged:** the import alert's text; every reference check, with the same messages and params; every length, range, enum and literal limit; unknown keys are still stripped.
+  - **Console only:** zod's default issue messages are reworded, and the codes `invalid_string` and `invalid_enum_value` are now `invalid_format` and `invalid_value`. Nothing in the code reads them.
+- **Security:** the lib's validation of imported landscapes is no longer in the advisory's range. `npm audit --omit=dev` no longer lists zod.
+- **Verified:**
+  - **Differential check:** 57 inputs ran through the schemas on zod 3.25.76 and on 4.6.7, and the results were compared. The inputs covered `e2e-tests/test-diagram.json`, the example data, unknown keys, every reference check, every limit, and date and number edge cases. The only changes in what passes and fails are the two listed above.
+  - **Lib:** 244 tests pass (one new) and `tsc` is clean. **App:** builds; `tsc` shows the same 7 existing errors.
+- **Not done / later:** `npm audit --omit=dev` still lists 8 other advisories (3 low, 5 moderate) in other packages.
+
+---
+
 ## 2026-11-13 — Live traffic (phase 2a), milestone 1: ingest
 
 - **What:**

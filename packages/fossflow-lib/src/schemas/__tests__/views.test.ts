@@ -40,6 +40,16 @@ describe('viewSchema', () => {
       ).toBe(true);
     }
   });
+  // zod 4 requires seconds next to `Z` (RFC 3339); zod 3 also accepted `T00:00Z`.
+  it('accepts lastUpdated only as an ISO datetime with seconds', () => {
+    const view = (lastUpdated: string) => {
+      return { id: 'view1', name: 'View', items: [], lastUpdated };
+    };
+    expect(viewSchema.safeParse(view(new Date().toISOString())).success).toBe(true);
+    expect(viewSchema.safeParse(view('2024-01-01T00:00:00Z')).success).toBe(true);
+    expect(viewSchema.safeParse(view('2024-01-01T00:00Z')).success).toBe(false);
+    expect(viewSchema.safeParse(view('2024-01-01T00:00:00+02:00')).success).toBe(false);
+  });
 });
 
 describe('viewsSchema', () => {
