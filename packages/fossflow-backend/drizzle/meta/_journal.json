@@ -50,6 +50,13 @@
       "when": 1794578200354,
       "tag": "0006_traffic_functions",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1794580785274,
+      "tag": "0007_traffic_failure_bigint",
+      "breakpoints": true
     }
   ]
 }

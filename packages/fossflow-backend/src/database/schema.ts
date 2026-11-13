@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  bigint,
   doublePrecision,
   index,
   integer,
@@ -235,7 +236,7 @@ export const trafficHour = pgTable(
 export const trafficFailure = pgTable(
   'traffic_failure',
   {
-    id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
+    id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
     projectId: text('project_id')
       .notNull()
       .references(() => project.id, { onDelete: 'cascade' }),
