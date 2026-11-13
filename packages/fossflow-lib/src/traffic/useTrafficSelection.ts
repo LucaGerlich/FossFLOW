@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { useUiStateStore } from 'src/stores/uiStateStore';
 import { useTraffic } from './TrafficContext';
 
+const TYPING_TARGETS = 'input, textarea, select, [contenteditable]';
+
 export type TrafficSelection =
   | { type: 'arrow'; connectorId: string }
   | { type: 'box'; itemId: string };
@@ -66,7 +68,11 @@ export const useTrafficSelection = (): TrafficSelectionState => {
   useEffect(() => {
     if (!open) return undefined;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') close();
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      // Escape belongs to whatever the user is typing in.
+      const target = event.target;
+      if (target instanceof Element && target.closest(TYPING_TARGETS)) return;
+      close();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);

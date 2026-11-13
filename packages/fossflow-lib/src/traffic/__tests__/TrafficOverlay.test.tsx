@@ -81,6 +81,27 @@ describe('TrafficOverlay', () => {
       expect(screen.queryByText('Identities')).toBeNull();
     });
 
+    it('ignores Escape typed into an input', async () => {
+      const { container } = renderMap(feed());
+      await screen.findByTestId('map-ready');
+      fireEvent.click(
+        container.querySelector('[data-traffic-hit="box:web"]') as Element
+      );
+      expect(await screen.findByText('Identities')).toBeInTheDocument();
+
+      const input = document.createElement('input');
+      document.body.appendChild(input);
+      try {
+        fireEvent.keyDown(input, { key: 'Escape' });
+        expect(screen.getByText('Identities')).toBeInTheDocument();
+
+        fireEvent.keyDown(document.body, { key: 'Escape' });
+        expect(screen.queryByText('Identities')).toBeNull();
+      } finally {
+        input.remove();
+      }
+    });
+
     it('follows the editor selection and draws no hit areas when editable', async () => {
       const { container } = renderMap(feed());
       await screen.findByTestId('map-ready');
