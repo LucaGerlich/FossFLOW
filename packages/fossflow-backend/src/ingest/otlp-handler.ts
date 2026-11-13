@@ -15,6 +15,8 @@ const logger = new Logger('Ingest');
 /** Largest request body, measured after gzip is inflated. */
 export const INGEST_MAX_BYTES = 16 * 1024 * 1024;
 const KEY_LIMIT = 1200;
+/** Failed authentications allowed per client IP and window. */
+const FAILED_AUTH_LIMIT = 30;
 const WINDOW_MS = 60_000;
 const SWEEP_ABOVE = 1000;
 
@@ -24,9 +26,15 @@ type Take = { ok: true } | { ok: false; retryAfterSeconds: number };
 export const createKeyLimiter = (
   limit: number,
   windowMs: number
-): { take(keyId: string, now: number): Take } => {
+): { take(keyId: string, now: number): Take; peek(keyId: string, now: number): Take } => {
   const windows = new Map<string, { start: number; count: number }>();
   return {
+    /** Whether the next take would fail, without counting anything. */
+    peek(keyId, now) {
+      const current = windows.get(keyId);
+      if (!current || now - current.start >= windowMs || current.count < limit) return { ok: true };
+      return { ok: false, retryAfterSeconds: Math.ceil((current.start + windowMs - now) / 1000) };
+    },
     take(keyId, now) {
       if (windows.size > SWEEP_ABOVE) {
         for (const [id, window] of windows) {
@@ -49,10 +57,12 @@ export const createKeyLimiter = (
   };
 };
 
+/** Built once; `raw` inflates gzip and applies the limit to the inflated size. */
+const rawBody = express.raw({ type: () => true, limit: INGEST_MAX_BYTES });
+
 const readBody = (req: Request, res: Response): Promise<Buffer> =>
   new Promise((resolve, reject) => {
-    // `raw` inflates gzip and applies the limit to the inflated size.
-    express.raw({ type: () => true, limit: INGEST_MAX_BYTES })(req, res, (error?: unknown) => {
+    rawBody(req, res, (error?: unknown) => {
       if (error) {
         reject(error);
         return;
@@ -85,15 +95,27 @@ export const createOtlpHandler = (deps: {
   aggregator: TrafficAggregator;
 }): RequestHandler => {
   const limiter = createKeyLimiter(KEY_LIMIT, WINDOW_MS);
+  const failedAuth = createKeyLimiter(FAILED_AUTH_LIMIT, WINDOW_MS);
 
   return async (req, res) => {
     try {
+      // An IP that keeps failing is turned away before it costs a database lookup.
+      const client = req.ip ?? 'unknown';
+      const blocked = failedAuth.peek(client, Date.now());
+      if (!blocked.ok) {
+        res.set('Retry-After', String(blocked.retryAfterSeconds));
+        return fail(res, 429, 'Too many failed authentications');
+      }
+
       // The key comes first: nothing is read from an unauthenticated sender.
       const presented = req.headers['x-fossflow-key'];
       const key = await deps.keys.authenticate(
         typeof presented === 'string' ? presented : undefined
       );
-      if (!key) return fail(res, 401, 'Missing or invalid ingest key');
+      if (!key) {
+        failedAuth.take(client, Date.now());
+        return fail(res, 401, 'Missing or invalid ingest key');
+      }
 
       const taken = limiter.take(key.id, Date.now());
       if (!taken.ok) {

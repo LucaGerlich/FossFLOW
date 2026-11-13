@@ -313,6 +313,31 @@ describe('OTLP endpoint against real Postgres', () => {
       assert.equal(proto.headers['content-length'], '0');
     });
 
+    it('limits failed authentications per IP, before the key lookup', async () => {
+      const unknown = `ffi_${'B'.repeat(43)}`;
+      const flood = { 'X-Forwarded-For': '203.0.113.50' };
+      const send = (key: string, headers: Record<string, string>) =>
+        http()
+          .post('/api/otlp/v1/traces')
+          .set('x-fossflow-key', key)
+          .set('Content-Type', 'application/json')
+          .set(headers)
+          .send('{}');
+      for (let i = 0; i < 30; i += 1) {
+        assert.equal((await send(unknown, flood)).status, 401, `request ${i + 1}`);
+      }
+      const limited = await send(unknown, flood);
+      assert.equal(limited.status, 429);
+      assert.ok(Number(limited.headers['retry-after']) > 0);
+      // A different client with a valid key is unaffected.
+      const other = { 'X-Forwarded-For': '203.0.113.51' };
+      assert.equal((await send(shopKey.key, other)).status, 200);
+      // Successful requests never count against the failure budget.
+      for (let i = 0; i < 35; i += 1) {
+        assert.equal((await send(shopKey.key, other)).status, 200, `valid ${i + 1}`);
+      }
+    });
+
     it('limits per key, not per IP', async () => {
       const burst = await createKey(owner, shop, 'burst');
       for (let i = 0; i < 1200; i += 1) {
