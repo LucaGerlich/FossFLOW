@@ -152,18 +152,16 @@ const scrubWords = (operation: string): string =>
     .map((word) => (looksLikeId(word) ? '{id}' : word))
     .join(' ');
 
+/** Only short `VERB word word` values pass; raw SQL and filters never do. */
+const isQueryShape = (value: string): boolean =>
+  value.length <= MAX_QUERY_SUMMARY && QUERY_SUMMARY.test(value);
+
 const dbOperation = (
   attributes: Attributes,
   name: string | undefined
 ): string => {
   const summary = pick(attributes, 'db.query.summary');
-  if (
-    summary &&
-    summary.length <= MAX_QUERY_SUMMARY &&
-    QUERY_SUMMARY.test(summary)
-  ) {
-    return scrubWords(summary);
-  }
+  if (summary && isQueryShape(summary)) return scrubWords(summary);
   const operation = pick(attributes, 'db.operation.name', 'db.operation');
   if (operation) {
     const collection = pick(
@@ -172,7 +170,8 @@ const dbOperation = (
       'db.sql.table',
       'db.mongodb.collection'
     );
-    return scrubWords(collection ? `${operation} ${collection}` : operation);
+    const combined = collection ? `${operation} ${collection}` : operation;
+    if (isQueryShape(combined)) return scrubWords(combined);
   }
   if (name && name.length <= MAX_SPAN_NAME && SPAN_NAME_OPERATION.test(name)) {
     return scrubWords(name);

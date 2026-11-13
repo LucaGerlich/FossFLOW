@@ -354,6 +354,21 @@ describe('toTraffic', () => {
     assert.equal(event.operation, 'query');
   });
 
+  it('rejects a db.operation.name that is not shaped like an operation', () => {
+    const db = { 'db.system': 'postgresql', 'net.peer.name': 'db' };
+    const event = only(
+      request('a', [
+        span(3, {
+          ...db,
+          'db.operation.name':
+            "SELECT * FROM members WHERE email='jane@example.com'"
+        })
+      ])
+    );
+    assert.doesNotMatch(event.operation, /jane|WHERE|'/);
+    assert.equal(event.operation, 'query');
+  });
+
   it('does not accept a numeric second word in a DB span name', () => {
     const event = only(
       request('a', [
