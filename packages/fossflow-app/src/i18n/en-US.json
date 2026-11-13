@@ -57,6 +57,8 @@
     "live": {
         "label": "Live",
         "unavailable": "Live data unavailable",
+        "trafficLive": "Traffic · live",
+        "trafficConnecting": "Traffic · connecting",
         "servers_one": "{{count}} server",
         "servers_other": "{{count}} servers",
         "noServers": "no servers",
