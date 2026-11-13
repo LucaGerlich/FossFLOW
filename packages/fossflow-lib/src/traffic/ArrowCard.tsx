@@ -7,7 +7,11 @@ import { CardFrame, captionSx, sectionSx, StatRow } from './CardFrame';
 import { fill, formatMs } from './format';
 import type { ArrowTraffic } from './stats';
 import { useTraffic } from './TrafficContext';
-import type { TrafficEdgeDetail, TrafficRange } from './types';
+import type {
+  TrafficEdgeDetail,
+  TrafficRange,
+  TrafficSummary
+} from './types';
 
 const RANGES: TrafficRange[] = ['1h', '24h', '7d'];
 const REFRESH_MS = 15000;
@@ -130,6 +134,28 @@ const Detail = ({ detail }: { detail: TrafficEdgeDetail }) => {
   );
 };
 
+// ponytail: the edge endpoint takes at most 20 pairs, so the detail covers the
+// 20 busiest ones; the stats row still comes from the full summary.
+const MAX_EDGE_PAIRS = 20;
+
+/** At most 20 pairs, busiest first by the summary's calls (ties keep summary order). */
+const busiestPairs = (
+  pairs: ArrowTraffic['pairs'],
+  summary: TrafficSummary | undefined
+): ArrowTraffic['pairs'] => {
+  if (pairs.length <= MAX_EDGE_PAIRS) return pairs;
+  const calls = new Map(
+    (summary?.edges ?? []).map((edge) => [
+      `${edge.caller}\n${edge.callee}`,
+      edge.calls
+    ])
+  );
+  const callsOf = (pair: ArrowTraffic['pairs'][number]): number =>
+    calls.get(`${pair.caller}\n${pair.callee}`) ?? 0;
+  // Array.prototype.sort is stable, so ties keep their incoming order.
+  return [...pairs].sort((a, b) => callsOf(b) - callsOf(a)).slice(0, MAX_EDGE_PAIRS);
+};
+
 interface ArrowCardProps {
   arrow: ArrowTraffic;
   /** Scene position of the arrow's path midpoint. */
@@ -147,8 +173,9 @@ export const ArrowCard = ({ arrow, anchor, title, onClose }: ArrowCardProps) => 
   const loadEdge = traffic?.feed.loadEdge;
   const [range, setRange] = useState<TrafficRange>('1h');
   const [load, setLoad] = useState<Load>({ status: 'loading' });
+  const summary = traffic?.feed.summary;
   // The summary refresh makes a new `pairs` array each time; key on content.
-  const pairsKey = JSON.stringify(arrow.pairs);
+  const pairsKey = JSON.stringify(busiestPairs(arrow.pairs, summary));
 
   useEffect(() => {
     if (!loadEdge) return undefined;

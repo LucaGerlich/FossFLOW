@@ -61,6 +61,37 @@ describe('ArrowCard', () => {
     expect(screen.getByText('1.2 s')).toBeInTheDocument();
   });
 
+  it('asks for at most the 20 busiest pairs of a wide arrow', async () => {
+    const many = Array.from({ length: 25 }, (_, index) => ({
+      caller: `service:c${index}`,
+      callee: 'service:app'
+    }));
+    const summary = summaryOf(
+      many.map((pair, index) => ({
+        ...pair,
+        // c24 is the busiest, c0 the quietest
+        stats: { calls: 10 + index }
+      }))
+    );
+    const loadEdge = jest.fn().mockResolvedValue(detailOf());
+    const Card = () => (
+      <ArrowCard
+        arrow={{ ...arrow, pairs: many }}
+        anchor={{ x: 0, y: 0 }}
+        title="Website → Member app"
+        onClose={jest.fn()}
+      />
+    );
+    renderCard(<Card />, fakeFeed(summary, loadEdge));
+
+    await screen.findByText('Website → Member app');
+    const sent = loadEdge.mock.calls[0][0] as typeof many;
+    expect(sent).toHaveLength(20);
+    expect(sent.map((pair) => pair.caller).sort()).toEqual(
+      many.slice(5).map((pair) => pair.caller).sort()
+    );
+  });
+
   it('renders the busiest calls and recent failures', async () => {
     const loadEdge = jest.fn().mockResolvedValue(
       detailOf({
