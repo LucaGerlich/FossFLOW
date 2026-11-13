@@ -167,23 +167,29 @@ const Providers = ({ children }: { children: React.ReactNode }) => (
   </ThemeProvider>
 );
 
-export const renderMap = (traffic?: TrafficFeed) =>
-  render(
+export const renderMap = (traffic?: TrafficFeed) => {
+  const ui = (feed?: TrafficFeed) => (
     <Providers>
-      <Harness traffic={traffic} model={twoBoxModel} />
+      <Harness traffic={feed} model={twoBoxModel} />
     </Providers>
   );
+  const result = render(ui(traffic));
+  return { ...result, rerenderWith: (feed?: TrafficFeed) => result.rerender(ui(feed)) };
+};
 
 /** Mounts `ui` inside the traffic provider of a loaded model, as the overlay's cards are. */
 export const renderCard = (
   ui: React.ReactNode,
   traffic?: TrafficFeed,
   model: InitialData = twoBoxModel
-) =>
-  render(
+) => {
+  const tree = (feed?: TrafficFeed) => (
     <Providers>
-      <Harness traffic={traffic} model={model}>
+      <Harness traffic={feed} model={model}>
         {ui}
       </Harness>
     </Providers>
   );
+  const result = render(tree(traffic));
+  return { ...result, rerenderWith: (feed?: TrafficFeed) => result.rerender(tree(feed)) };
+};

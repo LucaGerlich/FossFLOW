@@ -167,4 +167,28 @@ describe('ArrowCard', () => {
       jest.useRealTimers();
     }
   });
+
+  it('keeps its data and timer when the feed object changes but loadEdge does not', async () => {
+    const loadEdge = jest.fn().mockResolvedValue(detailOf());
+    const { rerenderWith } = open(loadEdge);
+    await screen.findByText('No failures');
+
+    rerenderWith({ ...feedWith(loadEdge), summary: summaryOf([]) });
+
+    expect(screen.queryByText('Loading…')).toBeNull();
+    expect(screen.getByText('No failures')).toBeInTheDocument();
+    expect(loadEdge).toHaveBeenCalledTimes(1);
+  });
+
+  it('reloads when loadEdge itself changes', async () => {
+    const first = jest.fn().mockResolvedValue(detailOf());
+    const second = jest.fn().mockResolvedValue(detailOf());
+    const { rerenderWith } = open(first);
+    await screen.findByText('No failures');
+
+    rerenderWith(feedWith(second));
+
+    expect(second).toHaveBeenCalledWith(pairs, '1h');
+    await screen.findByText('No failures');
+  });
 });

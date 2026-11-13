@@ -143,19 +143,19 @@ interface ArrowCardProps {
 export const ArrowCard = ({ arrow, anchor, title, onClose }: ArrowCardProps) => {
   const { t } = useTranslation('traffic');
   const traffic = useTraffic();
-  const feed = traffic?.feed;
+  // Key on the function, not the feed object: the feed may be a new object per summary.
+  const loadEdge = traffic?.feed.loadEdge;
   const [range, setRange] = useState<TrafficRange>('1h');
   const [load, setLoad] = useState<Load>({ status: 'loading' });
   // The summary refresh makes a new `pairs` array each time; key on content.
   const pairsKey = JSON.stringify(arrow.pairs);
 
   useEffect(() => {
-    if (!feed) return undefined;
+    if (!loadEdge) return undefined;
     const pairs: ArrowTraffic['pairs'] = JSON.parse(pairsKey);
     let cancelled = false;
     const fetchDetail = () => {
-      feed
-        .loadEdge(pairs, range)
+      loadEdge(pairs, range)
         .then((detail) => {
           if (!cancelled) setLoad({ status: 'ready', detail });
         })
@@ -170,7 +170,7 @@ export const ArrowCard = ({ arrow, anchor, title, onClose }: ArrowCardProps) => 
       cancelled = true;
       clearInterval(timer);
     };
-  }, [feed, pairsKey, range]);
+  }, [loadEdge, pairsKey, range]);
 
   const weight = traffic?.weights.get(arrow.connectorId) ?? 1;
 

@@ -54,11 +54,12 @@ export const TrafficLayer = () => {
     latest.current = { route, points };
   }, [route, points]);
 
-  const feed = traffic?.feed;
+  // Key on the function, not the feed object: the feed may be a new object per summary.
+  const subscribe = traffic?.feed.subscribe;
   const weights = traffic?.weights;
   useEffect(() => {
     const group = dotsRef.current;
-    if (!feed || !weights || !group) return undefined;
+    if (!subscribe || !weights || !group) return undefined;
 
     const scheduler = createDotScheduler();
     const circles = new Map<number, SVGCircleElement>();
@@ -69,7 +70,7 @@ export const TrafficLayer = () => {
       circles.clear();
     };
 
-    const unsubscribe = feed.subscribe((message) => {
+    const unsubscribe = subscribe((message) => {
       scheduler.receive(message, Date.now());
       const { route: currentRoute } = latest.current;
       if (!currentRoute) return;
@@ -128,7 +129,7 @@ export const TrafficLayer = () => {
       scheduler.clear();
       removeAll();
     };
-  }, [feed, weights]);
+  }, [subscribe, weights]);
 
   if (!traffic) return null;
 

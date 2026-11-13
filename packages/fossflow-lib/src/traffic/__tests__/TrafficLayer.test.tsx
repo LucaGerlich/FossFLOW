@@ -2,7 +2,7 @@ import { act, screen } from '@testing-library/react';
 import type { Coords } from 'src/types';
 import { drawFrame } from 'src/traffic/TrafficLayer';
 import type { ActiveDot } from 'src/traffic/scheduler';
-import { fakeFeed, renderMap } from 'src/traffic/__fixtures__/feed';
+import { fakeFeed, renderMap, summaryOf } from 'src/traffic/__fixtures__/feed';
 
 const dot = (overrides: Partial<ActiveDot> = {}): ActiveDot => ({
   id: 1,
@@ -67,5 +67,28 @@ describe('TrafficLayer', () => {
     const { container } = renderMap();
     await screen.findByTestId('map-ready');
     expect(container.querySelector('[data-traffic-layer]')).toBeNull();
+  });
+
+  it('keeps its subscription when only the feed object changes', async () => {
+    const feed = fakeFeed();
+    const { rerenderWith } = renderMap(feed);
+    await screen.findByTestId('map-ready');
+
+    rerenderWith({ ...feed, summary: summaryOf([]) });
+
+    expect(feed.subscribe).toHaveBeenCalledTimes(1);
+    expect(feed.unsubscribe).not.toHaveBeenCalled();
+  });
+
+  it('resubscribes when the subscribe function changes', async () => {
+    const first = fakeFeed();
+    const second = fakeFeed();
+    const { rerenderWith } = renderMap(first);
+    await screen.findByTestId('map-ready');
+
+    rerenderWith(second);
+
+    expect(first.unsubscribe).toHaveBeenCalledTimes(1);
+    expect(second.subscribe).toHaveBeenCalledTimes(1);
   });
 });
