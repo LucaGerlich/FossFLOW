@@ -121,7 +121,12 @@ export const createOtlpHandler = (deps: {
       const request = decodeTraceRequest(body, format);
       const batch = toTraffic(request, Date.now());
       deps.aggregator.add(key, batch);
-      deps.hub.publish(key.projectId, batch.events);
+      try {
+        deps.hub.publish(key.projectId, batch.events);
+      } catch (error) {
+        // The live view must never fail ingest: a 500 makes the sender retry and double count.
+        logger.error(`Live traffic publish failed (${error instanceof Error ? error.name : 'unknown error'})`);
+      }
       succeed(res, format);
     } catch (error) {
       if (error instanceof OtlpDecodeError) return fail(res, 400, error.message);
