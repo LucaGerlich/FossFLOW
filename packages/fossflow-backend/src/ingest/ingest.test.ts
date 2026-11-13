@@ -19,6 +19,8 @@ import {
   trafficMinute
 } from '../database/schema.js';
 import { TrafficAggregator } from '../traffic/aggregator.js';
+import { TrafficHub } from '../traffic/hub.js';
+import type { TrafficDot } from '../traffic/wire.js';
 import { type Browser, startTestApp, type TestApp } from '../test/app.js';
 import { joinAs, type Person } from '../test/people.js';
 import type { CreatedIngestKey } from './ingest-keys.service.js';
@@ -208,6 +210,32 @@ describe('OTLP endpoint against real Postgres', () => {
     const row = rows.find((r) => r.caller === 'service:sync-service');
     assert.equal(row?.callee, 'host:api.magicline.com');
     assert.equal(row?.operation, 'GET /v1/customers/{id}');
+  });
+
+  it('publishes each call to the project stream', async () => {
+    const dots: TrafficDot[] = [];
+    const unsubscribe = t.app.get(TrafficHub).subscribe(shop, (message) => dots.push(...message.dots));
+    try {
+      await send(shopKey, 'stream-app', 'proto', (tracer, t0) => {
+        tracer
+          .startSpan('GET', {
+            kind: SpanKind.CLIENT,
+            startTime: t0,
+            attributes: {
+              'http.request.method': 'GET',
+              'url.full': 'https://api.stream.example/v1/ping',
+              'server.address': 'api.stream.example'
+            }
+          })
+          .end(t0 + 25);
+      });
+    } finally {
+      unsubscribe();
+    }
+    assert.equal(dots.length, 1);
+    assert.equal(dots[0]?.caller, 'service:stream-app');
+    assert.equal(dots[0]?.callee, 'host:api.stream.example');
+    assert.equal(dots[0]?.weight, 1);
   });
 
   it('stores nothing personal', async () => {

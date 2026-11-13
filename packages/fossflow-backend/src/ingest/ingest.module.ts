@@ -1,6 +1,7 @@
 import { Global, Module } from '@nestjs/common';
 import { IngestKeysController } from './ingest-keys.controller.js';
 import { TrafficAggregator } from '../traffic/aggregator.js';
+import { TrafficHub } from '../traffic/hub.js';
 import { TrafficMaintenance } from '../traffic/maintenance.js';
 import { IngestKeysService } from './ingest-keys.service.js';
 
@@ -8,7 +9,7 @@ import { IngestKeysService } from './ingest-keys.service.js';
 @Global()
 @Module({
   controllers: [IngestKeysController],
-  providers: [IngestKeysService, TrafficAggregator, TrafficMaintenance],
-  exports: [IngestKeysService, TrafficAggregator, TrafficMaintenance]
+  providers: [IngestKeysService, TrafficAggregator, TrafficHub, TrafficMaintenance],
+  exports: [IngestKeysService, TrafficAggregator, TrafficHub, TrafficMaintenance]
 })
 export class IngestModule {}

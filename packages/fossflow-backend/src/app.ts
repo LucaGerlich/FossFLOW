@@ -9,6 +9,7 @@ import type { AppConfig } from './config/config.js';
 import { IngestKeysService } from './ingest/ingest-keys.service.js';
 import { createOtlpHandler } from './ingest/otlp-handler.js';
 import { TrafficAggregator } from './traffic/aggregator.js';
+import { TrafficHub } from './traffic/hub.js';
 
 /** Builds the configured app without listening; shared by main.ts and tests. */
 export async function createApp(
@@ -33,7 +34,8 @@ export async function createApp(
     '/api/otlp/v1/traces',
     createOtlpHandler({
       keys: app.get(IngestKeysService),
-      aggregator: app.get(TrafficAggregator)
+      aggregator: app.get(TrafficAggregator),
+      hub: app.get(TrafficHub)
     })
   );
   app.useBodyParser('json', { limit: '10mb' });

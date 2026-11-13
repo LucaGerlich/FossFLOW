@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 import express, { type Request, type RequestHandler, type Response } from 'express';
 import type { TrafficAggregator } from '../traffic/aggregator.js';
+import type { TrafficHub } from '../traffic/hub.js';
 import type { IngestKeysService } from './ingest-keys.service.js';
 import {
   decodeTraceRequest,
@@ -85,6 +86,7 @@ const succeed = (res: Response, format: OtlpFormat): void => {
 export const createOtlpHandler = (deps: {
   keys: IngestKeysService;
   aggregator: TrafficAggregator;
+  hub: TrafficHub;
 }): RequestHandler => {
   const limiter = createKeyLimiter(KEY_LIMIT, WINDOW_MS);
 
@@ -117,7 +119,9 @@ export const createOtlpHandler = (deps: {
       }
 
       const request = decodeTraceRequest(body, format);
-      deps.aggregator.add(key, toTraffic(request, Date.now()));
+      const batch = toTraffic(request, Date.now());
+      deps.aggregator.add(key, batch);
+      deps.hub.publish(key.projectId, batch.events);
       succeed(res, format);
     } catch (error) {
       if (error instanceof OtlpDecodeError) return fail(res, 400, error.message);
