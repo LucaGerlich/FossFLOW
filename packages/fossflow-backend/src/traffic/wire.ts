@@ -16,3 +16,57 @@ export type TrafficStreamMessage = {
   sentAt: number;
   dots: TrafficDot[];
 };
+
+export interface TrafficPair {
+  caller: string;
+  callee: string;
+}
+
+export interface TrafficStats {
+  calls: number;
+  failures: number;
+  callsPerMin: number;
+  /** 0–100. */
+  failedPct: number;
+  p50Ms: number | null;
+  p95Ms: number | null;
+}
+
+/** 'host:b.internal' is served by 'service:B'. */
+export interface TrafficAlias {
+  host: string;
+  service: string;
+}
+
+export interface TrafficSummary {
+  generatedAt: string;
+  windowMinutes: number;
+  edges: (TrafficPair & TrafficStats & { lastSeenAt: string })[];
+  callees: ({ callee: string } & TrafficStats)[];
+  services: ({ service: string } & TrafficStats)[];
+  aliases: TrafficAlias[];
+}
+
+export type TrafficRange = '1h' | '24h' | '7d';
+
+export interface TrafficEdgeDetail {
+  range: TrafficRange;
+  stepSeconds: 60 | 3600;
+  totals: TrafficStats;
+  series: { at: string; calls: number; failures: number; p95Ms: number | null }[];
+  operations: {
+    operation: string;
+    calls: number;
+    failures: number;
+    p50Ms: number | null;
+    p95Ms: number | null;
+  }[];
+  failures: {
+    at: string;
+    caller: string;
+    callee: string;
+    operation: string;
+    status: string;
+    durationMs: number;
+  }[];
+}
