@@ -3,6 +3,7 @@ import { NavLink, Navigate, Route, Routes, useParams } from 'react-router-dom';
 import { can, useProject } from '../projects';
 import { ProjectCredentials } from '../components/ProjectCredentials';
 import { ProjectLandscapes } from '../components/ProjectLandscapes';
+import { ProjectMonitoring } from '../components/ProjectMonitoring';
 import { ProjectSettings } from './ProjectSettings';
 
 const tabClass = ({ isActive }: { isActive: boolean }) => (isActive ? 'tab tab--active' : 'tab');
@@ -28,6 +29,7 @@ export function ProjectPage() {
   const showSettings =
     data.type === 'team' && (can(data, 'project:update') || can(data, 'projectMember:manage'));
   const showCredentials = can(data, 'credential:read');
+  const showMonitoring = can(data, 'ingestKey:read');
   const title = data.type === 'personal' ? t('platform.nav.personal') : data.name;
 
   return (
@@ -49,6 +51,11 @@ export function ProjectPage() {
             {t('platform.projects.credentials')}
           </NavLink>
         )}
+        {showMonitoring && (
+          <NavLink to={`${base}/monitoring`} className={tabClass}>
+            {t('platform.projects.monitoring')}
+          </NavLink>
+        )}
         {showSettings && (
           <NavLink to={`${base}/settings`} className={tabClass}>
             {t('platform.projects.settings')}
@@ -59,6 +66,9 @@ export function ProjectPage() {
         <Route index element={<ProjectLandscapes project={data} />} />
         {showCredentials && (
           <Route path="credentials" element={<ProjectCredentials project={data} />} />
+        )}
+        {showMonitoring && (
+          <Route path="monitoring" element={<ProjectMonitoring project={data} />} />
         )}
         {showSettings && <Route path="settings" element={<ProjectSettings project={data} />} />}
         <Route path="*" element={<Navigate to={base} replace />} />

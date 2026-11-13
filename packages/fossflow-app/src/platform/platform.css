@@ -754,3 +754,55 @@
   font-size: 14px;
   color: var(--ds-ink);
 }
+
+/* ── Monitoring ─────────────────────────────────────────────────────── */
+
+.section-head {
+  margin-bottom: 16px;
+}
+
+.section-head__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.section-head__hint {
+  margin: 4px 0 0;
+  font-size: 14px;
+  color: var(--ds-body);
+}
+
+.setup-blocks__steps {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.setup-step__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.setup-step__label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ds-body);
+}
+
+.setup-step__code {
+  margin: 0;
+  padding: 12px;
+  overflow-x: auto;
+  font-family: var(--ds-font-mono);
+  font-size: 13px;
+  line-height: 1.5;
+  background-color: var(--ds-canvas);
+  border-radius: var(--ds-radius-md);
+  box-shadow: var(--ds-ring);
+}
