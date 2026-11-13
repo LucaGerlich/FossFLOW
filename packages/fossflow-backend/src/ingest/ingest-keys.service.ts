@@ -1,5 +1,13 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import { ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  type BeforeApplicationShutdown,
+  ConflictException,
+  Inject,
+  Injectable,
+  Logger,
+  NotFoundException,
+  type OnApplicationBootstrap
+} from '@nestjs/common';
 import { count, desc, eq, inArray } from 'drizzle-orm';
 import { APP_CONFIG, type AppConfig } from '../config/config.js';
 import { DB, type Database } from '../database/database.module.js';
@@ -34,14 +42,62 @@ const KEY_PATTERN = /^ffi_[A-Za-z0-9_-]{43}$/;
 const PREFIX_LENGTH = 12;
 const MAX_KEYS_PER_PROJECT = 50;
 
+const RELOAD_MS = 30_000;
+const logger = new Logger('IngestKeys');
+
 const hashKey = (key: string) => createHash('sha256').update(key).digest('hex');
 
+/**
+ * Keys are authenticated from an in-memory index of every key hash, so a flood of
+ * invalid keys never reaches the database. The index is updated on create and remove,
+ * and rebuilt every 30 s to pick up cascades (a deleted project or user).
+ */
 @Injectable()
-export class IngestKeysService {
+export class IngestKeysService implements OnApplicationBootstrap, BeforeApplicationShutdown {
+  private index = new Map<string, IngestKeyRef>();
+  private timer: NodeJS.Timeout | undefined;
+  /** reload, create and remove run one after another, so a stale snapshot can't drop a new key. */
+  private chain: Promise<unknown> = Promise.resolve();
+
   constructor(
     @Inject(DB) private readonly db: Database,
     @Inject(APP_CONFIG) private readonly config: AppConfig
   ) {}
+
+  async onApplicationBootstrap(): Promise<void> {
+    try {
+      await this.reload();
+    } catch (error) {
+      logger.warn(`Could not load ingest keys (${error instanceof Error ? error.name : 'unknown error'}); retrying`);
+    }
+    this.timer = setInterval(() => {
+      this.reload().catch((error: unknown) => {
+        logger.warn(`Could not reload ingest keys (${error instanceof Error ? error.name : 'unknown error'})`);
+      });
+    }, RELOAD_MS);
+    this.timer.unref();
+  }
+
+  beforeApplicationShutdown(): void {
+    if (this.timer) clearInterval(this.timer);
+    this.timer = undefined;
+  }
+
+  private serialise<T>(work: () => Promise<T>): Promise<T> {
+    const run = this.chain.then(work, work);
+    this.chain = run.catch(() => undefined);
+    return run;
+  }
+
+  /** Rebuilds the index from the database and swaps it in. */
+  reload(): Promise<void> {
+    return this.serialise(async () => {
+      const rows = await this.db
+        .select({ id: ingestKey.id, projectId: ingestKey.projectId, keyHash: ingestKey.keyHash })
+        .from(ingestKey);
+      this.index = new Map(rows.map((row) => [row.keyHash, { id: row.id, projectId: row.projectId }]));
+    });
+  }
 
   async list(projectId: string): Promise<IngestKeySummary[]> {
     const rows = await this.db
@@ -76,7 +132,11 @@ export class IngestKeysService {
     }));
   }
 
-  async create(projectId: string, userId: string, name: string): Promise<CreatedIngestKey> {
+  create(projectId: string, userId: string, name: string): Promise<CreatedIngestKey> {
+    return this.serialise(() => this.insertKey(projectId, userId, name));
+  }
+
+  private async insertKey(projectId: string, userId: string, name: string): Promise<CreatedIngestKey> {
     const [existing] = await this.db
       .select({ total: count() })
       .from(ingestKey)
@@ -91,6 +151,7 @@ export class IngestKeysService {
       .values({ id, projectId, name, keyHash: hashKey(key), prefix: key.slice(0, PREFIX_LENGTH), createdBy: userId })
       .returning();
     if (!row) throw new Error('ingest key was not saved');
+    this.index.set(row.keyHash, { id: row.id, projectId: row.projectId });
     const [creator] = await this.db.select({ name: user.name }).from(user).where(eq(user.id, userId));
     const endpoint = `${this.config.publicUrl}/api/otlp`;
     return {
@@ -107,21 +168,25 @@ export class IngestKeysService {
     };
   }
 
-  async remove(id: string): Promise<void> {
-    const removed = await this.db.delete(ingestKey).where(eq(ingestKey.id, id)).returning({ id: ingestKey.id });
-    if (removed.length === 0) throw new NotFoundException('Ingest key not found');
+  remove(id: string): Promise<void> {
+    return this.serialise(async () => {
+      const removed = await this.db
+        .delete(ingestKey)
+        .where(eq(ingestKey.id, id))
+        .returning({ keyHash: ingestKey.keyHash });
+      const [row] = removed;
+      if (!row) throw new NotFoundException('Ingest key not found');
+      this.index.delete(row.keyHash);
+    });
   }
 
   /**
-   * Finds the key a request presented. Malformed input never reaches the database. The lookup is by
-   * SHA-256 hash, which a caller cannot steer, so its timing reveals nothing about stored keys.
+   * Finds the key a request presented, from the in-memory index: the format check, the SHA-256 hash
+   * and a map lookup, with no database query. A caller cannot steer the hash, so lookup timing
+   * reveals nothing about stored keys.
    */
   async authenticate(presented: string | undefined): Promise<IngestKeyRef | null> {
     if (presented === undefined || !KEY_PATTERN.test(presented)) return null;
-    const [row] = await this.db
-      .select({ id: ingestKey.id, projectId: ingestKey.projectId })
-      .from(ingestKey)
-      .where(eq(ingestKey.keyHash, hashKey(presented)));
-    return row ?? null;
+    return this.index.get(hashKey(presented)) ?? null;
   }
 }

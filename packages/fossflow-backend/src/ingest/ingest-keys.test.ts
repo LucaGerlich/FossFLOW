@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, it } from 'vitest';
 import { DB, type Database } from '../database/database.module.js';
-import { ingestKey } from '../database/schema.js';
+import { ingestKey, project } from '../database/schema.js';
 import { type Browser, startTestApp, type TestApp } from '../test/app.js';
 import { joinAs, type Person } from '../test/people.js';
 import { IngestKeysService } from './ingest-keys.service.js';
@@ -100,6 +101,50 @@ describe('ingest keys against real Postgres', () => {
     assert.equal(await keys.authenticate(undefined), null);
     assert.equal(await keys.authenticate('ffi_short'), null);
     assert.equal(await keys.authenticate(`ffi_${'A'.repeat(43)}`), null);
+  });
+
+  describe('in-memory index', () => {
+    const insertDirectly = async (projectId: string) => {
+      const key = `ffi_${randomBytes(32).toString('base64url')}`;
+      const id = randomUUID();
+      await t.app.get<Database>(DB).insert(ingestKey).values({
+        id,
+        projectId,
+        name: 'direct',
+        keyHash: createHash('sha256').update(key).digest('hex'),
+        prefix: key.slice(0, 12)
+      });
+      return { key, id };
+    };
+
+    it('accepts a created key immediately and rejects a deleted one immediately', async () => {
+      const keys = t.app.get(IngestKeysService);
+      const own: string = (await owner.post('/api/projects', { name: 'Fresh' })).body.id;
+      const fresh: CreatedIngestKey = (await owner.post(`/api/projects/${own}/ingest-keys`, { name: 'fresh' })).body;
+      assert.deepEqual(await keys.authenticate(fresh.key), { id: fresh.id, projectId: own });
+      assert.equal((await owner.delete(`/api/ingest-keys/${fresh.id}`)).status, 204);
+      assert.equal(await keys.authenticate(fresh.key), null);
+    });
+
+    it('runs no database query: a row inserted directly is unknown until reload', async () => {
+      const keys = t.app.get(IngestKeysService);
+      const own: string = (await owner.post('/api/projects', { name: 'Direct' })).body.id;
+      const direct = await insertDirectly(own);
+      assert.equal(await keys.authenticate(direct.key), null);
+      await keys.reload();
+      assert.deepEqual(await keys.authenticate(direct.key), { id: direct.id, projectId: own });
+    });
+
+    it('a project deleted directly stays accepted until reload', async () => {
+      const keys = t.app.get(IngestKeysService);
+      const doomed: string = (await owner.post('/api/projects', { name: 'Doomed' })).body.id;
+      const key: CreatedIngestKey = (await owner.post(`/api/projects/${doomed}/ingest-keys`, { name: 'k' })).body;
+      assert.ok(await keys.authenticate(key.key));
+      await t.app.get<Database>(DB).delete(project).where(eq(project.id, doomed));
+      assert.ok(await keys.authenticate(key.key));
+      await keys.reload();
+      assert.equal(await keys.authenticate(key.key), null);
+    });
   });
 
   it('enforces roles, then deletes', async () => {
