@@ -1,3 +1,4 @@
+import { trafficIdentity } from 'src/schemas/common';
 import type { Connector } from 'src/types';
 import { boxOf, findArrow, type TrafficIndex } from './match';
 import type { TrafficSummary } from './types';
@@ -36,6 +37,8 @@ const unplacedOf = (
   const seen = new Map<string, UnplacedEntry>();
   const note = (identity: string, calls: number, lastSeenAt: string): void => {
     if (aliasHosts.has(identity) || boxOf(index, identity) !== null) return;
+    // A name the binding schema rejects could never be saved, so never offer it.
+    if (!trafficIdentity.safeParse(identity).success) return;
     const entry = seen.get(identity);
     if (!entry) {
       seen.set(identity, { identity, calls, lastSeenAt });

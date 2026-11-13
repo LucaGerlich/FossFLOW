@@ -9,6 +9,7 @@ import { useUiStateStore } from 'src/stores/uiStateStore';
 import { EditorModeEnum, type Coords, type Icon } from 'src/types';
 import { VIEW_ITEM_DEFAULTS } from 'src/config';
 import { generateId } from 'src/utils/common';
+import { trafficIdentity } from 'src/schemas/common';
 import { screenToIso } from 'src/utils/renderer';
 import { findNearestUnoccupiedTile } from 'src/utils/findNearestUnoccupiedTile';
 import { fill } from './format';
@@ -121,7 +122,7 @@ export const SeenTray = () => {
 
   const place = (identity: string): void => {
     const iconId = ICON_FOR_PREFIX[splitIdentity(identity).prefix];
-    if (!iconId) return;
+    if (!iconId || !trafficIdentity.safeParse(identity).success) return;
     // skipHistory: the snapshot placeIcon takes is the placement's only undo step.
     if (!icons.some((icon) => icon.id === iconId)) {
       const icon = HAIRLINE_ICONS.find((candidate) => candidate.id === iconId);

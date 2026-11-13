@@ -78,6 +78,20 @@ describe('SeenTray', () => {
     expect(viewItem.tile).toEqual({ x: 0, y: 0 });
   });
 
+  it('does not offer Place for an identity the schema rejects', async () => {
+    await mount(
+      fakeFeed(
+        summaryOf([
+          { caller: 'service:a*b', callee: 'host:x*y', stats: { calls: 5 } },
+          { caller: 'service:a*b', callee: 'host:ok.example', stats: { calls: 4 } }
+        ])
+      )
+    );
+    await open();
+    expect(screen.queryByText(/\*/)).toBeNull();
+    expect(screen.getAllByRole('button', { name: 'Place' })).toHaveLength(1);
+  });
+
   it('draws an arrow between two placed boxes', async () => {
     await mount();
     await open();

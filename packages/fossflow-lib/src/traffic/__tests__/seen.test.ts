@@ -144,3 +144,16 @@ describe('seenEntries', () => {
     expect(capped.unplaced[0].identity).toBe('host:h79');
   });
 });
+
+describe('identities the schema rejects', () => {
+  const edges = [
+    { caller: 'service:a*b', callee: 'service:app', stats: { calls: 5 } }
+  ];
+
+  it('are neither unplaced nor suggested', () => {
+    const { summary, index, result } = run(edges);
+    expect(result.unplaced.map((entry) => entry.identity)).toEqual([]);
+    expect(suggestIdentities(summary, index)).toEqual([]);
+  });
+});
+
