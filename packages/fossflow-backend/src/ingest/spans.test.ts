@@ -267,6 +267,26 @@ describe('toTraffic', () => {
     assert.deepEqual(batch.services, ['unknown_service']);
   });
 
+  it('replaces * in the service name so identities satisfy the wire schema', () => {
+    const batch = toTraffic(
+      request('pay*ments', [
+        span(3, { 'http.request.method': 'GET', 'server.address': 'h' }),
+        span(2, {
+          'http.route': '/x',
+          'http.request.method': 'GET',
+          'server.address': 'pay.internal'
+        })
+      ]),
+      RECEIVED
+    );
+    assert.equal(batch.events[0]!.caller, 'service:pay_ments');
+    assert.equal(batch.events[1]!.callee, 'service:pay_ments');
+    assert.deepEqual(batch.aliases, [
+      { host: 'pay.internal', service: 'pay_ments' }
+    ]);
+    assert.deepEqual(batch.services, ['pay_ments']);
+  });
+
   it('ignores INTERNAL, PRODUCER and CONSUMER spans, and calls without a host', () => {
     const http = { 'http.request.method': 'GET', 'server.address': 'h' };
     const batch = toTraffic(

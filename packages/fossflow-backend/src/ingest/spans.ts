@@ -262,7 +262,9 @@ export const toTraffic = (
       toAttributes(resource.resource?.attributes),
       'service.name'
     );
-    const service = cap(name ?? '') || 'unknown_service';
+    // `*` is the lib's wildcard marker and its identity schema rejects it.
+    const service =
+      cap(name ?? '').replaceAll('*', '_') || 'unknown_service';
     services.add(service);
 
     for (const scope of resource.scopeSpans ?? []) {
