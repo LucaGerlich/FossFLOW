@@ -22,7 +22,7 @@ export const modelSchema = z
 
     issues.forEach((issue) => {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: 'custom',
         params: issue.params,
         message: issue.message
       });
