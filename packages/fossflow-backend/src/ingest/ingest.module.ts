@@ -1,13 +1,14 @@
 import { Global, Module } from '@nestjs/common';
 import { IngestKeysController } from './ingest-keys.controller.js';
 import { TrafficAggregator } from '../traffic/aggregator.js';
+import { TrafficMaintenance } from '../traffic/maintenance.js';
 import { IngestKeysService } from './ingest-keys.service.js';
 
 /** Ingest keys: how services prove which project their traces belong to. */
 @Global()
 @Module({
   controllers: [IngestKeysController],
-  providers: [IngestKeysService, TrafficAggregator],
-  exports: [IngestKeysService, TrafficAggregator]
+  providers: [IngestKeysService, TrafficAggregator, TrafficMaintenance],
+  exports: [IngestKeysService, TrafficAggregator, TrafficMaintenance]
 })
 export class IngestModule {}
