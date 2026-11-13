@@ -21,6 +21,10 @@ const CHUNK = 1000;
 const MAX_FAILURES_PER_ARROW = 100;
 const MAX_OPERATIONS_PER_PAIR = 200;
 const MAX_PAIRS_PER_PROJECT = 1000;
+export const MAX_MINUTE_BUCKETS_PER_FLUSH = 20_000;
+const MAX_SERVICES_PER_KEY = 100;
+const MAX_ALIASES_PER_PROJECT = 500;
+const THROTTLE_MS = MINUTE_MS;
 const OVERFLOW_OPERATION = 'other';
 const SEP = '\u0000';
 
@@ -48,6 +52,8 @@ type Failure = {
 
 type ProjectBuffer = {
   minutes: Map<string, Minute>;
+  /** Events dropped in this flush window because the buffer was full. */
+  droppedMinutes: number;
   failures: Failure[];
   /** Failures buffered per arrow in this flush window. */
   failureCounts: Map<string, number>;
@@ -58,6 +64,7 @@ type ProjectBuffer = {
 
 const newBuffer = (): ProjectBuffer => ({
   minutes: new Map(),
+  droppedMinutes: 0,
   failures: [],
   failureCounts: new Map(),
   aliases: new Map(),
@@ -84,10 +91,13 @@ export class TrafficAggregator implements OnApplicationBootstrap, BeforeApplicat
   /** Distinct operations seen per (project, caller, callee) since the last reset. */
   private operations = new Map<string, Set<string>>();
   private pairs = new Map<string, Set<string>>();
-  private warnedPairCap = new Set<string>();
+  private warnedCaps = new Set<string>();
+  /** Distinct service names seen per ingest key, and alias rows per project, since the last reset. */
+  private serviceNames = new Map<string, Set<string>>();
+  private aliasNames = new Map<string, Set<string>>();
   private capsResetAt = 0;
 
-  /** When each service, alias and key was last queued for a write. */
+  /** When each service, alias and key was last written successfully; pruned on every flush. */
   private lastWrite = new Map<string, number>();
 
   constructor(@Inject(DB) private readonly db: Database) {}
@@ -95,6 +105,11 @@ export class TrafficAggregator implements OnApplicationBootstrap, BeforeApplicat
   onApplicationBootstrap(): void {
     this.timer = setInterval(() => void this.flush(), FLUSH_MS);
     this.timer.unref();
+  }
+
+  /** How many throttle entries are held in memory (for tests). */
+  get throttleSize(): number {
+    return this.lastWrite.size;
   }
 
   async beforeApplicationShutdown(): Promise<void> {
@@ -134,7 +149,9 @@ export class TrafficAggregator implements OnApplicationBootstrap, BeforeApplicat
     if (now < this.capsResetAt) return;
     this.operations.clear();
     this.pairs.clear();
-    this.warnedPairCap.clear();
+    this.warnedCaps.clear();
+    this.serviceNames.clear();
+    this.aliasNames.clear();
     this.capsResetAt = now + DAY_MS;
   }
 
@@ -148,10 +165,7 @@ export class TrafficAggregator implements OnApplicationBootstrap, BeforeApplicat
     }
     if (!projectPairs.has(pair)) {
       if (projectPairs.size >= MAX_PAIRS_PER_PROJECT) {
-        if (!this.warnedPairCap.has(projectId)) {
-          this.warnedPairCap.add(projectId);
-          logger.warn(`Project ${projectId} is over ${MAX_PAIRS_PER_PROJECT} service pairs; dropping new ones`);
-        }
+        this.warnOnce(`pairs${SEP}${projectId}`, `Project ${projectId} is over ${MAX_PAIRS_PER_PROJECT} service pairs; dropping new ones`);
         return null;
       }
       projectPairs.add(pair);
@@ -174,6 +188,10 @@ export class TrafficAggregator implements OnApplicationBootstrap, BeforeApplicat
     const id = [event.kind, event.caller, event.callee, operation, minute].join(SEP);
     let row = buffer.minutes.get(id);
     if (!row) {
+      if (buffer.minutes.size >= MAX_MINUTE_BUCKETS_PER_FLUSH) {
+        buffer.droppedMinutes += 1;
+        return;
+      }
       row = {
         kind: event.kind,
         caller: event.caller,
@@ -209,37 +227,70 @@ export class TrafficAggregator implements OnApplicationBootstrap, BeforeApplicat
     });
   }
 
-  /** Queues services, aliases and the key's last use, each at most once a minute. */
-  private queueIdentity(key: IngestKeyRef, buffer: ProjectBuffer, batch: TrafficBatch, now: number): void {
-    const due = (id: string): boolean => {
-      const last = this.lastWrite.get(id);
-      if (last !== undefined && now - last < MINUTE_MS) return false;
-      this.lastWrite.set(id, now);
-      return true;
-    };
+  private warnOnce(id: string, message: string): void {
+    if (this.warnedCaps.has(id)) return;
+    this.warnedCaps.add(id);
+    logger.warn(message);
+  }
 
+  /** True when the row was not written in the last minute. */
+  private due(id: string, now: number): boolean {
+    const last = this.lastWrite.get(id);
+    return last === undefined || now - last >= THROTTLE_MS;
+  }
+
+  /** Whether a name fits under its cap; names beyond it are ignored. */
+  private admitName(sets: Map<string, Set<string>>, scope: string, name: string, max: number): boolean {
+    let seen = sets.get(scope);
+    if (!seen) {
+      seen = new Set();
+      sets.set(scope, seen);
+    }
+    if (seen.has(name)) return true;
+    if (seen.size >= max) return false;
+    seen.add(name);
+    return true;
+  }
+
+  /**
+   * Queues services, aliases and the key's last use, each at most once a minute.
+   * The throttle is only recorded once the write succeeds, so a failed write is retried.
+   */
+  private queueIdentity(key: IngestKeyRef, buffer: ProjectBuffer, batch: TrafficBatch, now: number): void {
     for (const service of batch.services) {
-      if (!due(`service${SEP}${key.id}${SEP}${service}`)) continue;
+      if (!this.admitName(this.serviceNames, key.id, service, MAX_SERVICES_PER_KEY)) {
+        this.warnOnce(`services${SEP}${key.id}`, `Ingest key ${key.id} is over ${MAX_SERVICES_PER_KEY} services; ignoring new ones`);
+        continue;
+      }
+      if (!this.due(`service${SEP}${key.id}${SEP}${service}`, now)) continue;
       const names = buffer.services.get(key.id) ?? new Set<string>();
       names.add(service);
       buffer.services.set(key.id, names);
     }
     for (const alias of batch.aliases) {
       const id = `${alias.host}${SEP}${alias.service}`;
-      if (due(`alias${SEP}${key.projectId}${SEP}${id}`)) buffer.aliases.set(id, alias);
+      if (!this.admitName(this.aliasNames, key.projectId, id, MAX_ALIASES_PER_PROJECT)) {
+        this.warnOnce(`aliases${SEP}${key.projectId}`, `Project ${key.projectId} is over ${MAX_ALIASES_PER_PROJECT} aliases; ignoring new ones`);
+        continue;
+      }
+      if (this.due(`alias${SEP}${key.projectId}${SEP}${id}`, now)) buffer.aliases.set(id, alias);
     }
     // An empty entry still marks the key as used.
-    if (due(`key${SEP}${key.id}`) && !buffer.services.has(key.id)) buffer.services.set(key.id, new Set());
+    if (this.due(`key${SEP}${key.id}`, now) && !buffer.services.has(key.id)) buffer.services.set(key.id, new Set());
   }
 
   private async write(now: number): Promise<void> {
+    for (const [id, last] of this.lastWrite) if (now - last > THROTTLE_MS) this.lastWrite.delete(id);
     const buffers = this.buffers;
     this.buffers = new Map();
     for (const [projectId, buffer] of buffers) {
+      if (buffer.droppedMinutes > 0) {
+        logger.warn(`Project ${projectId} filled ${MAX_MINUTE_BUCKETS_PER_FLUSH} minute buckets in one flush; dropped ${buffer.droppedMinutes} calls`);
+      }
       await this.guard(projectId, 'traffic_minute', () => this.writeMinutes(projectId, buffer));
       await this.guard(projectId, 'traffic_failure', () => this.writeFailures(projectId, buffer));
       await this.guard(projectId, 'traffic_alias', () => this.writeAliases(projectId, buffer, now));
-      await this.guard(projectId, 'ingest_service', () => this.writeKeys(buffer, now));
+      await this.writeKeys(projectId, buffer, now);
     }
   }
 
@@ -297,20 +348,26 @@ export class TrafficAggregator implements OnApplicationBootstrap, BeforeApplicat
           target: [trafficAlias.projectId, trafficAlias.host, trafficAlias.service],
           set: { lastSeenAt: new Date(now) }
         });
+      for (const row of part) this.lastWrite.set(`alias${SEP}${projectId}${SEP}${row.host}${SEP}${row.service}`, now);
     }
   }
 
-  private async writeKeys(buffer: ProjectBuffer, now: number): Promise<void> {
-    const lastSeenAt = new Date(now);
+  /** Each key is written on its own, so one failing key doesn't drop the others. */
+  private async writeKeys(projectId: string, buffer: ProjectBuffer, now: number): Promise<void> {
     for (const [keyId, names] of buffer.services) {
-      const rows = [...names].map((serviceName) => ({ keyId, serviceName, lastSeenAt }));
-      for (const part of chunks(rows)) {
-        await this.db
-          .insert(ingestService)
-          .values(part)
-          .onConflictDoUpdate({ target: [ingestService.keyId, ingestService.serviceName], set: { lastSeenAt } });
-      }
-      await this.db.update(ingestKey).set({ lastUsedAt: lastSeenAt }).where(eq(ingestKey.id, keyId));
+      await this.guard(projectId, 'ingest_service', async () => {
+        const lastSeenAt = new Date(now);
+        const rows = [...names].map((serviceName) => ({ keyId, serviceName, lastSeenAt }));
+        for (const part of chunks(rows)) {
+          await this.db
+            .insert(ingestService)
+            .values(part)
+            .onConflictDoUpdate({ target: [ingestService.keyId, ingestService.serviceName], set: { lastSeenAt } });
+          for (const row of part) this.lastWrite.set(`service${SEP}${keyId}${SEP}${row.serviceName}`, now);
+        }
+        await this.db.update(ingestKey).set({ lastUsedAt: lastSeenAt }).where(eq(ingestKey.id, keyId));
+        this.lastWrite.set(`key${SEP}${keyId}`, now);
+      });
     }
   }
 }

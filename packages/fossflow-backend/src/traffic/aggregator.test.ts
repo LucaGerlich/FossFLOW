@@ -8,7 +8,7 @@ import type { TrafficBatch, TrafficEvent } from '../ingest/spans.js';
 import { DB, type Database } from '../database/database.module.js';
 import { ingestKey, ingestService, project, trafficAlias, trafficFailure, trafficMinute } from '../database/schema.js';
 import { startTestApp, type TestApp } from '../test/app.js';
-import { TrafficAggregator } from './aggregator.js';
+import { MAX_MINUTE_BUCKETS_PER_FLUSH, TrafficAggregator } from './aggregator.js';
 
 const MINUTE = 60_000;
 const NOW = Date.UTC(2026, 10, 13, 12, 0, 30);
@@ -184,5 +184,133 @@ describe('traffic aggregator against real Postgres', () => {
       .from(ingestKey)
       .where(and(eq(ingestKey.id, b.id)));
     assert.ok(row?.lastUsedAt);
+  });
+
+  it('keeps at most 100 services per key and warns once', async () => {
+    const key = await newKey();
+    const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    try {
+      const services = Array.from({ length: 105 }, (_, i) => `svc-${i}`);
+      aggregator.add(key, batch([call()], { services }), NOW);
+      aggregator.add(key, batch([call()], { services }), NOW);
+      await aggregator.flush(NOW);
+      assert.equal(warn.mock.calls.filter(([message]) => String(message).includes(key.id)).length, 1);
+    } finally {
+      warn.mockRestore();
+    }
+    const rows = await db.select().from(ingestService).where(eq(ingestService.keyId, key.id));
+    assert.equal(rows.length, 100);
+  });
+
+  it('keeps at most 500 aliases per project', async () => {
+    const key = await newKey();
+    const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    try {
+      const aliases = Array.from({ length: 505 }, (_, i) => ({ host: `host-${i}`, service: 'svc' }));
+      aggregator.add(key, batch([call()], { aliases }), NOW);
+      await aggregator.flush(NOW);
+      assert.equal(warn.mock.calls.filter(([message]) => String(message).includes(key.projectId)).length, 1);
+    } finally {
+      warn.mockRestore();
+    }
+    const rows = await db.select().from(trafficAlias).where(eq(trafficAlias.projectId, key.projectId));
+    assert.equal(rows.length, 500);
+  });
+
+  it('retries identity writes that failed, even within the minute', async () => {
+    const key = await newKey();
+    await db.delete(project).where(eq(project.id, key.projectId));
+    const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    try {
+      aggregator.add(key, batch([], { services: ['member-app'] }), NOW);
+      await aggregator.flush(NOW);
+      assert.ok(warn.mock.calls.length > 0);
+    } finally {
+      warn.mockRestore();
+    }
+    await db.insert(project).values({ id: key.projectId, name: 'P', type: 'team' });
+    await db.insert(ingestKey).values({ id: key.id, projectId: key.projectId, name: 'k', keyHash: randomUUID(), prefix: 'ffi_x' });
+
+    aggregator.add(key, batch([], { services: ['member-app'] }), NOW + 1000);
+    await aggregator.flush(NOW + 1000);
+    const rows = await db.select().from(ingestService).where(eq(ingestService.keyId, key.id));
+    assert.deepEqual(rows.map((row) => row.serviceName), ['member-app']);
+    const [row] = await db.select().from(ingestKey).where(eq(ingestKey.id, key.id));
+    assert.ok(row?.lastUsedAt);
+  });
+
+  it("one failing key doesn't drop the other keys of a project", async () => {
+    const good = await newKey();
+    const bad: IngestKeyRef = { id: randomUUID(), projectId: good.projectId };
+    const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    try {
+      aggregator.add(bad, batch([], { services: ['ghost'] }), NOW);
+      aggregator.add(good, batch([], { services: ['real'] }), NOW);
+      await aggregator.flush(NOW);
+    } finally {
+      warn.mockRestore();
+    }
+    const rows = await db.select().from(ingestService).where(eq(ingestService.keyId, good.id));
+    assert.equal(rows.length, 1);
+    const [row] = await db.select().from(ingestKey).where(eq(ingestKey.id, good.id));
+    assert.ok(row?.lastUsedAt);
+  });
+
+  it('prunes throttle entries older than a minute on flush', async () => {
+    const key = await newKey();
+    aggregator.add(key, batch([call()], { services: ['svc'], aliases: [{ host: 'h', service: 'svc' }] }), NOW);
+    await aggregator.flush(NOW);
+    assert.ok(aggregator.throttleSize >= 3);
+    await aggregator.flush(NOW + 2 * MINUTE);
+    assert.equal(aggregator.throttleSize, 0);
+  });
+
+  it('admits new services and pairs again after the 24 h reset', async () => {
+    const key = await newKey();
+    const later = NOW + 25 * 3_600_000;
+    const services = Array.from({ length: 105 }, (_, i) => `svc-${i}`);
+    const pairs = Array.from({ length: 1005 }, (_, i) => call({ callee: `service:svc-${i}`, at: later }));
+    const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    try {
+      aggregator.add(key, batch(pairs.map((e) => ({ ...e, at: NOW })), { services }), NOW);
+      await aggregator.flush(NOW);
+      aggregator.add(key, batch(pairs.slice(1000), { services: services.slice(100) }), later);
+      await aggregator.flush(later);
+    } finally {
+      warn.mockRestore();
+    }
+    const rows = await db.select().from(ingestService).where(eq(ingestService.keyId, key.id));
+    assert.equal(rows.length, 105);
+    assert.equal((await minutesOf(key.projectId)).length, 1005);
+  });
+
+  it('caps minute buckets per project per flush window', async () => {
+    const key = await newKey();
+    const total = MAX_MINUTE_BUCKETS_PER_FLUSH + 5000;
+    // 3 pairs x 200 operations x 60 minutes gives 36 000 distinct buckets.
+    const events = Array.from({ length: total }, (_, i) =>
+      call({
+        callee: `service:svc-${i % 3}`,
+        operation: `op-${Math.floor(i / 3) % 200}`,
+        at: NOW - Math.floor(i / 600) * MINUTE
+      })
+    );
+    const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    try {
+      aggregator.add(key, batch(events), NOW);
+      // Events for buckets that already exist still count.
+      aggregator.add(key, batch([events[0] as TrafficEvent]), NOW);
+      await aggregator.flush(NOW);
+      const mine = warn.mock.calls.filter(([message]) => String(message).includes(key.projectId));
+      assert.equal(mine.length, 1);
+      assert.match(String(mine[0]?.[0]), /dropped 5000 /);
+    } finally {
+      warn.mockRestore();
+    }
+    assert.equal((await minutesOf(key.projectId)).length, MAX_MINUTE_BUCKETS_PER_FLUSH);
+
+    aggregator.add(key, batch([call({ operation: 'fresh' })]), NOW);
+    await aggregator.flush(NOW);
+    assert.equal((await minutesOf(key.projectId)).length, MAX_MINUTE_BUCKETS_PER_FLUSH + 1);
   });
 });
