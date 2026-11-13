@@ -6,6 +6,7 @@ import { parseBody } from '../common/validation.js';
 import { CurrentSession } from '../auth/guards.js';
 import { CurrentProject, type ProjectAccessInfo, RequireProjectScope } from '../projects/project-access.js';
 import { TrafficHub } from './hub.js';
+import { createSummaryCache } from './summary-cache.js';
 import { MAX_STREAMS_PER_USER, openTrafficStream } from './stream.js';
 import { TrafficQueries } from './traffic-queries.js';
 import type { TrafficEdgeDetail, TrafficSummary } from './wire.js';
@@ -30,10 +31,14 @@ export class TrafficController {
   /** Open streams per user; the stream's own `close` frees its slot. */
   private readonly openStreams = new Map<string, number>();
 
+  private readonly summaryOf: (projectId: string, now: Date) => Promise<TrafficSummary>;
+
   constructor(
     private readonly hub: TrafficHub,
     private readonly queries: TrafficQueries
-  ) {}
+  ) {
+    this.summaryOf = createSummaryCache((projectId, now) => this.queries.summary(projectId, now));
+  }
 
   @Get('stream')
   @RequireProjectScope('landscape:read', { target: 'landscape' })
@@ -62,7 +67,7 @@ export class TrafficController {
   @RequireProjectScope('landscape:read', { target: 'landscape' })
   @Header('Cache-Control', 'no-store')
   summary(@CurrentProject() access: ProjectAccessInfo): Promise<TrafficSummary> {
-    return this.queries.summary(access.projectId, new Date());
+    return this.summaryOf(access.projectId, new Date());
   }
 
   @Get('edge')

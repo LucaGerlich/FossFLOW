@@ -80,12 +80,14 @@ export class TrafficQueries {
       `),
       this.db.execute<{ caller: string; callee: string; last_seen: Date | string }>(sql`
         select caller, callee, max(seen) as last_seen from (
-          select caller, callee, hour as seen from traffic_hour
+          select caller, callee, max(hour) as seen from traffic_hour
           where project_id = ${projectId} and kind = 'call'
             and hour >= ${new Date(seenFrom)}::timestamptz and hour < ${new Date(cut)}::timestamptz
+          group by caller, callee
           union all
-          select caller, callee, minute as seen from traffic_minute
+          select caller, callee, max(minute) as seen from traffic_minute
           where project_id = ${projectId} and kind = 'call' and minute >= ${new Date(cut)}::timestamptz
+          group by caller, callee
         ) seen
         group by caller, callee
       `),
