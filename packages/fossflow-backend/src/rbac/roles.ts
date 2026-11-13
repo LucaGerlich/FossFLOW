@@ -84,7 +84,10 @@ export const PROJECT_SCOPES = [
   'credential:read',
   'credential:update',
   'credential:delete',
-  'credential:use'
+  'credential:use',
+  'ingestKey:create',
+  'ingestKey:read',
+  'ingestKey:delete'
 ] as const;
 export type ProjectScope = (typeof PROJECT_SCOPES)[number];
 
@@ -97,7 +100,10 @@ const CONTENT_SCOPES: readonly ProjectScope[] = [
   'credential:read',
   'credential:update',
   'credential:delete',
-  'credential:use'
+  'credential:use',
+  'ingestKey:create',
+  'ingestKey:read',
+  'ingestKey:delete'
 ];
 
 const PROJECT_ROLE_SCOPES: Record<ProjectRole, readonly ProjectScope[]> = {
@@ -106,7 +112,7 @@ const PROJECT_ROLE_SCOPES: Record<ProjectRole, readonly ProjectScope[]> = {
   'project:admin': PROJECT_SCOPES,
   'project:editor': ['project:read', ...CONTENT_SCOPES],
   // Read-only: sees landscapes and credential names, can't use credentials.
-  'project:viewer': ['project:read', 'landscape:read', 'credential:read']
+  'project:viewer': ['project:read', 'landscape:read', 'credential:read', 'ingestKey:read']
 };
 
 export function isTeamProjectRole(value: unknown): value is TeamProjectRole {

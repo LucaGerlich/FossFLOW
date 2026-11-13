@@ -31,9 +31,21 @@ describe('project roles', () => {
     assert.ok(!editor.has('landscape:move'));
   });
 
+  it('lets editors and personal owners manage ingest keys', () => {
+    for (const role of ['project:editor', 'project:personalOwner']) {
+      const granted = scopes('global:member', role);
+      for (const scope of ['ingestKey:create', 'ingestKey:read', 'ingestKey:delete'] as const) {
+        assert.ok(granted.has(scope), `${role} ${scope}`);
+      }
+    }
+  });
+
   it('keeps viewers read-only and away from credential use', () => {
     const viewer = scopes('global:member', 'project:viewer');
-    assert.deepEqual([...viewer].sort(), ['credential:read', 'landscape:read', 'project:read']);
+    assert.deepEqual(
+      [...viewer].sort(),
+      ['credential:read', 'ingestKey:read', 'landscape:read', 'project:read']
+    );
   });
 
   it('never lets a personal project be renamed, deleted or shared', () => {
