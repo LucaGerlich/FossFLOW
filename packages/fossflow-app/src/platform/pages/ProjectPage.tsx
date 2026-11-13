@@ -68,7 +68,7 @@ export function ProjectPage() {
           <Route path="credentials" element={<ProjectCredentials project={data} />} />
         )}
         {showMonitoring && (
-          <Route path="monitoring" element={<ProjectMonitoring project={data} />} />
+          <Route path="monitoring" element={<ProjectMonitoring key={data.id} project={data} />} />
         )}
         {showSettings && <Route path="settings" element={<ProjectSettings project={data} />} />}
         <Route path="*" element={<Navigate to={base} replace />} />

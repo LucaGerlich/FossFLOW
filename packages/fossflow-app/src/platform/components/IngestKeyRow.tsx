@@ -55,14 +55,20 @@ export function IngestKeyRow({ project, ingestKey }: { project: ProjectDetail; i
       {confirming && (
         <div className="inline-form">
           <span className="list__muted">{t('platform.monitoring.revokeHint')}</span>
-          <button className="btn btn--sm" type="button" onClick={() => setConfirming(false)}>
+          <button className="btn btn--sm" type="button" onClick={() => {
+              setError(null);
+              setConfirming(false);
+            }}>
             {t('platform.users.cancel')}
           </button>
           <button
             className="btn btn--sm btn--danger-solid"
             type="button"
             disabled={revoke.isPending}
-            onClick={() => revoke.mutate()}
+            onClick={() => {
+              setError(null);
+              revoke.mutate();
+            }}
           >
             {t('platform.monitoring.revokeConfirm', { name: ingestKey.name })}
           </button>
