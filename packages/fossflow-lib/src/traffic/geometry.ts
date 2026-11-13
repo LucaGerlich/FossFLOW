@@ -35,3 +35,18 @@ export const pointAlong = (points: Coords[], progress: number): Coords => {
   }
   return points[points.length - 1];
 };
+
+/** Scene points of every connector by id; connectors without a path are left out. */
+export const connectorPointsById = (
+  connectors: { id: string; path?: { tiles: Coords[]; rectangle: { from: Coords } } }[]
+): Map<string, Coords[]> => {
+  const points = new Map<string, Coords[]>();
+  for (const connector of connectors) {
+    if (!connector.path) continue;
+    points.set(
+      connector.id,
+      connectorScenePoints(connector.path.tiles, connector.path.rectangle.from)
+    );
+  }
+  return points;
+};

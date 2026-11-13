@@ -63,7 +63,7 @@ const StatusLight = ({ at, entity }: { at: Coords; entity: LiveEntity }) => {
   );
 };
 
-const Chip = ({
+export const Chip = ({
   at,
   children,
   colour
