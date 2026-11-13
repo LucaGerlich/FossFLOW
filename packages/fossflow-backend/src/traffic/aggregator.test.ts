@@ -313,4 +313,74 @@ describe('traffic aggregator against real Postgres', () => {
     await aggregator.flush(NOW);
     assert.equal((await minutesOf(key.projectId)).length, MAX_MINUTE_BUCKETS_PER_FLUSH + 1);
   });
+
+  /** A second ingest key in the same project as `other`. */
+  const siblingKey = async (other: IngestKeyRef): Promise<IngestKeyRef> => {
+    const id = randomUUID();
+    await db.insert(ingestKey).values({ id, projectId: other.projectId, name: 'k2', keyHash: randomUUID(), prefix: 'ffi_y' });
+    return { id, projectId: other.projectId };
+  };
+
+  const quiet = async (run: (warn: { mock: { calls: unknown[][] } }) => Promise<void>): Promise<void> => {
+    const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    try {
+      await run(warn);
+    } finally {
+      warn.mockRestore();
+    }
+  };
+
+  it("one key's full pair budget doesn't block another key of the project", async () => {
+    const a = await newKey();
+    const b = await siblingKey(a);
+    await quiet(async () => {
+      aggregator.add(a, batch(Array.from({ length: 1005 }, (_, i) => call({ callee: `service:svc-${i}` }))), NOW);
+      aggregator.add(b, batch([call({ callee: 'service:only-b' })]), NOW);
+      await aggregator.flush(NOW);
+    });
+    const rows = await minutesOf(a.projectId);
+    assert.equal(rows.length, 1001);
+    assert.ok(rows.some((row) => row.callee === 'service:only-b'));
+  });
+
+  it("one key's full alias budget doesn't block another key of the project", async () => {
+    const a = await newKey();
+    const b = await siblingKey(a);
+    await quiet(async () => {
+      const aliases = Array.from({ length: 505 }, (_, i) => ({ host: `host-${i}`, service: 'svc' }));
+      aggregator.add(a, batch([], { aliases }), NOW);
+      aggregator.add(b, batch([], { aliases: [{ host: 'only-b', service: 'svc' }] }), NOW);
+      await aggregator.flush(NOW);
+    });
+    const rows = await db.select().from(trafficAlias).where(eq(trafficAlias.projectId, a.projectId));
+    assert.equal(rows.length, 501);
+    assert.ok(rows.some((row) => row.host === 'only-b'));
+  });
+
+  it("one key's full bucket budget doesn't block another key, and warns once per key", async () => {
+    const a = await newKey();
+    const b = await siblingKey(a);
+    const overflow = () =>
+      Array.from({ length: MAX_MINUTE_BUCKETS_PER_FLUSH + 5000 }, (_, i) =>
+        call({
+          callee: `service:svc-${i % 3}`,
+          operation: `op-${Math.floor(i / 3) % 200}`,
+          at: NOW - Math.floor(i / 600) * MINUTE
+        })
+      );
+    await quiet(async (warn) => {
+      aggregator.add(a, batch(overflow()), NOW);
+      aggregator.add(b, batch([call({ operation: 'only-b' })]), NOW);
+      await aggregator.flush(NOW);
+      // A second overflowing window for the same key stays quiet.
+      aggregator.add(a, batch(overflow()), NOW);
+      await aggregator.flush(NOW);
+      const mine = warn.mock.calls.filter(([message]) => String(message).includes(a.id));
+      assert.equal(mine.length, 1);
+      assert.match(String(mine[0]?.[0]), new RegExp(a.projectId));
+    });
+    const rows = await minutesOf(a.projectId);
+    assert.equal(rows.length, MAX_MINUTE_BUCKETS_PER_FLUSH + 1);
+    assert.ok(rows.some((row) => row.operation === 'only-b'));
+  });
 });

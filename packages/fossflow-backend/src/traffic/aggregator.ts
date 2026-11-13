@@ -20,10 +20,10 @@ const DAY_MS = 86_400_000;
 const CHUNK = 1000;
 const MAX_FAILURES_PER_ARROW = 100;
 const MAX_OPERATIONS_PER_PAIR = 200;
-const MAX_PAIRS_PER_PROJECT = 1000;
+const MAX_PAIRS_PER_KEY = 1000;
 export const MAX_MINUTE_BUCKETS_PER_FLUSH = 20_000;
 const MAX_SERVICES_PER_KEY = 100;
-const MAX_ALIASES_PER_PROJECT = 500;
+const MAX_ALIASES_PER_KEY = 500;
 const THROTTLE_MS = MINUTE_MS;
 const OVERFLOW_OPERATION = 'other';
 const SEP = '\u0000';
@@ -52,8 +52,10 @@ type Failure = {
 
 type ProjectBuffer = {
   minutes: Map<string, Minute>;
-  /** Events dropped in this flush window because the buffer was full. */
-  droppedMinutes: number;
+  /** New minute buckets opened per ingest key in this flush window. */
+  bucketsByKey: Map<string, number>;
+  /** Events dropped per ingest key because its bucket budget was used up. */
+  droppedByKey: Map<string, number>;
   failures: Failure[];
   /** Failures buffered per arrow in this flush window. */
   failureCounts: Map<string, number>;
@@ -64,7 +66,8 @@ type ProjectBuffer = {
 
 const newBuffer = (): ProjectBuffer => ({
   minutes: new Map(),
-  droppedMinutes: 0,
+  bucketsByKey: new Map(),
+  droppedByKey: new Map(),
   failures: [],
   failureCounts: new Map(),
   aliases: new Map(),
@@ -123,9 +126,9 @@ export class TrafficAggregator implements OnApplicationBootstrap, BeforeApplicat
     const buffer = this.bufferFor(key.projectId);
 
     for (const event of batch.events) {
-      const operation = this.admit(key.projectId, event);
+      const operation = this.admit(key, event);
       if (operation === null) continue;
-      this.count(buffer, event, operation);
+      this.count(buffer, key.id, event, operation);
     }
     this.queueIdentity(key, buffer, batch, now);
   }
@@ -156,16 +159,16 @@ export class TrafficAggregator implements OnApplicationBootstrap, BeforeApplicat
   }
 
   /** The operation name to count under, or null when the pair is over the cap. */
-  private admit(projectId: string, event: TrafficEvent): string | null {
+  private admit({ id: keyId, projectId }: IngestKeyRef, event: TrafficEvent): string | null {
     const pair = `${event.caller}${SEP}${event.callee}`;
-    let projectPairs = this.pairs.get(projectId);
+    let projectPairs = this.pairs.get(keyId);
     if (!projectPairs) {
       projectPairs = new Set();
-      this.pairs.set(projectId, projectPairs);
+      this.pairs.set(keyId, projectPairs);
     }
     if (!projectPairs.has(pair)) {
-      if (projectPairs.size >= MAX_PAIRS_PER_PROJECT) {
-        this.warnOnce(`pairs${SEP}${projectId}`, `Project ${projectId} is over ${MAX_PAIRS_PER_PROJECT} service pairs; dropping new ones`);
+      if (projectPairs.size >= MAX_PAIRS_PER_KEY) {
+        this.warnOnce(`pairs${SEP}${keyId}`, `Ingest key ${keyId} (project ${projectId}) is over ${MAX_PAIRS_PER_KEY} service pairs; dropping new ones`);
         return null;
       }
       projectPairs.add(pair);
@@ -183,15 +186,17 @@ export class TrafficAggregator implements OnApplicationBootstrap, BeforeApplicat
     return event.operation;
   }
 
-  private count(buffer: ProjectBuffer, event: TrafficEvent, operation: string): void {
+  private count(buffer: ProjectBuffer, keyId: string, event: TrafficEvent, operation: string): void {
     const minute = Math.floor(event.at / MINUTE_MS) * MINUTE_MS;
     const id = [event.kind, event.caller, event.callee, operation, minute].join(SEP);
     let row = buffer.minutes.get(id);
     if (!row) {
-      if (buffer.minutes.size >= MAX_MINUTE_BUCKETS_PER_FLUSH) {
-        buffer.droppedMinutes += 1;
+      const opened = buffer.bucketsByKey.get(keyId) ?? 0;
+      if (opened >= MAX_MINUTE_BUCKETS_PER_FLUSH) {
+        buffer.droppedByKey.set(keyId, (buffer.droppedByKey.get(keyId) ?? 0) + 1);
         return;
       }
+      buffer.bucketsByKey.set(keyId, opened + 1);
       row = {
         kind: event.kind,
         caller: event.caller,
@@ -269,8 +274,8 @@ export class TrafficAggregator implements OnApplicationBootstrap, BeforeApplicat
     }
     for (const alias of batch.aliases) {
       const id = `${alias.host}${SEP}${alias.service}`;
-      if (!this.admitName(this.aliasNames, key.projectId, id, MAX_ALIASES_PER_PROJECT)) {
-        this.warnOnce(`aliases${SEP}${key.projectId}`, `Project ${key.projectId} is over ${MAX_ALIASES_PER_PROJECT} aliases; ignoring new ones`);
+      if (!this.admitName(this.aliasNames, key.id, id, MAX_ALIASES_PER_KEY)) {
+        this.warnOnce(`aliases${SEP}${key.id}`, `Ingest key ${key.id} (project ${key.projectId}) is over ${MAX_ALIASES_PER_KEY} aliases; ignoring new ones`);
         continue;
       }
       if (this.due(`alias${SEP}${key.projectId}${SEP}${id}`, now)) buffer.aliases.set(id, alias);
@@ -284,8 +289,11 @@ export class TrafficAggregator implements OnApplicationBootstrap, BeforeApplicat
     const buffers = this.buffers;
     this.buffers = new Map();
     for (const [projectId, buffer] of buffers) {
-      if (buffer.droppedMinutes > 0) {
-        logger.warn(`Project ${projectId} filled ${MAX_MINUTE_BUCKETS_PER_FLUSH} minute buckets in one flush; dropped ${buffer.droppedMinutes} calls`);
+      for (const [keyId, dropped] of buffer.droppedByKey) {
+        this.warnOnce(
+          `minutes${SEP}${keyId}`,
+          `Ingest key ${keyId} (project ${projectId}) filled ${MAX_MINUTE_BUCKETS_PER_FLUSH} minute buckets in one flush; dropped ${dropped} calls so far`
+        );
       }
       await this.guard(projectId, 'traffic_minute', () => this.writeMinutes(projectId, buffer));
       await this.guard(projectId, 'traffic_failure', () => this.writeFailures(projectId, buffer));
