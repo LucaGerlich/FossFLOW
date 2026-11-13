@@ -121,9 +121,10 @@ export const SeenTray = () => {
   const place = (identity: string): void => {
     const iconId = ICON_FOR_PREFIX[splitIdentity(identity).prefix];
     if (!iconId) return;
+    // skipHistory: the snapshot placeIcon takes is the placement's only undo step.
     if (!icons.some((icon) => icon.id === iconId)) {
       const icon = HAIRLINE_ICONS.find((candidate) => candidate.id === iconId);
-      if (icon) modelActions.set({ icons: [...icons, icon as Icon] });
+      if (icon) modelActions.set({ icons: [...icons, icon as Icon] }, true);
     }
     const centre = viewportCentreTile();
     const id = generateId();
