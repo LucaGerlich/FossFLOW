@@ -6,6 +6,90 @@ Newest entries first.
 
 ---
 
+## 2026-11-13 — Live traffic (phase 2a), milestone 1: ingest
+
+- **What:**
+  - **Design and plan:**
+    - `docs/superpowers/specs/2026-11-13-live-traffic-alerts-design.md` covers phase 2a: live traffic, monitoring and alerts.
+    - `docs/superpowers/plans/2026-11-13-live-traffic-m1-ingest.md` is this milestone's plan.
+  - **Ingest keys (Monitoring → Services):**
+    - Project scopes `ingestKey:create|read|delete`. Editors and admins hold all three; viewers see the list only.
+    - `GET`/`POST /api/projects/:id/ingest-keys` and `DELETE /api/ingest-keys/:id`.
+    - A key is `ffi_` plus 32 random bytes, shown once. Only its SHA-256 hash and a 12-character prefix are stored.
+    - Creating a key returns setup blocks for Node.js (CommonJS), Node.js (ES modules) and Next.js, with the key, the endpoint and `OTEL_SERVICE_NAME` filled in.
+    - At most 50 keys per project.
+    - The list shows the services seen with each key and when data last arrived.
+  - **OTLP/HTTP endpoint `POST /api/otlp/v1/traces`:**
+    - Accepts protobuf (`protobufjs` with vendored `opentelemetry-proto` v1.11.1 in `packages/fossflow-backend/proto/`) and JSON, with optional gzip.
+    - Mounted on Express before the JSON parser, so the key is checked before any of the body is read.
+    - Keys are checked against an in-memory index of hashes. Creating or deleting a key updates the index immediately, and it is reloaded every 30 s.
+    - Limits: 16 MiB after decompression (413), 1200 requests per minute per key (429 with `Retry-After`). Bad payloads answer 400, other content types 415, unknown keys 401. `/v1/metrics` and `/v1/logs` answer 404.
+    - nginx: `location /api/otlp/` with `auth_basic off` and `client_max_body_size 16m`.
+  - **Spans to calls (`src/ingest/spans.ts`, `scrub.ts`):**
+    - Client spans with HTTP or database attributes become calls (caller → callee, operation). Server spans count as incoming requests. Old and new semantic-convention names are both accepted.
+    - Database spans count only when they carry a query or operation attribute. Connection spans like `pg.connect` are skipped.
+    - Timing is anchored on the server's clock, so a skewed service clock can't misplace calls.
+    - Host aliases are recorded for services that receive requests.
+  - **Storage (`src/traffic/`):**
+    - Calls are counted per minute in memory (calls, failures, duration sum and a 22-bucket duration histogram) and written to Postgres every 5 s.
+    - Tables: `traffic_minute`, `traffic_hour`, `traffic_failure`, `traffic_alias`, `ingest_service` and `ingest_key`.
+    - Migrations 0005–0007. SQL helpers `int_array_add`/`int_array_sum`; `traffic_failure.id` is a bigint.
+    - A job every 10 minutes rolls minutes into hours (UTC hours, safe to repeat, catches up after downtime) and deletes old data.
+    - Retention: `TRAFFIC_MINUTES_DAYS` (7, at least 2), `TRAFFIC_HOURS_DAYS` (90), `TRAFFIC_FAILURES_DAYS` (7), and at most 500 failures per arrow.
+- **Why:** Phase 2a turns the landscape map live. Services report the calls they make, as with Sentry or GlitchTip but over OpenTelemetry, so the map can show real traffic and alerts can fire in milestones 2 and 3. This milestone receives, cleans and stores the data.
+- **Security:**
+  - **No member data is stored:**
+    - Query strings, fragments and URL user info are dropped.
+    - Path segments that look like IDs become `{id}`: numbers, UUIDs, hex strings, long tokens, anything with `@`, 5 or more digits in a row, and percent-encoded or multiply-encoded variants. Matrix parameters (`;jsessionid=…`) are cut off.
+    - SQL text is never read into anything stored.
+    - Database operations, query summaries and collection and database names are only kept when they have a safe shape, with ID-like words replaced.
+    - Failures keep only a 3-digit HTTP status or a short `error.type`, never exception messages.
+    - Control characters are stripped, and every stored string is cut to 300 UTF-8 bytes.
+    - Logs carry error names and SQLSTATE codes only, never driver messages or payload content.
+  - **Keys:** only hashes are stored. The raw key exists in the create response and in the app's panel until Done; it never enters the query cache, browser storage or a URL. Revoking takes effect immediately.
+  - **Resource bounds:**
+    - Per-key shares under project ceilings: pairs 1000 per key and 2000 per project per day; host aliases 500 and 1000; new minute buckets 20 000 and 40 000 per flush window.
+    - At most 200 operations per caller → callee pair (the rest count as `other`) and 100 service names per key.
+    - Failed calls buffered per flush: at most 100 per arrow.
+    - A leaked key can't take more than its share or starve the project after it is revoked.
+    - One bad row never drops the rest of a flush: chunks that fail on a data, constraint or size error are retried row by row.
+  - **Reviews:** every task was reviewed for spec and quality, then the whole branch was reviewed with a security lens, and an automated security scan ran after every commit. Seven rounds of fixes came out of them (scrubbing gaps, memory bounds, per-key budgets, robustness of writes). Every ruling is recorded in this milestone's SDD ledger and summarised in the PR.
+  - **Accepted risks:**
+    - The `{id}` rules can't recognise plain names in paths or name-like tenant databases (`/users/jane`, `tenant_acme`).
+    - Keys of a deleted project keep authenticating for up to 30 s; nothing is stored in that time.
+    - Calls are lost if Postgres is down during a flush.
+    - Concurrent key creation can overshoot the 50-key cap slightly.
+    - There is no limit on concurrent decodes per key holder.
+    - The single-process design (in-memory aggregation and key index) is as specified.
+- **Verified:**
+  - **Server:** 246 tests pass (115 new), and the build and type check are clean. New code coverage is 94.9 % of statements; `maintenance.ts` is at 66 % because its 10-minute timer wrapper is untested, while its roll-up and prune logic is fully covered.
+  - **End-to-end tests** with the real OpenTelemetry exporters (`@opentelemetry/sdk-trace` 3.1.1, OTLP exporters 0.301.2) over HTTP: protobuf with gzip and JSON, endpoint and header taken from the setup block, nothing personal stored, every error code.
+  - **Lib:** 243 tests. **App:** builds; `tsc` shows the same 7 existing errors.
+  - **Real apps:** all three setup blocks were pasted unchanged into a CommonJS Express app, an ES-module Express app and a Next.js 16.4.6 app, each calling `example.com` and Postgres.
+    - All three report through the dev proxy, and the key lists the three service names.
+    - Calls are stored as `GET /` and templated routes, with the IDs and emails in query strings dropped.
+    - Next.js fetches are not doubled.
+    - After the connection-span fix, 3 requests give exactly 3 database calls.
+    - A revoked key is refused immediately.
+  - **Browser, on a throwaway database:**
+    - The Monitoring tab: an invalid name is refused with a readable error; key creation, all three setup tabs, and Done removing the key from the page.
+    - The list shows "last data" and "seen as" within 15 s.
+    - A viewer sees the list without Connect or Revoke, and Revoke with its confirmation works.
+  - **Docker** (real `compose.yml` in a throwaway project, Basic Auth on):
+    - `/api` still asks for Basic Auth; `/api/otlp` answers with the backend's own 401.
+    - A real export through nginx is stored scrubbed. A 12 MB body passes nginx and a 17 MB body gets nginx's 413.
+    - The logs contain no personal data or keys, and the server runs as `node`.
+    - Everything was removed afterwards; your dev database was never touched.
+- **Not done / later:**
+  - **Milestone 2:** the live map (dots, the arrow and box panels, the "seen, not on the map" tray, the SSE stream). **Milestone 3:** alerts. **Milestone 4:** `docs/PLATFORM.md`, `docs/TRAFFIC.md` and `.env.example`.
+  - Accessibility polish on the setup blocks: unique labels for the Copy buttons and arrow keys between the tabs.
+  - The inactive setup tabs look like disabled buttons.
+  - Tests for the maintenance timer and for chunks over 1000 rows.
+  - An atomic 50-key cap.
+  - `fossflow-lib` still depends on `zod` 3.25, which is in the range of advisory GHSA-mrhx-c7xc-m3w5 (memory use on oversized collections). The server uses `zod` 4.6.7 and isn't affected.
+
+---
+
 ## 2026-11-10 — Platform phase 1, milestone 6: settings, deployment and docs
 
 - **What:**
