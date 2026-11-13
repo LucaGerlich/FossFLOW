@@ -7,6 +7,7 @@ import { APP_CONFIG, type AppConfig } from './config/config.js';
 import { CredentialsModule } from './credentials/credentials.module.js';
 import { DatabaseModule } from './database/database.module.js';
 import { HealthController } from './health/health.controller.js';
+import { IngestModule } from './ingest/ingest.module.js';
 import { InvitationsController } from './invitations/invitations.controller.js';
 import { InvitationsService } from './invitations/invitations.service.js';
 import { LandscapesModule } from './landscapes/landscapes.module.js';
@@ -33,7 +34,8 @@ export class AppModule {
         ProjectsModule,
         LandscapesModule,
         AuthModule,
-        CredentialsModule
+        CredentialsModule,
+        IngestModule
       ],
       controllers: [HealthController, SetupController, InvitationsController, UsersController],
       providers: [
