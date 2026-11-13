@@ -16,6 +16,7 @@ import { ScopesGuard } from './rbac/scopes.guard.js';
 import { SetupController } from './setup/setup.controller.js';
 import { SetupService } from './setup/setup.service.js';
 import { StartupMigrations } from './setup/startup-migrations.js';
+import { TrafficModule } from './traffic/traffic.module.js';
 import { UsersController } from './users/users.controller.js';
 import { UsersService } from './users/users.service.js';
 
@@ -35,7 +36,8 @@ export class AppModule {
         LandscapesModule,
         AuthModule,
         CredentialsModule,
-        IngestModule
+        IngestModule,
+        TrafficModule
       ],
       controllers: [HealthController, SetupController, InvitationsController, UsersController],
       providers: [
