@@ -9,6 +9,7 @@ import { desc, sql } from 'drizzle-orm';
 import { APP_CONFIG, type AppConfig } from '../config/config.js';
 import { DB, type Database } from '../database/database.module.js';
 import { trafficHour } from '../database/schema.js';
+import { describeError } from './errors.js';
 
 const logger = new Logger('TrafficMaintenance');
 
@@ -113,8 +114,7 @@ export class TrafficMaintenance implements OnApplicationBootstrap, BeforeApplica
     try {
       await work();
     } catch (error) {
-      const reason = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
-      logger.warn(`Traffic ${task} failed, will retry: ${reason}`);
+      logger.warn(`Traffic ${task} failed, will retry (${describeError(error)})`);
     }
   }
 }

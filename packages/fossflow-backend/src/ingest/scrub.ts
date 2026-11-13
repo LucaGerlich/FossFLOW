@@ -3,7 +3,9 @@
  * through these helpers: member and customer identifiers must not survive.
  */
 
-const DEFAULT_MAX = 300;
+/** Postgres rejects NUL and caps btree entries, so text is cut by bytes, not UTF-16 units. */
+const DEFAULT_MAX_BYTES = 300;
+const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f-\u009f]/g;
 
 const ALL_DIGITS = /^\d+$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -12,8 +14,22 @@ const DIGIT_RUN = /\d{5}/;
 const LONG_TOKEN = /^[A-Za-z0-9_=.-]{20,}$/;
 const HAS_DIGIT = /\d/;
 
-export const cap = (value: string, max: number = DEFAULT_MAX): string =>
-  value.length > max ? value.slice(0, max) : value;
+/**
+ * Removes control characters, then cuts to at most `max` UTF-8 bytes without
+ * splitting a code point.
+ */
+export const cap = (value: string, max: number = DEFAULT_MAX_BYTES): string => {
+  const clean = value.replace(CONTROL_CHARACTERS, '');
+  if (Buffer.byteLength(clean) <= max) return clean;
+  let bytes = 0;
+  let result = '';
+  for (const character of clean) {
+    bytes += Buffer.byteLength(character);
+    if (bytes > max) break;
+    result += character;
+  }
+  return result;
+};
 
 const MAX_DECODE_ROUNDS = 3;
 const LONG_PLAIN_TOKEN = /^[A-Za-z0-9_=-]{32,}$/;

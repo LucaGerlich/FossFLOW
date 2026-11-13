@@ -10,6 +10,7 @@ import { DB, type Database } from '../database/database.module.js';
 import { ingestKey, ingestService, trafficAlias, trafficFailure, trafficMinute } from '../database/schema.js';
 import type { IngestKeyRef } from '../ingest/ingest-keys.service.js';
 import type { TrafficBatch, TrafficEvent } from '../ingest/spans.js';
+import { describeError, sqlstateOf } from './errors.js';
 import { bucketOf, emptyHistogram } from './histogram.js';
 
 const logger = new Logger('Traffic');
@@ -30,6 +31,8 @@ const MAX_ALIASES_PER_PROJECT = 1000;
 const THROTTLE_MS = MINUTE_MS;
 const OVERFLOW_OPERATION = 'other';
 const SEP = '\u0000';
+/** SQLSTATE classes of rejected row values: data exception, constraint violation, program limit exceeded. */
+const ROW_ERROR_CLASS = /^(22|23|54)/;
 
 type Minute = {
   kind: TrafficEvent['kind'];
@@ -143,7 +146,10 @@ export class TrafficAggregator implements OnApplicationBootstrap, BeforeApplicat
 
   /** Writes everything added so far. Flushes run one after another, never overlapping. */
   flush(now: number = Date.now()): Promise<void> {
-    this.queue = this.queue.then(() => this.write(now));
+    // The catch is the last resort: a rejected queue would fail every later flush.
+    this.queue = this.queue.then(() => this.write(now)).catch((error: unknown) => {
+      logger.warn(`Traffic flush failed (${describeError(error)})`);
+    });
     return this.queue;
   }
 
@@ -356,9 +362,46 @@ export class TrafficAggregator implements OnApplicationBootstrap, BeforeApplicat
     try {
       await run();
     } catch (error) {
-      const reason = error instanceof Error ? error.message : String(error);
-      logger.warn(`Could not write ${table} for project ${projectId}: ${reason}`);
+      logger.warn(`Could not write ${table} for project ${projectId} (${describeError(error)})`);
     }
+  }
+
+  /**
+   * Inserts rows in chunks. When a chunk is rejected because of a row's values, the chunk is retried
+   * row by row so one bad row costs only itself. Rows that still fail are dropped and counted in one
+   * warning per project and table. Any other failure (connection, say) propagates to `guard`.
+   */
+  private async insertResilient<T>(
+    projectId: string,
+    table: string,
+    rows: T[],
+    insert: (part: T[]) => Promise<void>,
+    written?: (row: T) => void
+  ): Promise<void> {
+    let dropped = 0;
+    let reason = '';
+    for (const part of chunks(rows)) {
+      try {
+        await insert(part);
+        if (written) part.forEach(written);
+        continue;
+      } catch (error) {
+        const code = sqlstateOf(error);
+        if (code === null || !ROW_ERROR_CLASS.test(code)) throw error;
+      }
+      for (const row of part) {
+        try {
+          await insert([row]);
+          written?.(row);
+        } catch (error) {
+          const code = sqlstateOf(error);
+          if (code === null || !ROW_ERROR_CLASS.test(code)) throw error;
+          dropped += 1;
+          reason = describeError(error);
+        }
+      }
+    }
+    if (dropped > 0) logger.warn(`Dropped ${dropped} ${table} rows for project ${projectId} (${reason})`);
   }
 
   private async writeMinutes(projectId: string, buffer: ProjectBuffer): Promise<void> {
@@ -367,7 +410,7 @@ export class TrafficAggregator implements OnApplicationBootstrap, BeforeApplicat
       projectId,
       minute: new Date(row.minute)
     }));
-    for (const part of chunks(rows)) {
+    await this.insertResilient(projectId, 'traffic_minute', rows, async (part) => {
       await this.db
         .insert(trafficMinute)
         .values(part)
@@ -387,26 +430,33 @@ export class TrafficAggregator implements OnApplicationBootstrap, BeforeApplicat
             histogram: sql`int_array_add(${trafficMinute.histogram}, excluded.histogram)`
           }
         });
-    }
+    });
   }
 
   private async writeFailures(projectId: string, buffer: ProjectBuffer): Promise<void> {
     const rows = buffer.failures.map((row) => ({ ...row, projectId, at: new Date(row.at) }));
-    for (const part of chunks(rows)) await this.db.insert(trafficFailure).values(part);
+    await this.insertResilient(projectId, 'traffic_failure', rows, async (part) => {
+      await this.db.insert(trafficFailure).values(part);
+    });
   }
 
   private async writeAliases(projectId: string, buffer: ProjectBuffer, now: number): Promise<void> {
     const rows = [...buffer.aliases.values()].map((alias) => ({ ...alias, projectId, lastSeenAt: new Date(now) }));
-    for (const part of chunks(rows)) {
-      await this.db
-        .insert(trafficAlias)
-        .values(part)
-        .onConflictDoUpdate({
-          target: [trafficAlias.projectId, trafficAlias.host, trafficAlias.service],
-          set: { lastSeenAt: new Date(now) }
-        });
-      for (const row of part) this.lastWrite.set(`alias${SEP}${projectId}${SEP}${row.host}${SEP}${row.service}`, now);
-    }
+    await this.insertResilient(
+      projectId,
+      'traffic_alias',
+      rows,
+      async (part) => {
+        await this.db
+          .insert(trafficAlias)
+          .values(part)
+          .onConflictDoUpdate({
+            target: [trafficAlias.projectId, trafficAlias.host, trafficAlias.service],
+            set: { lastSeenAt: new Date(now) }
+          });
+      },
+      (row) => this.lastWrite.set(`alias${SEP}${projectId}${SEP}${row.host}${SEP}${row.service}`, now)
+    );
   }
 
   /** Each key is written on its own, so one failing key doesn't drop the others. */
@@ -415,13 +465,18 @@ export class TrafficAggregator implements OnApplicationBootstrap, BeforeApplicat
       await this.guard(projectId, 'ingest_service', async () => {
         const lastSeenAt = new Date(now);
         const rows = [...names].map((serviceName) => ({ keyId, serviceName, lastSeenAt }));
-        for (const part of chunks(rows)) {
-          await this.db
-            .insert(ingestService)
-            .values(part)
-            .onConflictDoUpdate({ target: [ingestService.keyId, ingestService.serviceName], set: { lastSeenAt } });
-          for (const row of part) this.lastWrite.set(`service${SEP}${keyId}${SEP}${row.serviceName}`, now);
-        }
+        await this.insertResilient(
+          projectId,
+          'ingest_service',
+          rows,
+          async (part) => {
+            await this.db
+              .insert(ingestService)
+              .values(part)
+              .onConflictDoUpdate({ target: [ingestService.keyId, ingestService.serviceName], set: { lastSeenAt } });
+          },
+          (row) => this.lastWrite.set(`service${SEP}${keyId}${SEP}${row.serviceName}`, now)
+        );
         await this.db.update(ingestKey).set({ lastUsedAt: lastSeenAt }).where(eq(ingestKey.id, keyId));
         this.lastWrite.set(`key${SEP}${keyId}`, now);
       });

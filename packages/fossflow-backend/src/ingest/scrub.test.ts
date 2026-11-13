@@ -38,4 +38,21 @@ describe('cap', () => {
     assert.equal(cap('abcdef', 3), 'abc');
     assert.equal(cap('abc'), 'abc');
   });
+
+  it('strips control characters, including NUL', () => {
+    assert.equal(cap('a\u0000b\u001fc\u007fd\u0085e\tf\ng'), 'abcdefg');
+  });
+
+  it('cuts to at most 300 UTF-8 bytes', () => {
+    const result = cap('\u20ac'.repeat(400));
+    assert.ok(Buffer.byteLength(result) <= 300);
+    assert.equal(result, '\u20ac'.repeat(100));
+  });
+
+  it('never leaves a lone surrogate when cutting emoji', () => {
+    const result = cap('\u{1F600}'.repeat(200));
+    assert.ok(Buffer.byteLength(result) <= 300);
+    assert.equal(result, '\u{1F600}'.repeat(75));
+    assert.doesNotMatch(result, /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/);
+  });
 });

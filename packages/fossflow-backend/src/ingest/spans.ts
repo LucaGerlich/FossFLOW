@@ -247,7 +247,7 @@ export const toTraffic = (
       toAttributes(resource.resource?.attributes),
       'service.name'
     );
-    const service = cap(name ?? 'unknown_service');
+    const service = cap(name ?? '') || 'unknown_service';
     services.add(service);
 
     for (const scope of resource.scopeSpans ?? []) {
@@ -288,7 +288,7 @@ export const toTraffic = (
             Number(span.endTimeUnixNano - span.startTimeUnixNano) / 1e6
           ),
           failed,
-          status: failed ? failureStatus(attributes) : null
+          status: failed ? cap(failureStatus(attributes)) : null
         });
       }
     }

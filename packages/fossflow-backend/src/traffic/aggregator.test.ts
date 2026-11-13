@@ -83,6 +83,49 @@ describe('traffic aggregator against real Postgres', () => {
     assert.equal(failures[0]?.durationMs, 480);
   });
 
+  it('keeps the valid rows of a flush when one row cannot be stored', async () => {
+    const key = await newKey();
+    const bad = call({ operation: `bad\u0000${'\u{1F600}'.repeat(300)}` });
+    const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    try {
+      aggregator.add(key, batch([call(), bad]), NOW);
+      await aggregator.flush(NOW);
+      const rows = await minutesOf(key.projectId);
+      assert.deepEqual(
+        rows.map((row) => row.operation),
+        ['GET /orders']
+      );
+      const mine = warn.mock.calls.filter(([message]) => String(message).includes(key.projectId));
+      assert.equal(mine.length, 1);
+      assert.match(String(mine[0]?.[0]), /traffic_minute/);
+      assert.match(String(mine[0]?.[0]), /SQLSTATE 22021/);
+      assert.doesNotMatch(String(mine[0]?.[0]), /bad|\u{1F600}/u);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('recovers when a flush throws outside its guards', async () => {
+    const key = await newKey();
+    const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    const internals = aggregator as unknown as { write: (now: number) => Promise<void> };
+    const write = vi.spyOn(internals, 'write').mockRejectedValueOnce(new Error('secret row value'));
+    try {
+      aggregator.add(key, batch([call()]), NOW);
+      await aggregator.flush(NOW);
+      assert.ok(warn.mock.calls.length > 0);
+      assert.ok(warn.mock.calls.every(([message]) => !String(message).includes('secret row value')));
+
+      aggregator.add(key, batch([call()]), NOW);
+      await aggregator.flush(NOW);
+      // The mocked write never took the first call's buffer, so both are stored now.
+      assert.equal((await minutesOf(key.projectId))[0]?.calls, 2);
+    } finally {
+      write.mockRestore();
+      warn.mockRestore();
+    }
+  });
+
   it('adds to an existing minute', async () => {
     const key = await newKey();
     const events = [call(), call({ durationMs: 480, failed: true, status: '503' })];
