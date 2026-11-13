@@ -11,9 +11,21 @@ export type StreamTarget = {
   writeHead(status: number, headers: Record<string, string>): void;
   write(chunk: string): boolean;
   end(): void;
+  destroy(): void;
   on(event: 'close', listener: () => void): void;
   readonly writableLength: number;
   readonly destroyed: boolean;
+};
+
+const serialised = new WeakMap<TrafficStreamMessage, string>();
+
+/** One JSON string per message, however many listeners receive it. */
+const encode = (message: TrafficStreamMessage): string => {
+  const cached = serialised.get(message);
+  if (cached !== undefined) return cached;
+  const chunk = `data: ${JSON.stringify(message)}\n\n`;
+  serialised.set(message, chunk);
+  return chunk;
 };
 
 type Timing = { heartbeatMs: number; maxMs: number };
@@ -42,10 +54,15 @@ export function openTrafficStream(
     stop();
     target.end();
   };
+  // A graceful end() queues behind the unread buffer, so `close` might never fire.
+  const cutOff = (): void => {
+    stop();
+    target.destroy();
+  };
   const send = (chunk: string): void => {
     if (!open) return;
     if (target.writableLength > MAX_BUFFERED_BYTES) {
-      finish();
+      cutOff();
       return;
     }
     target.write(chunk);
@@ -58,7 +75,7 @@ export function openTrafficStream(
   });
   target.write(`retry: ${RETRY_MS}\n\n`);
   target.on('close', stop);
-  unsubscribe = subscribe((message) => send(`data: ${JSON.stringify(message)}\n\n`));
+  unsubscribe = subscribe((message) => send(encode(message)));
   heartbeat = setInterval(() => send(': ping\n\n'), timing.heartbeatMs);
   limit = setTimeout(finish, timing.maxMs);
 }

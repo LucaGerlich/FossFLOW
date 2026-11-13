@@ -22,6 +22,7 @@ const setup = () => {
   const heads: { status: number; headers: Record<string, string> }[] = [];
   let closeListener: (() => void) | undefined;
   let ended = 0;
+  let destroyedCount = 0;
   let unsubscribed = 0;
   let listener: ((m: TrafficStreamMessage) => void) | undefined;
   const target = {
@@ -36,6 +37,9 @@ const setup = () => {
     },
     end: () => {
       ended += 1;
+    },
+    destroy: () => {
+      destroyedCount += 1;
     },
     on: (_event: 'close', fn: () => void) => {
       closeListener = fn;
@@ -55,6 +59,7 @@ const setup = () => {
     publish: (m: TrafficStreamMessage) => listener?.(m),
     close: () => closeListener?.(),
     ended: () => ended,
+    destroyedCount: () => destroyedCount,
     unsubscribed: () => unsubscribed
   };
 };
@@ -108,6 +113,7 @@ describe('openTrafficStream', () => {
     assert.equal(s.ended(), 0);
     vi.advanceTimersByTime(1);
     assert.equal(s.ended(), 1);
+    assert.equal(s.destroyedCount(), 0);
     assert.equal(s.unsubscribed(), 1);
   });
 
@@ -124,16 +130,30 @@ describe('openTrafficStream', () => {
     assert.equal(vi.getTimerCount(), 0);
   });
 
-  it('ends instead of writing when too much is buffered', () => {
+  it('destroys instead of writing when too much is buffered', () => {
     const s = setup();
     openTrafficStream(s.target, s.subscribe);
     const before = s.writes.length;
     s.target.writableLength = MAX_BUFFERED_BYTES + 1;
     s.publish(message);
     assert.equal(s.writes.length, before);
-    assert.equal(s.ended(), 1);
+    assert.equal(s.destroyedCount(), 1);
+    assert.equal(s.ended(), 0);
     assert.equal(s.unsubscribed(), 1);
     assert.equal(vi.getTimerCount(), 0);
+  });
+
+  it('serialises a message once for many listeners', () => {
+    const spy = vi.spyOn(JSON, 'stringify');
+    const a = setup();
+    const b = setup();
+    openTrafficStream(a.target, a.subscribe);
+    openTrafficStream(b.target, b.subscribe);
+    const shared: TrafficStreamMessage = { ...message, sentAt: 42 };
+    a.publish(shared);
+    b.publish(shared);
+    assert.equal(spy.mock.calls.filter(([v]) => v === shared).length, 1);
+    spy.mockRestore();
   });
 
   it('does nothing for a target that is already closed', () => {
