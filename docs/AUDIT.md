@@ -6,6 +6,73 @@ Newest entries first.
 
 ---
 
+## 2026-11-13 — Live traffic (phase 2a), milestone 2: live map
+
+- **What:**
+  - **Plan:** `docs/superpowers/plans/2026-11-13-live-traffic-m2-live-map.md` (section 5 of the phase 2a design).
+  - **Server (`src/traffic/`):**
+    - `TrafficHub` takes every OTLP batch right after it is counted and fans its calls out to open streams of the same project. It thins busy arrows to 20 dots a second, and a project to 400. Each dot carries a weight, and the weights add up to the real call count. Publishing can never fail or double-count ingest: it has its own error handling.
+    - `GET /api/landscapes/:id/traffic/stream`: Server-Sent Events (`retry: 2000`, a heartbeat every 25 s, `X-Accel-Buffering: no`). Limits:
+      - at most 10 open streams per user;
+      - each stream ends after 10 minutes, and the browser reconnects, which re-checks access;
+      - a client that stops reading is cut off at 1 MiB and its connection destroyed;
+      - a client that leaves during the access check holds no slot.
+    - `GET …/traffic/summary`: the last 5 minutes per caller → callee pair, per callee and per service (calls/min, % failed, median and p95 from the duration histogram). It includes every pair seen in 24 h and the unambiguous host aliases. It is computed at most once per project every 5 s, however many people watch.
+    - `GET …/traffic/edge?caller=&callee=&range=1h|24h|7d`: series, totals, the 10 busiest operations and the 20 newest failures, for 1–20 pairs. Older hours come from `traffic_hour`, the last two from `traffic_minute`, so no hour is counted twice.
+    - All three need `landscape:read` and only ever read the landscape's own project.
+  - **Lib (`src/traffic/`):**
+    - Boxes get an optional `traffic: { ids }` binding (up to 20 identities like `service:sync`, `host:*.magicline.com`, `db:server/name`). It round-trips through export and import, and local mode ignores it.
+    - The matcher resolves identities to boxes: hand-bound before learned aliases before wildcards, then model order. An arrow carries the calls between its two end boxes, in both directions; with several arrows between the same boxes, the first one gets the dots.
+    - A dot scheduler on the server's clock (offset from the stream's `sentAt`) plays each call one lag after it happened. The lag is 2–15 s. Travel time is the call duration clamped to 0.8–4 s, and late calls play at once. A hidden tab drops the queue.
+    - `TrafficLayer` moves the dots in one `requestAnimationFrame` loop, with no React render per dot.
+    - **Trouble:** at least 5 % and at least 5 failures in 5 minutes turns the arrow red, with a pill such as `24/min · 91 ms · 12.5% failed`. The box gets one line, such as `12.5% of calls from Sample service fail`. Healthy arrows stay quiet.
+    - **Arrow card:** stats, the series for 1h, 24h or 7d (failing bars red), the busiest calls, recent failures, and `1 dot ≈ N calls`. The **box card** shows incoming numbers for a service and "seen by callers" for others, plus its identities. Editors open cards by selecting; viewers open them by clicking an arrow or box.
+    - **Box settings** get a **Live traffic** section: identity chips, suggestions from what was seen, and validation.
+    - **"Seen, not on the map" tray** (editors): **Place** adds a box for an unknown system, as one undo step. **Draw arrow** connects two placed boxes that talk without an arrow.
+    - A new `traffic` locale namespace in all 12 lib locales.
+  - **App:** the landscape editor polls the summary every 15 s and opens the stream once there was traffic in 24 h. It closes the stream while the tab is hidden and backs off from 2 s to 2 min after refusals. A `Traffic · live` / `Traffic · connecting` badge sits next to the live-data badge.
+- **Why:** Milestone 2 of phase 2a. The landscape map now shows real calls as they happen, with nothing moving when nothing is sent. Real numbers sit on every arrow and box, and the map can be completed from what the services report.
+- **Security:**
+  - **Access:** every route is landscape-scoped. Outsiders get 404 and signed-out users 401, both tested, and a removed member is refused on reconnect.
+  - **SQL:** identities from the query string reach SQL only as bound parameters. `range` is an enum, and pairs and identity lengths are capped. Errors never echo values.
+  - **No new data leaves the server:** dots carry identities, timing, a failed flag and a weight. Summaries and cards carry only what milestone 1 already scrubbed (identities, operations, statuses, numbers).
+  - **Untrusted names:** a service name with `*` is turned into `_` at ingest, and the tray never offers an identity the model schema would reject. A name chosen by a key holder therefore can't make a landscape unloadable.
+  - **Reviews:**
+    - Each task was reviewed for spec and quality, with a fix round where needed (stream slot leak, feed identity, single-step undo).
+    - The real-app walkthrough found three bugs, each fixed and re-reviewed: hand-bound identities losing to learned aliases, the tray chip wrapping, and arrow selection never opening the card.
+    - The whole branch was reviewed with a security lens. Its fix wave covered unvalidated Place, more than 20 pairs per arrow, the slow-reader cut-off, the summary cost, ingest isolation from the live view, and Escape while typing.
+  - **Accepted risks:**
+    - An already-open stream keeps delivering for up to 10 minutes after the member is removed or signed out. Access is checked on connect and on each reconnect.
+    - Anyone who can read one landscape of a project sees the traffic of the whole project, which is the project's data model.
+    - Hub fairness: with more than 20 saturated arrows in a project, the 400 dots a second go to the arrows seen first. The numbers stay complete.
+    - The summary cache and the hub live in one process, which is the single-process design.
+    - Each open tab holds one HTTP connection to the server while visible.
+- **Verified:**
+  - **Server:** 293 tests in 30 files pass (47 new), lint and build are clean, and `src/traffic` is at 95.5 % statement coverage (the new hub, stream, queries, cache and controller files are between 91 % and 100 %). Covered end to end: a real OpenTelemetry export reaching a stream subscriber, viewer/outsider/signed-out access, the 10-stream cap, a removed member refused on reconnect, the summary numbers and the no-double-count hour boundary.
+  - **Lib:** 355 tests in 48 suites pass (112 new): matching table, scheduler timing (a browser 5 minutes ahead, lag and travel clamps, hidden tab), geometry, stats and the failing rule, the pill text, cards with their loader and ranges, identity editing, the tray and single-step undo with the real stores. Type check and build are clean.
+  - **App:** builds; `tsc` shows the same 7 existing errors.
+  - **Real walkthrough** (throwaway database; backend, app, a fake members API and an instrumented Node sample using the unchanged setup block):
+    - The summary is scrubbed: `/members/1000?email=…` arrives only as identities and `GET /members/{id}`.
+    - Dots run during bursts, nothing moves in the 20 s pauses, and dots travel along their arrow and vanish on arrival.
+    - The tray lists the unplaced database. Place adds the box and one undo removes it; Draw arrow connects it, and the landscape saves the bindings and arrows.
+    - A failing API turns its arrow red with the pill and the box status line.
+    - As editor: the arrow card opens on selection, and identity chips can be added (a wildcard), refused (`ftp:x`) and removed.
+    - As viewer: `Read only`, no tray; arrow and box cards open on click, the 24h range loads, Escape closes.
+    - The static build (local mode) makes no traffic requests.
+  - **Docker** (real `compose.yml` in a throwaway project): through nginx, `retry: 2000` arrived after 26 ms and a dot 8 ms after an OTLP POST, so nothing buffers. The logs are clean, and everything was removed afterwards.
+  - Your dev database and your processes on ports 3000 and 3001 were never touched.
+- **Not done / later:**
+  - **Milestone 3:** alerts, "slow" trouble, "Alert me when…", and alerts in the summary. **Milestone 4:** `docs/PLATFORM.md`, `docs/TRAFFIC.md`, `.env.example`, and a Docker walkthrough with Beszel and traffic on the same box (not checked in the browser here).
+  - Fair sharing of the per-project dot budget across saturated arrows.
+  - Per-dot validation of stream messages in the app, and isolating listeners from each other.
+  - Per-box trouble and per-pair routes cached in the provider for large landscapes. Fewer allocations in the per-frame path.
+  - The arrow card keeps its last good data on a transient error; "As seen by" shows box names instead of identities.
+  - App translations of the two badge strings beyond English.
+  - A box placed from the tray can land on an existing arrow.
+  - Smaller test gaps from the task reviews: the hub cap part-way through an arrow, an hour row exactly at the roll-up cut, feed resubscribe and unmount cleanup, and stream cross-project isolation end to end.
+
+---
+
 ## 2026-11-13 — Live traffic (phase 2a), milestone 1: ingest
 
 - **What:**
