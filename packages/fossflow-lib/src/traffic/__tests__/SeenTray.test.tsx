@@ -56,6 +56,12 @@ describe('SeenTray', () => {
     ).toBeInTheDocument();
   });
 
+  it('keeps the chip on one line', async () => {
+    await mount();
+    const chip = await screen.findByRole('button', { name: 'Seen, not on the map · 2' });
+    expect(chip).toHaveStyle({ whiteSpace: 'nowrap' });
+  });
+
   it('places an identity as a box bound to it, with the database icon', async () => {
     await mount();
     await open();

@@ -39,6 +39,7 @@ const chipSx = {
   alignItems: 'center',
   px: '12px',
   height: 28,
+  whiteSpace: 'nowrap',
   borderRadius: '14px',
   border: `1px solid ${LIVE_TOKENS.hairlineStrong}`,
   background: LIVE_TOKENS.canvas,
