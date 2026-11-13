@@ -4,14 +4,15 @@ import { ThemeProvider } from '@mui/material/styles';
 import { theme } from 'src/styles/theme';
 import { ModelProvider } from 'src/stores/modelStore';
 import { SceneProvider } from 'src/stores/sceneStore';
-import { UiStateProvider } from 'src/stores/uiStateStore';
+import { UiStateProvider, useUiStateStore } from 'src/stores/uiStateStore';
 import { useInitialDataManager } from 'src/hooks/useInitialDataManager';
 import { useScene } from 'src/hooks/useScene';
 import { TrafficProvider } from 'src/traffic/TrafficContext';
 import { TrafficLayer } from 'src/traffic/TrafficLayer';
 import { TrafficOverlay } from 'src/traffic/TrafficOverlay';
-import type { InitialData } from 'src/types';
+import type { InitialData, UiStateActions } from 'src/types';
 import type {
+  TrafficEdgeDetail,
   TrafficFeed,
   TrafficStats,
   TrafficStreamMessage,
@@ -50,7 +51,22 @@ export interface FakeFeed extends TrafficFeed {
   unsubscribe: jest.Mock<void, []>;
 }
 
-export const fakeFeed = (summary?: TrafficSummary): FakeFeed => {
+export const detailOf = (
+  overrides: Partial<TrafficEdgeDetail> = {}
+): TrafficEdgeDetail => ({
+  range: '1h',
+  stepSeconds: 60,
+  totals: stats(),
+  series: [],
+  operations: [],
+  failures: [],
+  ...overrides
+});
+
+export const fakeFeed = (
+  summary?: TrafficSummary,
+  loadEdge: TrafficFeed['loadEdge'] = () => Promise.reject(new Error('not used'))
+): FakeFeed => {
   const unsubscribe = jest.fn<void, []>();
   return {
     summary,
@@ -59,7 +75,7 @@ export const fakeFeed = (summary?: TrafficSummary): FakeFeed => {
       return unsubscribe;
     }),
     unsubscribe,
-    loadEdge: () => Promise.reject(new Error('not used'))
+    loadEdge
   };
 };
 
@@ -109,31 +125,65 @@ const Layers = () => {
 };
 
 /** Loads the model like <Isoflow> does, then mounts the traffic layers as the Renderer does. */
-const Harness = ({ traffic }: { traffic?: TrafficFeed }) => {
+const Harness = ({
+  traffic,
+  model,
+  children
+}: {
+  traffic?: TrafficFeed;
+  model: InitialData;
+  children?: React.ReactNode;
+}) => {
   const { load, isReady } = useInitialDataManager();
   useEffect(() => {
-    load(twoBoxModel);
-  }, [load]);
+    load(model);
+  }, [load, model]);
   if (!isReady) return null;
   return (
     <>
       <div data-testid="map-ready" />
-      <TrafficProvider feed={traffic}>
-        <Layers />
-      </TrafficProvider>
+      <TrafficProvider feed={traffic}>{children ?? <Layers />}</TrafficProvider>
     </>
   );
 };
 
+/** Exposes the ui store's actions to a test. */
+export const uiActions: { current: UiStateActions | null } = { current: null };
+const ActionsProbe = () => {
+  uiActions.current = useUiStateStore((state) => state.actions);
+  return null;
+};
+
+const Providers = ({ children }: { children: React.ReactNode }) => (
+  <ThemeProvider theme={theme}>
+    <ModelProvider>
+      <SceneProvider>
+        <UiStateProvider>
+          <ActionsProbe />
+          {children}
+        </UiStateProvider>
+      </SceneProvider>
+    </ModelProvider>
+  </ThemeProvider>
+);
+
 export const renderMap = (traffic?: TrafficFeed) =>
   render(
-    <ThemeProvider theme={theme}>
-      <ModelProvider>
-        <SceneProvider>
-          <UiStateProvider>
-            <Harness traffic={traffic} />
-          </UiStateProvider>
-        </SceneProvider>
-      </ModelProvider>
-    </ThemeProvider>
+    <Providers>
+      <Harness traffic={traffic} model={twoBoxModel} />
+    </Providers>
+  );
+
+/** Mounts `ui` inside the traffic provider of a loaded model, as the overlay's cards are. */
+export const renderCard = (
+  ui: React.ReactNode,
+  traffic?: TrafficFeed,
+  model: InitialData = twoBoxModel
+) =>
+  render(
+    <Providers>
+      <Harness traffic={traffic} model={model}>
+        {ui}
+      </Harness>
+    </Providers>
   );
