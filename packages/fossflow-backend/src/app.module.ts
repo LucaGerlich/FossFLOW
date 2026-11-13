@@ -7,6 +7,7 @@ import { APP_CONFIG, type AppConfig } from './config/config.js';
 import { CredentialsModule } from './credentials/credentials.module.js';
 import { DatabaseModule } from './database/database.module.js';
 import { HealthController } from './health/health.controller.js';
+import { IngestModule } from './ingest/ingest.module.js';
 import { InvitationsController } from './invitations/invitations.controller.js';
 import { InvitationsService } from './invitations/invitations.service.js';
 import { LandscapesModule } from './landscapes/landscapes.module.js';
@@ -15,6 +16,7 @@ import { ScopesGuard } from './rbac/scopes.guard.js';
 import { SetupController } from './setup/setup.controller.js';
 import { SetupService } from './setup/setup.service.js';
 import { StartupMigrations } from './setup/startup-migrations.js';
+import { TrafficModule } from './traffic/traffic.module.js';
 import { UsersController } from './users/users.controller.js';
 import { UsersService } from './users/users.service.js';
 
@@ -33,7 +35,9 @@ export class AppModule {
         ProjectsModule,
         LandscapesModule,
         AuthModule,
-        CredentialsModule
+        CredentialsModule,
+        IngestModule,
+        TrafficModule
       ],
       controllers: [HealthController, SetupController, InvitationsController, UsersController],
       providers: [

@@ -2,6 +2,7 @@ import type { EditorModeEnum, MainMenuOptions } from './common';
 import type { Model } from './model';
 import type { RendererProps } from './rendererProps';
 import type { LiveSnapshot } from 'src/live/types';
+import type { TrafficFeed } from 'src/traffic/types';
 
 export type InitialData = Model & {
   fitToView?: boolean;
@@ -218,6 +219,41 @@ export interface LocaleProps {
     update: string;
     live: string;
   };
+  traffic: {
+    pillFailed: string;
+    boxFailingFrom: string;
+    boxFailingIncoming: string;
+    seenBy: string;
+    seenByCallers: string;
+    incoming: string;
+    dotWeight: string;
+    callsPerMin: string;
+    failed: string;
+    median: string;
+    p95: string;
+    range1h: string;
+    range24h: string;
+    range7d: string;
+    busiest: string;
+    recentFailures: string;
+    noFailures: string;
+    noTraffic: string;
+    loading: string;
+    loadFailed: string;
+    close: string;
+    identities: string;
+    section: string;
+    addIdentity: string;
+    identityHint: string;
+    invalidIdentity: string;
+    tooManyIdentities: string;
+    seenTitle: string;
+    seenCount: string;
+    unplacedTitle: string;
+    unconnectedTitle: string;
+    place: string;
+    drawArrow: string;
+  };
   // other namespaces can be added here
 }
 
@@ -253,4 +289,9 @@ export interface IsoflowProps {
    * show their live status. Omit for plain diagramming.
    */
   live?: LiveSnapshot;
+  /**
+   * Optional live traffic (service calls). When set, dots move along arrows
+   * and failing arrows and boxes are marked. Omit for plain diagramming.
+   */
+  traffic?: TrafficFeed;
 }

@@ -14,7 +14,7 @@ import { Reflector } from '@nestjs/core';
 import { and, eq } from 'drizzle-orm';
 import type { AuthenticatedRequest } from '../auth/guards.js';
 import { DB, type Database } from '../database/database.module.js';
-import { credential, landscape, project, projectRelation } from '../database/schema.js';
+import { credential, ingestKey, landscape, project, projectRelation } from '../database/schema.js';
 import { type ProjectScope, projectScopesFor } from '../rbac/roles.js';
 
 export interface ProjectAccessInfo {
@@ -58,12 +58,13 @@ export class ProjectAccess {
 const PROJECT_SCOPE_KEY = 'fossflow:projectScope';
 
 /** Which record the route parameter names; its project decides access. */
-type ScopeTarget = 'project' | 'landscape' | 'credential';
+type ScopeTarget = 'project' | 'landscape' | 'credential' | 'ingestKey';
 
 const NOT_FOUND: Record<ScopeTarget, string> = {
   project: 'Project not found',
   landscape: 'Landscape not found',
-  credential: 'Credential not found'
+  credential: 'Credential not found',
+  ingestKey: 'Ingest key not found'
 };
 
 interface ProjectScopeRule {
@@ -98,8 +99,11 @@ class ProjectScopeGuard implements CanActivate {
     return true;
   }
 
-  private async projectOf(target: 'landscape' | 'credential', id: string): Promise<string | null> {
-    const table = target === 'landscape' ? landscape : credential;
+  private async projectOf(
+    target: Exclude<ScopeTarget, 'project'>,
+    id: string
+  ): Promise<string | null> {
+    const table = { landscape, credential, ingestKey }[target];
     const [row] = await this.db
       .select({ projectId: table.projectId })
       .from(table)

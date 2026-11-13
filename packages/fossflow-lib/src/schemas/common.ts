@@ -19,3 +19,16 @@ export const liveBinding = z.object({
   /** On server plates: container keys already placed (deleted ones stay hidden). */
   known: z.array(z.string().min(1).max(300)).max(2000).optional()
 });
+
+/** One traffic identity: `service:<name>`, `host:<host>` or `db:<host>/<name>`. A leading `*.` after the prefix is the only wildcard. */
+export const trafficIdentity = z
+  .string()
+  .min(1)
+  .max(300)
+  // eslint-disable-next-line no-control-regex
+  .regex(/^(service|host|db):(\*\.)?[^*\u0000-\u001f]+$/);
+
+/** Binds a box to the traffic identities whose calls it owns. */
+export const trafficBinding = z.object({
+  ids: z.array(trafficIdentity).max(20)
+});

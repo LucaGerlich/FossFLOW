@@ -57,6 +57,8 @@
     "live": {
         "label": "Live",
         "unavailable": "Live data unavailable",
+        "trafficLive": "Traffic · live",
+        "trafficConnecting": "Traffic · connecting",
         "servers_one": "{{count}} server",
         "servers_other": "{{count}} servers",
         "noServers": "no servers",
@@ -176,7 +178,8 @@
             "delete": "Delete project",
             "deleteHint": "Deletes the project and everything in it. This can’t be undone.",
             "deleteConfirm": "Delete “{{name}}”",
-            "credentials": "Credentials"
+            "credentials": "Credentials",
+            "monitoring": "Monitoring"
         },
         "landscapes": {
             "untitled": "Untitled landscape",
@@ -227,6 +230,38 @@
             "deleteUsed_other": "{{count}} landscapes show live data from this credential and will stop. Delete it anyway?",
             "empty": "No credentials yet",
             "emptyHint": "Credentials are logins for live sources, such as a Beszel hub. Landscapes in this project can then show live status."
+        },
+        "monitoring": {
+            "services": "Services",
+            "servicesHint": "Each service that sends traffic to this project gets its own key. Connect one to see it here.",
+            "connect": "Connect a service",
+            "serviceName": "Service name",
+            "serviceNameHint": "Becomes OTEL_SERVICE_NAME in the setup below, for example member-app.",
+            "create": "Create key",
+            "createdTitle": "Connect {{name}}",
+            "keyLabel": "Ingest key",
+            "keyHint": "Copy it now. It won’t be shown again.",
+            "copy": "Copy",
+            "copied": "Copied",
+            "done": "Done",
+            "setupTitle": "Setup",
+            "block": {
+                "node-cjs": "Node.js (CommonJS)",
+                "node-esm": "Node.js (ES modules)",
+                "nextjs": "Next.js"
+            },
+            "stepInstall": "Install",
+            "stepEnv": "Environment variables",
+            "stepFile": "File {{file}}",
+            "createdBy": "created by {{name}}",
+            "lastData": "last data {{date}}",
+            "noData": "no data received yet",
+            "seenAs": "Seen as: {{services}}",
+            "revoke": "Revoke",
+            "revokeHint": "Services using this key stop sending data. Traffic already received stays.",
+            "revokeConfirm": "Revoke “{{name}}”",
+            "empty": "No services connected yet",
+            "emptyHint": "Connect a service to start receiving traffic from your running apps."
         },
         "sources": {
             "button": "Live data",
