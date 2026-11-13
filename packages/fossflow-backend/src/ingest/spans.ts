@@ -199,8 +199,24 @@ const aliasOf = (
 
 type Mapped = { callee: string; operation: string } | null;
 
+/**
+ * Connection spans (`pg.connect`) carry a DB system but no query. Presence is
+ * all that is checked here; the statement text is never read.
+ */
+const DB_QUERY_ATTRIBUTES = [
+  'db.query.text',
+  'db.statement',
+  'db.operation.name',
+  'db.operation',
+  'db.query.summary'
+] as const;
+
+const carriesQuery = (attributes: Attributes): boolean =>
+  DB_QUERY_ATTRIBUTES.some((name) => attributes.has(name));
+
 const mapCall = (span: OtlpSpan, attributes: Attributes): Mapped => {
   if (pick(attributes, 'db.system.name', 'db.system')) {
+    if (!carriesQuery(attributes)) return null;
     const callee = dbCallee(attributes);
     return callee
       ? { callee, operation: dbOperation(attributes, span.name) }

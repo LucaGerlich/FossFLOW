@@ -149,7 +149,11 @@ describe('toTraffic', () => {
   });
 
   it('DB operation fallbacks', () => {
-    const db = { 'db.system': 'postgresql', 'net.peer.name': 'db' };
+    const db = {
+      'db.system': 'postgresql',
+      'net.peer.name': 'db',
+      'db.query.text': 'q'
+    };
     const batch = toTraffic(
       request('a', [
         span(
@@ -374,7 +378,11 @@ describe('toTraffic', () => {
       request('a', [
         span(
           3,
-          { 'db.system': 'postgresql', 'net.peer.name': 'db' },
+          {
+            'db.system': 'postgresql',
+            'net.peer.name': 'db',
+            'db.query.text': 'q'
+          },
           {
             name: 'SELECT 4711'
           }
@@ -387,7 +395,8 @@ describe('toTraffic', () => {
   it('normalises DB hosts and drops unsafe namespaces', () => {
     const base = {
       'db.system': 'postgresql',
-      'net.peer.name': 'Members.DB.internal:5432'
+      'net.peer.name': 'Members.DB.internal:5432',
+      'db.query.text': 'q'
     };
     assert.equal(
       only(request('a', [span(3, { ...base, 'db.name': 'members' })])).callee,
@@ -454,7 +463,11 @@ describe('toTraffic', () => {
 
   it('keeps ids out of DB operations and namespaces', () => {
     const longName = `${'ab.'.repeat(21)}a`;
-    const db = { 'db.system': 'postgresql', 'net.peer.name': 'db' };
+    const db = {
+      'db.system': 'postgresql',
+      'net.peer.name': 'db',
+      'db.query.text': 'q'
+    };
     const summary = only(
       request('a', [
         span(3, { ...db, 'db.query.summary': 'SELECT members 4711' })
@@ -484,6 +497,29 @@ describe('toTraffic', () => {
       only(request('a', [span(3, { ...db, 'db.name': longName })])).callee,
       `db:db/${longName}`
     );
+  });
+
+  it('counts a DB span only when it carries a query', () => {
+    const connect = {
+      'db.system': 'postgresql',
+      'net.peer.name': 'db',
+      'db.name': 'members'
+    };
+    const connectSpan = (extra: Record<string, string>) =>
+      span(3, { ...connect, ...extra }, { name: 'pg-pool.connect' });
+    assert.deepEqual(
+      toTraffic(request('a', [connectSpan({})]), RECEIVED).events,
+      []
+    );
+    const withStatement = only(
+      request('a', [connectSpan({ 'db.statement': 'SELECT 1' })])
+    );
+    assert.equal(withStatement.kind, 'call');
+    assert.doesNotMatch(withStatement.operation, /SELECT 1/);
+    const withOperation = only(
+      request('a', [connectSpan({ 'db.operation.name': 'SELECT' })])
+    );
+    assert.equal(withOperation.operation, 'SELECT');
   });
 
   it('caps identities at 300 characters', () => {
