@@ -49,6 +49,29 @@ describe('boxOf', () => {
     expect(boxOf(index, 'host:sync.internal')).toBe('box1');
   });
 
+  it('lets a host bound by hand beat an earlier alias-derived one', () => {
+    const items = [
+      item('boxA', ['service:m2-sample']),
+      item('boxB', ['host:localhost'])
+    ];
+    const aliases = [{ host: 'host:localhost', service: 'service:m2-sample' }];
+    const index = buildTrafficIndex(items, aliases);
+    expect(boxOf(index, 'host:localhost')).toBe('boxB');
+    const route = createRouter(index, [connector('c1', { item: 'boxA' }, { item: 'boxB' })]);
+    expect(route('service:m2-sample', 'host:localhost')).toEqual({
+      connectorId: 'c1',
+      reversed: false
+    });
+  });
+
+  it('lets an alias beat a wildcard', () => {
+    const index = buildTrafficIndex(
+      [item('box1', ['host:*.internal']), item('box2', ['service:sync'])],
+      [{ host: 'host:sync.internal', service: 'service:sync' }]
+    );
+    expect(boxOf(index, 'host:sync.internal')).toBe('box2');
+  });
+
   it('prefers an exact match over an earlier wildcard', () => {
     const index = buildTrafficIndex(
       [

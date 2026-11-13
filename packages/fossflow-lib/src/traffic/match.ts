@@ -8,7 +8,10 @@ export interface ArrowMatch {
 
 export interface TrafficBox {
   itemId: string;
+  /** Identities this box binds by hand (non-wildcard entries of its own `traffic.ids`). */
   exact: Set<string>;
+  /** Alias hosts of the services this box binds exactly; learned, so they rank below `exact`. */
+  aliases: Set<string>;
   /** Patterns of the form `<prefix>:*.<suffix>`. */
   wildcards: string[];
 }
@@ -48,18 +51,24 @@ export function buildTrafficIndex(
       if (id.includes(WILDCARD)) wildcards.push(id);
       else exact.add(id);
     }
+    const owned = new Set<string>();
     for (const alias of aliases) {
-      if (exact.has(alias.service)) exact.add(alias.host);
+      if (exact.has(alias.service)) owned.add(alias.host);
     }
-    boxes.push({ itemId: item.id, exact, wildcards });
+    boxes.push({ itemId: item.id, exact, aliases: owned, wildcards });
   }
   return { boxes };
 }
 
-/** The first box with an exact match, else the first box with a matching wildcard. */
+/**
+ * The first box binding the identity by hand, else the first box owning it
+ * through an alias, else the first box with a matching wildcard.
+ */
 export function boxOf(index: TrafficIndex, identity: string): string | null {
   const exact = index.boxes.find((box) => box.exact.has(identity));
   if (exact) return exact.itemId;
+  const aliased = index.boxes.find((box) => box.aliases.has(identity));
+  if (aliased) return aliased.itemId;
   const wild = index.boxes.find((box) =>
     box.wildcards.some((pattern) => matchesIdentity(pattern, identity))
   );
