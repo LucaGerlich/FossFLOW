@@ -32,9 +32,17 @@ export const useTrafficSelection = (): TrafficSelectionState => {
   let selection: TrafficSelection | null = null;
   if (readOnly) {
     selection = local;
-  } else if (traffic && itemControls && 'id' in itemControls) {
-    if (itemControls.type === 'CONNECTOR' && traffic.arrows.has(itemControls.id)) {
-      selection = { type: 'arrow', connectorId: itemControls.id };
+  } else if (traffic && itemControls) {
+    // A click on a connector yields a CONNECTOR_GROUP; it counts once one
+    // connector is focused (immediately when only one sits on the tile).
+    const connectorId =
+      itemControls.type === 'CONNECTOR_GROUP'
+        ? itemControls.focusedId
+        : itemControls.type === 'CONNECTOR'
+          ? itemControls.id
+          : null;
+    if (connectorId !== null && traffic.arrows.has(connectorId)) {
+      selection = { type: 'arrow', connectorId };
     } else if (
       itemControls.type === 'ITEM' &&
       traffic.index.boxes.some((box) => box.itemId === itemControls.id)

@@ -87,7 +87,11 @@ describe('TrafficOverlay', () => {
 
       act(() => {
         uiActions.current?.setEditorMode('EDITABLE');
-        uiActions.current?.setItemControls({ type: 'CONNECTOR', id: 'arrow' });
+        uiActions.current?.setItemControls({
+          type: 'CONNECTOR_GROUP',
+          ids: ['arrow'],
+          focusedId: 'arrow'
+        });
       });
 
       expect(await screen.findByText('Website → Member app')).toBeInTheDocument();
@@ -100,6 +104,30 @@ describe('TrafficOverlay', () => {
 
       fireEvent.click(screen.getByRole('button', { name: 'Close' }));
       expect(screen.queryByText('Identities')).toBeNull();
+    });
+
+    it('opens no arrow card until a connector of the group is focused', async () => {
+      renderMap(feed());
+      await screen.findByTestId('map-ready');
+
+      act(() => {
+        uiActions.current?.setEditorMode('EDITABLE');
+        uiActions.current?.setItemControls({
+          type: 'CONNECTOR_GROUP',
+          ids: ['arrow', 'other'],
+          focusedId: null
+        });
+      });
+      expect(screen.queryByText('Website → Member app')).toBeNull();
+
+      act(() => {
+        uiActions.current?.setItemControls({
+          type: 'CONNECTOR_GROUP',
+          ids: ['arrow', 'other'],
+          focusedId: 'arrow'
+        });
+      });
+      expect(await screen.findByText('Website → Member app')).toBeInTheDocument();
     });
   });
 });
