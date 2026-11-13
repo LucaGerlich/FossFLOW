@@ -18,6 +18,9 @@ describe('templatePath', () => {
     ['/v1/classes', '/v1/classes'],
     ['/api/v2/health', '/api/v2/health'],
     ['/blog/how-to-train', '/blog/how-to-train'],
+    ['/users/jane%2540example.com', '/users/{id}'],
+    ['/x;jsessionid=abc/orders', '/x/orders'],
+    ['/t/abcdefghijklmnopqrstuvwxyzabcdef', '/t/{id}'],
     ['/', '/']
   ])('templates %s', (input, expected) => {
     assert.equal(templatePath(input), expected);

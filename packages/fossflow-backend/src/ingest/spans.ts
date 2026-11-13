@@ -32,7 +32,12 @@ const MAX_AGE_MS = 3_600_000;
 const MAX_SPAN_NAME = 60;
 const METHOD = /^[A-Z]{1,10}$/;
 const ERROR_TYPE = /^[\w.:-]{1,60}$/;
-const SPAN_NAME_OPERATION = /^[A-Za-z][\w.:-]*( [\w.]+)?$/;
+const SPAN_NAME_OPERATION = /^[A-Za-z][\w.:-]*( [A-Za-z_][\w.]*)?$/;
+const QUERY_SUMMARY = /^[A-Za-z][\w.$:-]*( [\w.$:-]+){0,5}$/;
+const MAX_QUERY_SUMMARY = 100;
+const SAFE_HOST = /^[a-z0-9._:[\]-]{1,253}$/;
+const SAFE_NAMESPACE = /^[\w.$|-]{1,128}$/;
+const HTTP_STATUS = /^\d{3}$/;
 const URL_PREFIX = /^[a-z][a-z0-9+.-]*:\/\/[^/?#]*/i;
 
 type Attributes = ReadonlyMap<string, string>;
@@ -67,6 +72,12 @@ const stripPort = (host: string): string => {
   return lower.replace(/:\d+$/, '');
 };
 
+/** Normalised host, or undefined when it is not a plain hostname. */
+const cleanHost = (raw: string): string | undefined => {
+  const host = stripPort(raw).replace(/\.$/, '');
+  return SAFE_HOST.test(host) ? host : undefined;
+};
+
 const parseUrl = (raw: string): URL | null => {
   try {
     return new URL(raw);
@@ -81,17 +92,17 @@ const urlOf = (attributes: Attributes): string | undefined =>
 const httpHost = (attributes: Attributes): string | undefined => {
   const explicit = pick(attributes, 'server.address', 'net.peer.name');
   const raw = explicit ?? parseUrl(urlOf(attributes) ?? '')?.hostname;
-  if (!raw) return undefined;
-  const host = stripPort(raw).replace(/\.$/, '');
-  return host === '' ? undefined : host;
+  return raw ? cleanHost(raw) : undefined;
 };
 
 const dbCallee = (attributes: Attributes): string | undefined => {
   const system = pick(attributes, 'db.system.name', 'db.system');
   const target = pick(attributes, 'server.address', 'net.peer.name') ?? system;
-  if (!target) return undefined;
+  const host = target ? cleanHost(target) : undefined;
+  if (!host) return undefined;
   const namespace = pick(attributes, 'db.namespace', 'db.name');
-  return `db:${target}${namespace ? `/${namespace}` : ''}`;
+  const safe = namespace && SAFE_NAMESPACE.test(namespace) ? namespace : '';
+  return `db:${host}${safe ? `/${safe}` : ''}`;
 };
 
 const pathOfUrl = (raw: string): string => {
@@ -120,7 +131,10 @@ const httpOperation = (attributes: Attributes): string => {
 
 const incomingOperation = (attributes: Attributes): string => {
   const route = pick(attributes, 'http.route');
-  if (route) return joinOperation(methodOf(attributes), route);
+  const cleanRoute = route ? (route.split(/[?#]/)[0] ?? '') : '';
+  if (cleanRoute) {
+    return joinOperation(methodOf(attributes), templatePath(cleanRoute));
+  }
   const target = pick(attributes, 'url.path', 'http.target');
   const path = target ? (target.split(/[?#]/)[0] ?? '') : '';
   return joinOperation(methodOf(attributes), templatePath(path));
@@ -131,7 +145,13 @@ const dbOperation = (
   name: string | undefined
 ): string => {
   const summary = pick(attributes, 'db.query.summary');
-  if (summary) return summary;
+  if (
+    summary &&
+    summary.length <= MAX_QUERY_SUMMARY &&
+    QUERY_SUMMARY.test(summary)
+  ) {
+    return summary;
+  }
   const operation = pick(attributes, 'db.operation.name', 'db.operation');
   if (operation) {
     const collection = pick(
@@ -149,12 +169,10 @@ const dbOperation = (
 };
 
 const failureStatus = (attributes: Attributes): string => {
-  const code = pick(
-    attributes,
-    'http.response.status_code',
-    'http.status_code'
-  );
-  if (code) return code;
+  for (const name of ['http.response.status_code', 'http.status_code']) {
+    const code = attributes.get(name);
+    if (code && HTTP_STATUS.test(code)) return code;
+  }
   const type = pick(attributes, 'error.type');
   return type && ERROR_TYPE.test(type) ? type : 'error';
 };
@@ -164,7 +182,8 @@ const aliasOf = (
   service: string
 ): { host: string; service: string } | null => {
   const raw = pick(attributes, 'server.address', 'net.host.name', 'http.host');
-  return raw ? { host: cap(stripPort(raw)), service } : null;
+  const host = raw ? cleanHost(raw) : undefined;
+  return host ? { host: cap(host), service } : null;
 };
 
 type Mapped = { callee: string; operation: string } | null;

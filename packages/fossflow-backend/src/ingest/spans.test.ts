@@ -319,16 +319,144 @@ describe('toTraffic', () => {
     assert.equal(event.durationMs, 0);
   });
 
+  it('templates and cuts an incoming http.route', () => {
+    const event = only(
+      request('a', [
+        span(2, {
+          'http.request.method': 'GET',
+          'http.route': '/api/members/12345?x=1'
+        })
+      ])
+    );
+    assert.equal(event.operation, 'GET /api/members/{id}');
+    const kept = only(
+      request('a', [
+        span(2, {
+          'http.request.method': 'GET',
+          'http.route': '/api/members/[id]'
+        })
+      ])
+    );
+    assert.equal(kept.operation, 'GET /api/members/[id]');
+  });
+
+  it('rejects an unsafe db.query.summary and falls through', () => {
+    const db = { 'db.system': 'postgresql', 'net.peer.name': 'db' };
+    const event = only(
+      request('a', [
+        span(3, {
+          ...db,
+          'db.query.summary':
+            "SELECT * FROM members WHERE email='jane@example.com'"
+        })
+      ])
+    );
+    assert.equal(event.operation, 'query');
+  });
+
+  it('does not accept a numeric second word in a DB span name', () => {
+    const event = only(
+      request('a', [
+        span(
+          3,
+          { 'db.system': 'postgresql', 'net.peer.name': 'db' },
+          {
+            name: 'SELECT 4711'
+          }
+        )
+      ])
+    );
+    assert.equal(event.operation, 'query');
+  });
+
+  it('normalises DB hosts and drops unsafe namespaces', () => {
+    const base = {
+      'db.system': 'postgresql',
+      'net.peer.name': 'Members.DB.internal:5432'
+    };
+    assert.equal(
+      only(request('a', [span(3, { ...base, 'db.name': 'members' })])).callee,
+      'db:members.db.internal/members'
+    );
+    assert.equal(
+      only(request('a', [span(3, { ...base, 'db.name': "x' OR 1=1" })])).callee,
+      'db:members.db.internal'
+    );
+  });
+
+  it('drops calls and aliases whose host is not a plain hostname', () => {
+    const bad = request('a', [
+      span(3, {
+        'http.request.method': 'GET',
+        'server.address': 'evil/path?x=1'
+      }),
+      span(3, { 'db.system': 'postgresql', 'net.peer.name': 'a b' }),
+      span(2, { 'server.address': 'evil/path?x=1' })
+    ]);
+    const batch = toTraffic(bad, RECEIVED);
+    assert.equal(batch.events.filter((e) => e.kind === 'call').length, 0);
+    assert.deepEqual(batch.aliases, []);
+  });
+
+  it('only keeps a three-digit http status code', () => {
+    const http = { 'http.request.method': 'GET', 'server.address': 'h' };
+    const error = { code: 2 };
+    const intStatus: OtlpSpan = {
+      ...span(3, http, { status: error }),
+      attributes: [
+        ...kv(http),
+        { key: 'http.response.status_code', value: { intValue: 503 } }
+      ]
+    };
+    const batch = toTraffic(
+      request('a', [
+        intStatus,
+        span(
+          3,
+          {
+            ...http,
+            'http.response.status_code': 'user jane@example.com not found'
+          },
+          { status: error }
+        ),
+        span(
+          3,
+          {
+            ...http,
+            'http.response.status_code': 'user jane@example.com not found',
+            'error.type': 'timeout'
+          },
+          { status: error }
+        )
+      ]),
+      RECEIVED
+    );
+    assert.deepEqual(
+      batch.events.map((e) => e.status),
+      ['503', 'error', 'timeout']
+    );
+  });
+
   it('caps identities at 300 characters', () => {
     const event = only(
       request('s'.repeat(400), [
         span(3, {
           'http.request.method': 'GET',
-          'server.address': 'h'.repeat(400)
+          'server.address': 'h'.repeat(250)
         })
       ])
     );
     assert.equal(event.caller.length, 300);
-    assert.equal(event.callee.length, 300);
+    assert.equal(event.callee.length, 255);
+    const tooLong = toTraffic(
+      request('a', [
+        span(3, {
+          'http.request.method': 'GET',
+          'server.address': 'h'.repeat(400)
+        })
+      ]),
+      RECEIVED
+    );
+    assert.deepEqual(tooLong.events, []);
   });
 });
