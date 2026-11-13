@@ -383,4 +383,76 @@ describe('traffic aggregator against real Postgres', () => {
     assert.equal(rows.length, MAX_MINUTE_BUCKETS_PER_FLUSH + 1);
     assert.ok(rows.some((row) => row.operation === 'only-b'));
   });
+
+  it("a project's ceiling bounds pairs across its keys, and known pairs still count", async () => {
+    const a = await newKey();
+    const b = await siblingKey(a);
+    const c = await siblingKey(a);
+    await quiet(async (warn) => {
+      const pairs = (from: number, to: number) =>
+        Array.from({ length: to - from }, (_, i) => call({ callee: `service:svc-${from + i}` }));
+      aggregator.add(a, batch(pairs(0, 1000)), NOW);
+      aggregator.add(b, batch(pairs(1000, 2000)), NOW);
+      aggregator.add(c, batch(pairs(2000, 2001)), NOW);
+      aggregator.add(b, batch(pairs(0, 1)), NOW);
+      aggregator.add(a, batch(pairs(1000, 1001)), NOW);
+      await aggregator.flush(NOW);
+      const mine = warn.mock.calls.filter(([message]) => String(message).includes(a.projectId));
+      assert.equal(mine.length, 1);
+      assert.match(String(mine[0]?.[0]), /^Project /);
+    });
+    const rows = await minutesOf(a.projectId);
+    assert.equal(rows.length, 2000);
+    assert.equal(rows.find((row) => row.callee === 'service:svc-0')?.calls, 2);
+    assert.equal(rows.find((row) => row.callee === 'service:svc-1000')?.calls, 2);
+    assert.ok(!rows.some((row) => row.callee === 'service:svc-2000'));
+  });
+
+  it("a project's ceiling bounds aliases across its keys", async () => {
+    const a = await newKey();
+    const b = await siblingKey(a);
+    const c = await siblingKey(a);
+    await quiet(async (warn) => {
+      const aliases = (from: number, to: number) =>
+        Array.from({ length: to - from }, (_, i) => ({ host: `host-${from + i}`, service: 'svc' }));
+      aggregator.add(a, batch([], { aliases: aliases(0, 500) }), NOW);
+      aggregator.add(b, batch([], { aliases: aliases(500, 1000) }), NOW);
+      aggregator.add(c, batch([], { aliases: aliases(1000, 1002) }), NOW);
+      await aggregator.flush(NOW);
+      const mine = warn.mock.calls.filter(([message]) => String(message).includes(a.projectId));
+      assert.equal(mine.length, 1);
+      assert.match(String(mine[0]?.[0]), /^Project /);
+    });
+    const rows = await db.select().from(trafficAlias).where(eq(trafficAlias.projectId, a.projectId));
+    assert.equal(rows.length, 1000);
+  });
+
+  it("a project's ceiling bounds minute buckets per flush window", async () => {
+    const a = await newKey();
+    const b = await siblingKey(a);
+    const c = await siblingKey(a);
+    const buckets = (from: number, to: number) =>
+      Array.from({ length: to - from }, (_, i) =>
+        call({
+          callee: `service:svc-${(from + i) % 3}`,
+          operation: `op-${Math.floor((from + i) / 3) % 200}`,
+          at: NOW - Math.floor((from + i) / 600) * MINUTE
+        })
+      );
+    await quiet(async (warn) => {
+      aggregator.add(a, batch(buckets(0, 20_000)), NOW);
+      aggregator.add(b, batch(buckets(20_000, 40_000)), NOW);
+      aggregator.add(c, batch([call({ operation: 'one-more' })]), NOW);
+      // A bucket that exists already still counts.
+      aggregator.add(b, batch(buckets(0, 1)), NOW);
+      await aggregator.flush(NOW);
+      const mine = warn.mock.calls.filter(([message]) => String(message).includes(a.projectId));
+      assert.equal(mine.length, 1);
+      assert.match(String(mine[0]?.[0]), /^Project /);
+    });
+    const rows = await minutesOf(a.projectId);
+    assert.equal(rows.length, 40_000);
+    assert.ok(!rows.some((row) => row.operation === 'one-more'));
+    assert.equal(rows.find((row) => row.operation === 'op-0' && row.callee === 'service:svc-0' && row.minute.getTime() === Math.floor(NOW / MINUTE) * MINUTE)?.calls, 2);
+  });
 });

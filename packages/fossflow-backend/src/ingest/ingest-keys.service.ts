@@ -1,6 +1,6 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { desc, eq, inArray } from 'drizzle-orm';
+import { ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { count, desc, eq, inArray } from 'drizzle-orm';
 import { APP_CONFIG, type AppConfig } from '../config/config.js';
 import { DB, type Database } from '../database/database.module.js';
 import { ingestKey, ingestService } from '../database/schema.js';
@@ -32,6 +32,7 @@ export interface IngestKeyRef {
 
 const KEY_PATTERN = /^ffi_[A-Za-z0-9_-]{43}$/;
 const PREFIX_LENGTH = 12;
+const MAX_KEYS_PER_PROJECT = 50;
 
 const hashKey = (key: string) => createHash('sha256').update(key).digest('hex');
 
@@ -76,6 +77,13 @@ export class IngestKeysService {
   }
 
   async create(projectId: string, userId: string, name: string): Promise<CreatedIngestKey> {
+    const [existing] = await this.db
+      .select({ total: count() })
+      .from(ingestKey)
+      .where(eq(ingestKey.projectId, projectId));
+    if ((existing?.total ?? 0) >= MAX_KEYS_PER_PROJECT) {
+      throw new ConflictException({ error: `This project already has ${MAX_KEYS_PER_PROJECT} ingest keys` });
+    }
     const key = `ffi_${randomBytes(32).toString('base64url')}`;
     const id = randomUUID();
     const [row] = await this.db

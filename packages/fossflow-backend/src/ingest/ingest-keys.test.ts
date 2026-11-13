@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { afterAll, beforeAll, describe, it } from 'vitest';
+import { DB, type Database } from '../database/database.module.js';
+import { ingestKey } from '../database/schema.js';
 import { type Browser, startTestApp, type TestApp } from '../test/app.js';
 import { joinAs, type Person } from '../test/people.js';
 import { IngestKeysService } from './ingest-keys.service.js';
@@ -112,5 +114,25 @@ describe('ingest keys against real Postgres', () => {
     assert.equal((await mia.browser.delete(`/api/ingest-keys/${created.id}`)).status, 204);
     assert.deepEqual((await owner.get(list)).body, []);
     assert.equal(await t.app.get(IngestKeysService).authenticate(created.key), null);
+  });
+
+  it('allows at most 50 keys per project', async () => {
+    const busy: string = (await owner.post('/api/projects', { name: 'Busy' })).body.id;
+    const quiet: string = (await owner.post('/api/projects', { name: 'Quiet' })).body.id;
+    // Inserted directly: 50 API calls would only test the same count query slowly.
+    await t.app.get<Database>(DB).insert(ingestKey).values(
+      Array.from({ length: 50 }, (_, i) => ({
+        id: `bulk-${i}`,
+        projectId: busy,
+        name: `k${i}`,
+        keyHash: `bulk-hash-${i}`,
+        prefix: 'ffi_bulk'
+      }))
+    );
+
+    const refused = await owner.post(`/api/projects/${busy}/ingest-keys`, { name: 'one-too-many' });
+    assert.equal(refused.status, 409);
+    assert.equal(refused.body.error, 'This project already has 50 ingest keys');
+    assert.equal((await owner.post(`/api/projects/${quiet}/ingest-keys`, { name: 'fine' })).status, 201);
   });
 });
