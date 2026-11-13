@@ -26,6 +26,7 @@ const setup = () => {
   let listener: ((m: TrafficStreamMessage) => void) | undefined;
   const target = {
     writableLength: 0,
+    destroyed: false,
     writeHead: (status: number, headers: Record<string, string>) => {
       heads.push({ status, headers });
     },
@@ -47,7 +48,7 @@ const setup = () => {
     };
   };
   return {
-    target: target as StreamTarget & { writableLength: number },
+    target: target as StreamTarget & { writableLength: number; destroyed: boolean },
     subscribe,
     writes,
     heads,
@@ -132,6 +133,20 @@ describe('openTrafficStream', () => {
     assert.equal(s.writes.length, before);
     assert.equal(s.ended(), 1);
     assert.equal(s.unsubscribed(), 1);
+    assert.equal(vi.getTimerCount(), 0);
+  });
+
+  it('does nothing for a target that is already closed', () => {
+    const s = setup();
+    s.target.destroyed = true;
+    let subscribed = 0;
+    openTrafficStream(s.target, (listener) => {
+      subscribed += 1;
+      return s.subscribe(listener);
+    });
+    assert.equal(subscribed, 0);
+    assert.equal(s.heads.length, 0);
+    assert.equal(s.writes.length, 0);
     assert.equal(vi.getTimerCount(), 0);
   });
 });

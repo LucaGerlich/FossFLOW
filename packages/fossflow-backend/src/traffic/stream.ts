@@ -13,6 +13,7 @@ export type StreamTarget = {
   end(): void;
   on(event: 'close', listener: () => void): void;
   readonly writableLength: number;
+  readonly destroyed: boolean;
 };
 
 type Timing = { heartbeatMs: number; maxMs: number };
@@ -23,6 +24,8 @@ export function openTrafficStream(
   subscribe: (listener: (message: TrafficStreamMessage) => void) => () => void,
   timing: Timing = { heartbeatMs: HEARTBEAT_MS, maxMs: MAX_STREAM_MS }
 ): void {
+  // The client may have left while access was being checked; `close` won't fire again.
+  if (target.destroyed) return;
   let open = true;
   let unsubscribe: () => void = () => undefined;
   let heartbeat: ReturnType<typeof setInterval> | undefined;

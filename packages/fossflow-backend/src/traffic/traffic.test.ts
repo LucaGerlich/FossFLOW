@@ -147,4 +147,21 @@ describe('live traffic stream against real Postgres', () => {
     assert.equal((await owner.delete(`/api/projects/${projectId}/members/${mia.id}`)).status, 204);
     assert.equal((await stream(landscapePath, miaCookie)).status, 404);
   });
+
+  it('does not leak slots for clients that hang up straight away', async () => {
+    const quick = Array.from({ length: 12 }, () => {
+      const controller = new AbortController();
+      const request = fetch(`${baseUrl}${landscapePath}`, {
+        headers: { Cookie: vicCookie, Origin: 'http://fossflow.test', 'X-Real-IP': '10.88.0.1' },
+        signal: controller.signal
+      }).catch(() => undefined);
+      controller.abort();
+      return request;
+    });
+    await Promise.all(quick);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const s = await stream(landscapePath, vicCookie);
+    assert.equal(s.status, 200);
+    s.close();
+  });
 });

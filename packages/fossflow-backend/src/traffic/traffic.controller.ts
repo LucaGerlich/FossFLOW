@@ -20,6 +20,7 @@ export class TrafficController {
     @CurrentProject() access: ProjectAccessInfo,
     @Res() res: Response
   ): void {
+    if (res.destroyed || res.writableEnded) return;
     const userId = session.user.id;
     const count = this.openStreams.get(userId) ?? 0;
     if (count >= MAX_STREAMS_PER_USER) {
