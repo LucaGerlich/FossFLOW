@@ -20,14 +20,31 @@ export class OtlpDecodeError extends Error {
 }
 
 /** int64 arrives as a decimal string (protobuf, OTLP JSON) or a number. */
+const UINT64_MAX = 18446744073709551615n;
+const INT64_MIN = -9223372036854775808n;
+const INT64_MAX = 9223372036854775807n;
+
 const nanoTime = z
   .union([
     z.string().regex(/^\d{1,20}$/),
     z.number().int().nonnegative().safe()
   ])
-  .transform((value) => BigInt(value));
+  .transform((value) => BigInt(value))
+  .refine((value) => value <= UINT64_MAX);
 
-const intValue = z.union([z.string().regex(/^-?\d{1,20}$/), z.number().int()]);
+const intValue = z.union([
+  z
+    .string()
+    .regex(/^-?\d{1,20}$/)
+    .refine((value) => {
+      const parsed = BigInt(value);
+      return parsed >= INT64_MIN && parsed <= INT64_MAX;
+    }),
+  z
+    .number()
+    .int()
+    .refine((value) => value >= -(2 ** 63) && value < 2 ** 63)
+]);
 
 const keyValueSchema = z.object({
   key: z.string(),
@@ -36,7 +53,8 @@ const keyValueSchema = z.object({
       stringValue: z.string().optional(),
       intValue: intValue.optional(),
       boolValue: z.boolean().optional(),
-      doubleValue: z.number().optional()
+      // NaN and Infinity (protobuf can carry them) drop the value, not the batch.
+      doubleValue: z.number().optional().catch(undefined)
     })
     .optional()
 });

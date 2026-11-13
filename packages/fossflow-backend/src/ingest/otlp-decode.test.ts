@@ -146,6 +146,99 @@ describe('decodeTraceRequest', () => {
   });
 });
 
+describe('decodeTraceRequest limits', () => {
+  const withSpan = (span: object, attributes: object[] = []): Buffer =>
+    Buffer.from(
+      JSON.stringify({
+        resourceSpans: [
+          {
+            resource: { attributes },
+            scopeSpans: [{ spans: [span] }]
+          }
+        ]
+      })
+    );
+
+  it('drops a non-finite doubleValue and keeps the span', () => {
+    const raw = Buffer.from(
+      '{"resourceSpans":[{"scopeSpans":[{"spans":[{"startTimeUnixNano":"1","endTimeUnixNano":"2",' +
+        '"attributes":[{"key":"x","value":{"doubleValue":1e999}},{"key":"y","value":{"stringValue":"ok"}}]}]}]}]}'
+    );
+    const span = decodeTraceRequest(raw, 'json').resourceSpans?.[0]
+      ?.scopeSpans?.[0]?.spans?.[0];
+    assert.ok(span);
+    assert.equal(span.attributes?.[0]?.value?.doubleValue, undefined);
+    assert.equal(span.attributes?.[1]?.value?.stringValue, 'ok');
+  });
+
+  it('drops a NaN doubleValue from protobuf', async () => {
+    const proto = await encodeProtobuf({
+      resourceSpans: [
+        {
+          scopeSpans: [
+            {
+              spans: [
+                {
+                  startTimeUnixNano: '1',
+                  endTimeUnixNano: '2',
+                  attributes: [{ key: 'x', value: { doubleValue: NaN } }]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    });
+    const span = decodeTraceRequest(proto, 'protobuf').resourceSpans?.[0]
+      ?.scopeSpans?.[0]?.spans?.[0];
+    assert.ok(span);
+    assert.equal(span.attributes?.[0]?.value?.doubleValue, undefined);
+  });
+
+  it('rejects a nano time above the uint64 maximum', () => {
+    assert.throws(
+      () =>
+        decodeTraceRequest(
+          withSpan({
+            startTimeUnixNano: '18446744073709551616',
+            endTimeUnixNano: '2'
+          }),
+          'json'
+        ),
+      OtlpDecodeError
+    );
+    const max = decodeTraceRequest(
+      withSpan({
+        startTimeUnixNano: '18446744073709551615',
+        endTimeUnixNano: '2'
+      }),
+      'json'
+    );
+    assert.equal(
+      max.resourceSpans?.[0]?.scopeSpans?.[0]?.spans?.[0]?.startTimeUnixNano,
+      18446744073709551615n
+    );
+  });
+
+  it('rejects an intValue outside int64', () => {
+    const attribute = (intValue: string) => [
+      { key: 'x', value: { intValue } }
+    ];
+    const decode = (intValue: string) =>
+      decodeTraceRequest(
+        withSpan(
+          { startTimeUnixNano: '1', endTimeUnixNano: '2' },
+          attribute(intValue)
+        ),
+        'json'
+      );
+    assert.throws(() => decode('9223372036854775808'), OtlpDecodeError);
+    assert.throws(() => decode('-9223372036854775809'), OtlpDecodeError);
+    assert.doesNotThrow(() => decode('9223372036854775807'));
+    assert.doesNotThrow(() => decode('-9223372036854775808'));
+  });
+});
+
 describe('formatOf', () => {
   it('reads the media type only', () => {
     assert.equal(formatOf('application/x-protobuf'), 'protobuf');
