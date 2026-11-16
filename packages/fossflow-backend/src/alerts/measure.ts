@@ -1,6 +1,7 @@
 import { eq, gte, sql } from 'drizzle-orm';
 import type { Database } from '../database/database.module.js';
 import { alertRule, ingestGap } from '../database/schema.js';
+import { unambiguousAliases } from '../traffic/aliases.js';
 import { emptyHistogram, percentileMs } from '../traffic/histogram.js';
 import { GAP_MS } from './heartbeat.js';
 import { matchesIdentity } from './targets.js';
@@ -21,7 +22,6 @@ const HOUR_MS = 3_600_000;
 const DAY_MS = 86_400_000;
 /** The window query reaches back to the longest rule window (60 minutes). */
 const WINDOW_MINUTES = 60;
-const ALIAS_DAYS = 1;
 const LAST_SEEN_DAYS = 8;
 const SLOW_QUANTILE = 0.95;
 
@@ -37,14 +37,9 @@ type WindowRow = Identity & { minute: Date | string; calls: number; failures: nu
 type SeenRow = Identity & { seen: Date | string };
 
 /** `host:<name>` to `service:<name>` for hosts only one service claimed in the last 24 hours. */
-async function unambiguousAliases(db: Database, projectId: string, now: Date): Promise<Map<string, string>> {
-  const result = await db.execute<{ host: string; service: string }>(sql`
-    select host, min(service) as service from traffic_alias
-    where project_id = ${projectId} and last_seen_at >= ${new Date(now.getTime() - ALIAS_DAYS * DAY_MS)}::timestamptz
-    group by host
-    having count(distinct service) = 1
-  `);
-  return new Map(result.rows.map((row) => [`host:${row.host}`, `service:${row.service}`]));
+async function aliasMap(db: Database, projectId: string, now: Date): Promise<Map<string, string>> {
+  const aliases = await unambiguousAliases(db, projectId, now);
+  return new Map(aliases.map(({ host, service }) => [`host:${host}`, `service:${service}`]));
 }
 
 function matches(rule: RuleRow, row: Identity, aliases: ReadonlyMap<string, string>): boolean {
@@ -175,7 +170,7 @@ export async function measureProject(
 ): Promise<Map<string, Measurement>> {
   const result = new Map<string, Measurement>();
   if (rules.length === 0) return result;
-  const aliases = await unambiguousAliases(db, projectId, now);
+  const aliases = await aliasMap(db, projectId, now);
 
   const windowed = rules.filter((rule) => rule.kind !== 'silent');
   if (windowed.length > 0) {

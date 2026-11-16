@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { type SQL, sql } from 'drizzle-orm';
 import { DB, type Database } from '../database/database.module.js';
+import { unambiguousAliases } from './aliases.js';
 import { emptyHistogram, percentileMs } from './histogram.js';
 import type {
   TrafficAlias,
@@ -91,12 +92,7 @@ export class TrafficQueries {
         ) seen
         group by caller, callee
       `),
-      this.db.execute<{ host: string; service: string }>(sql`
-        select host, min(service) as service from traffic_alias
-        where project_id = ${projectId} and last_seen_at >= ${new Date(nowMs - SEEN_MS)}::timestamptz
-        group by host
-        having count(distinct service) = 1
-      `)
+      unambiguousAliases(this.db, projectId, now)
     ]);
 
     const pairCounts = new Map<string, Counts>();
@@ -128,7 +124,7 @@ export class TrafficQueries {
       .sort((a, b) => b.calls - a.calls || b.lastSeenAt.localeCompare(a.lastSeenAt))
       .slice(0, MAX_EDGES);
 
-    const aliases: TrafficAlias[] = aliasRows.rows.map((row) => ({
+    const aliases: TrafficAlias[] = aliasRows.map((row) => ({
       host: `host:${row.host}`,
       service: `service:${row.service}`
     }));
