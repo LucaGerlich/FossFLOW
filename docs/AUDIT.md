@@ -42,7 +42,7 @@ Newest entries first.
     - The demo publishes one port, on `127.0.0.1` only.
   - **Corrected in the docs** (found by the final review):
     - `/api/otlp/` skips Basic Auth and the general rate limit.
-    - Requests there without a valid key are not rate limited by FossFLOW, so the guide says to rate-limit that path in your proxy if it is reachable from the internet.
+    - FossFLOW refuses requests there without a valid key cheaply, but doesn't cap how many arrive. The guides say to rate-limit that path per client IP in the TLS proxy if it is reachable from the internet.
   - **Reviews:**
     - Every task was reviewed for spec and quality, and docs were checked fact by fact against the code.
     - The walkthrough found one gap: no troubleshooting row for the demo's `down` asking for the key. It was fixed and re-reviewed.
@@ -74,7 +74,12 @@ Newest entries first.
   - **Not checked live:**
     - Real Slack and Teams deliveries still have no live check, because no test webhooks were available.
     - In the walkthrough, the arrow card was checked through its data endpoint and the rule was made in Monitoring. Clicking the arrow and **Alert me when…** were checked in milestones 2 and 3.
-  - **Hardening worth doing:** rate-limit `/api/otlp/` requests that carry no valid key in FossFLOW itself, not only in the proxy.
+  - **Decided against: an in-app limit on `/api/otlp/` requests without a valid key.**
+    - They are already refused after at most one hash lookup, without a database query or decoding.
+    - The costly part, receiving up to 16 MiB, happens in the container's nginx before the app sees the request.
+    - Behind a TLS proxy, every client reaches FossFLOW from the proxy's address, so a per-IP limit there would lump real services in with an attacker.
+    - The docs now say to rate-limit that path per client IP in the TLS proxy.
+    - *Cost:* flood protection on `/api/otlp/` depends on the operator's proxy.
   - **Demo:** it has no lockfiles, so a broken upstream release can break its build until the pins move.
   - **Translations:** the translated READMEs don't mention live traffic.
   - Milestone 3's behaviour notes and scale notes still apply.

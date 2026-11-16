@@ -424,3 +424,4 @@ Change the retention with `TRAFFIC_MINUTES_DAYS`, `TRAFFIC_HOURS_DAYS` and `TRAF
 - Don't buffer `/api/landscapes/*/traffic/stream`. Honour `X-Accel-Buffering: no`, or turn proxy buffering off. A buffered stream means no dots.
 - Allow 16 MiB bodies on `/api/otlp/`. A lower limit answers 413.
 - No Basic Auth on `/api/otlp/`. Services authenticate with the `x-fossflow-key` header, and Basic Auth answers 401.
+- If `/api/otlp/` is reachable from the internet, rate-limit it per client IP here. FossFLOW refuses requests without a valid key cheaply but doesn't cap how many arrive, and only your proxy sees the real client addresses. Keep the limit above your services' combined export rate: with the setup blocks, each service sends about one request a second (`OTEL_BSP_SCHEDULE_DELAY=1000`).
