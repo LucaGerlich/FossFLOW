@@ -193,6 +193,8 @@ services:
 
 The demo's [`compose.yml`](../examples/live-traffic/compose.yml) is a working example. When FossFLOW is on another host, use its public address instead.
 
+On Docker Engine on Linux, `host.docker.internal:host-gateway` reaches FossFLOW only through a port FossFLOW publishes on the host (`PORT`, default 80), and a host firewall must allow traffic from the Docker bridge.
+
 ### Other languages
 
 FossFLOW accepts standard OTLP over HTTP with protobuf, so any OpenTelemetry SDK works with the same environment variables. These are **not tested by us**:
@@ -298,13 +300,14 @@ Every message starts with one line. The detail depends on the kind:
 
 ```
 Failing · Member app → MagicLine · 4.1% of 1,260 calls failed in the last 5 min (threshold 2%)
-Still slow · Member app → MagicLine · p95 1.2 s over 880 calls in the last 5 min (threshold 1 s)
+Slow · Member app → MagicLine · p95 1.2 s over 880 calls in the last 5 min (threshold 1 s)
+Silent · Member app → MagicLine · no calls for 12 min (threshold 10 min)
 Resolved · Member app → MagicLine · failing for 35 min
 ```
 
 The first line of a reminder starts with **Still failing**, **Still slow** or **Still silent**. A test message reads `Test · <project> · FossFLOW alerts will arrive here`. After the line comes the link to **Monitoring**.
 
-A message never names an operation, a status or a caller, only the rule, the target and the numbers.
+A message never names an operation, a status or a caller, only the rule name and the numbers.
 
 ### Delivery
 
@@ -384,14 +387,14 @@ A `test` message, from **Save and test**, has no kind, rule id or target. Its ru
 | Resolved alerts | kept 90 days |
 | OTLP request body | 16 MiB |
 | Requests per key | 1200 per minute, then 429 with `Retry-After` |
-| Age of a span | spans older than 1 hour are dropped |
+| Age of a span | FossFLOW places spans on its own clock, so clock skew between hosts doesn't matter. A span more than 1 hour older than the newest span in its batch is shown as 1 hour old |
 | Keys per project | 50 |
 | Operations per arrow | 200, the rest are counted as `other` |
 | Identities | up to about 300 characters; 20 per box |
-| Live streams | 10 per user, with a heartbeat every 25 seconds |
+| Live streams | 10 per user, with a heartbeat every 25 seconds. The server ends a stream after 10 minutes and the browser reconnects on its own |
 | Alert rules | 100 per project, 10 channels per rule |
 
-Change the retention with `TRAFFIC_MINUTES_DAYS`, `TRAFFIC_HOURS_DAYS` and `TRAFFIC_FAILURES_DAYS` in the backend environment.
+Change the retention with `TRAFFIC_MINUTES_DAYS`, `TRAFFIC_HOURS_DAYS` and `TRAFFIC_FAILURES_DAYS` in `.env` (compose passes them to the container).
 
 ## Troubleshooting
 
@@ -413,7 +416,6 @@ Change the retention with `TRAFFIC_MINUTES_DAYS`, `TRAFFIC_HOURS_DAYS` and `TRAF
 | An arrow does not light up | The host is shared by several services, so FossFLOW did not link it automatically. | Add the identity to the box yourself, or accept the suggestion in the tray. |
 | Numbers are lower than reality | Sampling in an SDK or a Collector drops spans. | Keep `OTEL_TRACES_SAMPLER=always_on` and remove tail sampling for FossFLOW. |
 | **Slow** never shows | Slow exists only through a slow rule. | Create one with **Alert me when…**. |
-| Spans are missing | The service's clock is off by more than 1 hour, and FossFLOW drops spans older than that. | Fix the clock. |
 | `docker compose … down` (or `logs`) says `FOSSFLOW_INGEST_KEY` is missing a value | The demo's compose file checks the variable on every command, not only `up`. | Export it again in that shell (any value works for `down`), then repeat the command. |
 | A silent alert fires after downtime | After more than 5 minutes of downtime a silent rule counts from the restart. | Wait one window. This is expected. |
 

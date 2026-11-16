@@ -9,6 +9,23 @@ import { setupBlocks } from './setup-blocks.js';
 
 const doc = (): string => readFileSync(new URL('../../../../docs/TRAFFIC.md', import.meta.url), 'utf8');
 
+/** The text under a `### ` or `## ` heading, up to the next heading of either level. */
+function section(text: string, heading: string): string {
+  const start = text.indexOf(`\n${heading}\n`);
+  assert.ok(start >= 0, `heading missing from the doc: ${heading}`);
+  const rest = text.slice(start + heading.length + 2);
+  const end = rest.search(/\n##+? /);
+  return end < 0 ? rest : rest.slice(0, end);
+}
+
+const SETUP_HEADINGS: Record<string, string> = {
+  'node-cjs': '### Node.js (CommonJS)',
+  'node-esm': '### Node.js (ES modules)',
+  nextjs: '### Next.js'
+};
+
+const MIN_LINE_LENGTH = 8;
+
 const OK: PostResult = { ok: true, status: 200, retryAfterSeconds: null, error: null };
 
 const message: AlertMessage = {
@@ -29,7 +46,7 @@ const message: AlertMessage = {
 };
 
 describe('docs/TRAFFIC.md stays in step with the code', () => {
-  it('shows every setup line with the doc placeholders', () => {
+  it('shows every setup line in its own section with the doc placeholders', () => {
     const text = doc();
     const blocks = setupBlocks({
       endpoint: 'https://fossflow.example.com/api/otlp',
@@ -37,25 +54,28 @@ describe('docs/TRAFFIC.md stays in step with the code', () => {
       serviceName: 'member-app'
     });
     for (const block of blocks) {
+      const heading = SETUP_HEADINGS[block.id];
+      assert.ok(heading, `no doc heading known for setup block ${block.id}`);
+      const own = section(text, heading);
       for (const step of block.steps) {
-        for (const line of step.code.split('\n').filter((entry) => entry.trim() !== '')) {
-          assert.ok(text.includes(line), `${block.id} line missing from the doc: ${line}`);
+        for (const line of step.code.split('\n').map((entry) => entry.trim()).filter((entry) => entry.length >= MIN_LINE_LENGTH)) {
+          assert.ok(own.includes(line), `${block.id} line missing from "${heading}": ${line}`);
         }
       }
     }
   });
 
   it('documents every webhook field', async () => {
-    const text = doc();
+    const own = section(doc(), '### Webhook JSON');
     const postJson = vi.fn(async (..._args: unknown[]) => OK);
     await webhookChannel.send({ url: 'https://hooks.example.com/in' }, message, { postJson } as unknown as ChannelDeps);
     const body = postJson.mock.calls[0]?.[1] as Record<string, unknown> & { rule: Record<string, unknown> };
     assert.ok(body, 'the webhook posted nothing');
     for (const key of [...Object.keys(body), ...Object.keys(body.rule)]) {
-      assert.ok(text.includes('`' + key + '`'), `webhook field \`${key}\` missing from the doc`);
+      assert.ok(own.includes('| `' + key + '`'), `webhook field \`${key}\` has no table row in "Webhook JSON"`);
     }
     for (const state of ['firing', 'reminder', 'resolved', 'test']) {
-      assert.ok(text.includes('`' + state + '`'), `webhook state \`${state}\` missing from the doc`);
+      assert.ok(own.includes('`' + state + '`'), `webhook state \`${state}\` missing from "Webhook JSON"`);
     }
   });
 });
