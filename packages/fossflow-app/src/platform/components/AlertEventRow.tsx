@@ -42,7 +42,7 @@ export function AlertEventRow({ event }: { event: AlertEventView }) {
         <div className="list__main">
           <span className="list__title">
             {event.ruleName}{' '}
-            <span className={`badge badge--mono alert-kind alert-kind--${event.kind}`}>
+            <span className={`badge badge--mono alert-kind${event.resolvedAt === null ? ` alert-kind--${event.kind}` : ''}`}>
               {t(`platform.alerts.kind.${event.kind}`)}
             </span>
           </span>

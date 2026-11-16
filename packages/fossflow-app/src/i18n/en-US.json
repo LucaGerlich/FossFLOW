@@ -234,7 +234,7 @@
             "deleteUsed_one": "{{count}} landscape shows live data from this credential and will stop. Delete it anyway?",
             "deleteUsed_other": "{{count}} landscapes show live data from this credential and will stop. Delete it anyway?",
             "empty": "No credentials yet",
-            "emptyHint": "Credentials are logins for live sources, such as a Beszel hub. Landscapes in this project can then show live status."
+            "emptyHint": "Credentials are logins for live data sources, such as a Beszel hub, and alert channels such as email, Slack, Teams or a webhook."
         },
         "monitoring": {
             "services": "Services",
@@ -273,7 +273,7 @@
             "buttonCount_one": "Live data · {{count}}",
             "buttonCount_other": "Live data · {{count}}",
             "hint": "Show live status from these credentials, then bind nodes to servers and containers.",
-            "none": "This project has no credentials yet.",
+            "none": "This project has no data sources yet.",
             "manage": "Manage credentials"
         },
         "settings": {

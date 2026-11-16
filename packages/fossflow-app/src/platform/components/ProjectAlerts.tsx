@@ -135,7 +135,7 @@ function AlertRuleRow({ project, rule, editPath }: { project: ProjectDetail; rul
         <div className="list__main">
           <span className="list__title">
             {rule.name}{' '}
-            <span className={`badge badge--mono alert-kind alert-kind--${rule.kind}`}>
+            <span className={`badge badge--mono alert-kind${rule.enabled && rule.state === 'firing' ? ` alert-kind--${rule.kind}` : ''}`}>
               {t(`platform.alerts.kind.${rule.kind}`)}
             </span>
           </span>
