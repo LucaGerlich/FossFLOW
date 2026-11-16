@@ -9,6 +9,8 @@ export interface Mailer {
   readonly enabled: boolean;
   sendInvitation(to: string, url: string, inviterName: string): Promise<void>;
   sendPasswordReset(to: string, url: string): Promise<void>;
+  /** Plain-text alert to several recipients; a no-op without SMTP. */
+  sendAlert(to: string[], subject: string, text: string): Promise<void>;
 }
 
 const logger = new Logger('Mail');
@@ -18,7 +20,8 @@ export function createMailer(smtp: SmtpConfig | null): Mailer {
     return {
       enabled: false,
       sendInvitation: async () => {},
-      sendPasswordReset: async () => {}
+      sendPasswordReset: async () => {},
+      sendAlert: async () => {}
     };
   }
 
@@ -54,6 +57,7 @@ export function createMailer(smtp: SmtpConfig | null): Mailer {
         to,
         'Reset your FossFLOW password',
         `Choose a new password here (the link expires in 1 hour):\n${url}\n\nIf you didn't ask for this, you can ignore this email.\n`
-      )
+      ),
+    sendAlert: (to, subject, text) => send(to.join(', '), subject, text)
   };
 }
