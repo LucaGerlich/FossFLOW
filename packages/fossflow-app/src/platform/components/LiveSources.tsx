@@ -20,6 +20,7 @@ export function LiveSources({ landscape, attached }: LiveSourcesProps) {
   const menu = useRef<HTMLDetailsElement>(null);
   const [open, setOpen] = useState(false);
   const credentials = useCredentials(landscape.projectId, open);
+  const sources = credentials.data?.filter((credential) => credential.kind === 'source');
   const [picked, setPicked] = useState<Set<string>>(new Set());
 
   const onToggle = () => {
@@ -59,9 +60,9 @@ export function LiveSources({ landscape, attached }: LiveSourcesProps) {
         <p className="panel__hint">{t('platform.sources.hint')}</p>
         {credentials.isPending ? (
           <p className="page-loading">{t('platform.loading')}</p>
-        ) : credentials.data?.length ? (
+        ) : sources?.length ? (
           <div className="sources-menu__list">
-            {credentials.data.map((credential) => (
+            {sources.map((credential) => (
               <label className="sources-menu__option" key={credential.id}>
                 <input
                   type="checkbox"

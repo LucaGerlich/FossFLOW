@@ -212,7 +212,12 @@
         },
         "credentials": {
             "add": "Add {{connector}} credential",
-            "type": "Kind of source",
+            "type": "Kind of credential",
+            "sources": "Data sources",
+            "sourcesHint": "Logins for live data, such as a Beszel hub.",
+            "channels": "Alert channels",
+            "channelsHint": "Where alerts are delivered: email, Slack, Teams or a webhook.",
+            "emailHint": "Separate addresses with commas",
             "new": "New {{connector}} credential",
             "edit": "Edit {{connector}} credential",
             "editButton": "Edit",

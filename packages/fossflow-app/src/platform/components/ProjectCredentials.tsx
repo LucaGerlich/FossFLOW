@@ -16,47 +16,16 @@ import { CredentialForm } from './CredentialForm';
 
 type Editing = { kind: 'new'; connector: ConnectorInfo } | { kind: 'edit'; id: string } | null;
 
-/** A project's Credentials tab: logins for live sources, n8n-style. */
+/** A project's Credentials tab: logins for live sources and alert channels, n8n-style. */
 export function ProjectCredentials({ project }: { project: ProjectDetail }) {
   const { t } = useTranslation('app');
   const credentials = useCredentials(project.id);
   const connectors = useConnectors();
   const [editing, setEditing] = useState<Editing>(null);
-  const [connectorId, setConnectorId] = useState('');
   const close = () => setEditing(null);
-
-  const picked = connectors.data?.find((connector) => connector.id === connectorId) ?? connectors.data?.[0];
 
   return (
     <>
-      {can(project, 'credential:create') && picked && editing === null && (
-        <div className="tab-toolbar">
-          <div className="page__actions">
-            {(connectors.data?.length ?? 0) > 1 && (
-              <select
-                className="field__input field__input--compact"
-                aria-label={t('platform.credentials.type')}
-                value={picked.id}
-                onChange={(event) => setConnectorId(event.target.value)}
-              >
-                {connectors.data?.map((connector) => (
-                  <option key={connector.id} value={connector.id}>
-                    {connector.name}
-                  </option>
-                ))}
-              </select>
-            )}
-            <button
-              className="btn btn--primary"
-              type="button"
-              onClick={() => setEditing({ kind: 'new', connector: picked })}
-            >
-              {t('platform.credentials.add', { connector: picked.name })}
-            </button>
-          </div>
-        </div>
-      )}
-
       {editing?.kind === 'new' && (
         <CredentialForm projectId={project.id} connector={editing.connector} onClose={close} />
       )}
@@ -66,27 +35,105 @@ export function ProjectCredentials({ project }: { project: ProjectDetail }) {
 
       {credentials.isPending ? (
         <p className="page-loading">{t('platform.loading')}</p>
-      ) : credentials.data?.length ? (
-        <section className="list" aria-label={t('platform.projects.credentials')}>
-          {credentials.data.map((credential) => (
+      ) : (
+        <>
+          {credentials.data?.length === 0 && editing === null && (
+            <div className="empty-state">
+              <p className="empty-state__title">{t('platform.credentials.empty')}</p>
+              <p className="empty-state__hint">{t('platform.credentials.emptyHint')}</p>
+            </div>
+          )}
+          {GROUPS.map((group) => (
+            <CredentialGroup
+              key={group.kind}
+              project={project}
+              group={group}
+              connectors={(connectors.data ?? []).filter((connector) => connector.kind === group.kind)}
+              allConnectors={connectors.data ?? []}
+              credentials={(credentials.data ?? []).filter((credential) => credential.kind === group.kind)}
+              showAdd={editing === null}
+              onAdd={(connector) => setEditing({ kind: 'new', connector })}
+              onEdit={(id) => setEditing({ kind: 'edit', id })}
+            />
+          ))}
+        </>
+      )}
+    </>
+  );
+}
+
+const GROUPS = [
+  { kind: 'source', title: 'platform.credentials.sources', hint: 'platform.credentials.sourcesHint' },
+  { kind: 'channel', title: 'platform.credentials.channels', hint: 'platform.credentials.channelsHint' }
+] as const;
+
+function CredentialGroup({
+  project,
+  group,
+  connectors,
+  allConnectors,
+  credentials,
+  showAdd,
+  onAdd,
+  onEdit
+}: {
+  project: ProjectDetail;
+  group: (typeof GROUPS)[number];
+  /** Only this group's kind. */
+  connectors: ConnectorInfo[];
+  allConnectors: ConnectorInfo[];
+  credentials: CredentialSummary[];
+  showAdd: boolean;
+  onAdd: (connector: ConnectorInfo) => void;
+  onEdit: (id: string) => void;
+}) {
+  const { t } = useTranslation('app');
+  const [connectorId, setConnectorId] = useState('');
+  const picked = connectors.find((connector) => connector.id === connectorId) ?? connectors[0];
+
+  return (
+    <section className="credential-group" aria-label={t(group.title)}>
+      <div className="section-head">
+        <h2 className="section-head__title">{t(group.title)}</h2>
+        <p className="section-head__hint">{t(group.hint)}</p>
+      </div>
+      {can(project, 'credential:create') && picked && showAdd && (
+        <div className="tab-toolbar">
+          <div className="page__actions">
+            {connectors.length > 1 && (
+              <select
+                className="field__input field__input--compact"
+                aria-label={t('platform.credentials.type')}
+                value={picked.id}
+                onChange={(event) => setConnectorId(event.target.value)}
+              >
+                {connectors.map((connector) => (
+                  <option key={connector.id} value={connector.id}>
+                    {connector.name}
+                  </option>
+                ))}
+              </select>
+            )}
+            <button className="btn btn--primary" type="button" onClick={() => onAdd(picked)}>
+              {t('platform.credentials.add', { connector: picked.name })}
+            </button>
+          </div>
+        </div>
+      )}
+      {credentials.length > 0 && (
+        <div className="list">
+          {credentials.map((credential) => (
             <CredentialRow
               key={credential.id}
               project={project}
               credential={credential}
-              connectorName={connectors.data?.find((c) => c.id === credential.type)?.name ?? credential.type}
-              onEdit={() => setEditing({ kind: 'edit', id: credential.id })}
+              connectorName={allConnectors.find((c) => c.id === credential.type)?.name ?? credential.type}
+              onEdit={() => onEdit(credential.id)}
             />
           ))}
-        </section>
-      ) : (
-        editing === null && (
-          <div className="empty-state">
-            <p className="empty-state__title">{t('platform.credentials.empty')}</p>
-            <p className="empty-state__hint">{t('platform.credentials.emptyHint')}</p>
-          </div>
-        )
+        </div>
       )}
-    </>
+    </section>
   );
 }
 
