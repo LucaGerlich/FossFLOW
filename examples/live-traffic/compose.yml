@@ -2,7 +2,8 @@
 # and exports its OpenTelemetry traces to your FossFLOW.
 # Walkthrough: docs/TRAFFIC.md#try-it-with-the-demo
 #
-#   FOSSFLOW_INGEST_KEY=ffi_... docker compose -f examples/live-traffic/compose.yml up --build
+#   export FOSSFLOW_INGEST_KEY=ffi_...   # every compose command needs it, `down` too
+#   docker compose -f examples/live-traffic/compose.yml up -d --build
 #   docker compose -f examples/live-traffic/compose.yml down -v
 #
 # FOSSFLOW_INGEST_KEY (required): create one in FossFLOW under Monitoring → Connect a service.
