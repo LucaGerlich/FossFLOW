@@ -1,9 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { type SQL, sql } from 'drizzle-orm';
+import { and, desc, eq, isNull, type SQL, sql } from 'drizzle-orm';
 import { DB, type Database } from '../database/database.module.js';
+import { alertEvent, alertRule } from '../database/schema.js';
 import { unambiguousAliases } from './aliases.js';
 import { emptyHistogram, percentileMs } from './histogram.js';
 import type {
+  TrafficAlert,
   TrafficAlias,
   TrafficEdgeDetail,
   TrafficPair,
@@ -64,7 +66,7 @@ export class TrafficQueries {
     const cut = floorTo(nowMs, HOUR_MS) - HOUR_MS;
     const seenFrom = floorTo(nowMs, HOUR_MS) - SEEN_MS;
 
-    const [windowRows, seenRows, aliasRows] = await Promise.all([
+    const [windowRows, seenRows, aliasRows, alerts] = await Promise.all([
       this.db.execute<{
         kind: 'call' | 'incoming';
         caller: string;
@@ -92,7 +94,8 @@ export class TrafficQueries {
         ) seen
         group by caller, callee
       `),
-      unambiguousAliases(this.db, projectId, now)
+      unambiguousAliases(this.db, projectId, now),
+      this.openAlerts(projectId)
     ]);
 
     const pairCounts = new Map<string, Counts>();
@@ -138,8 +141,26 @@ export class TrafficQueries {
         service,
         ...statsOf(counts, windowMinutes)
       })),
-      aliases
+      aliases,
+      alerts
     };
+  }
+
+  private async openAlerts(projectId: string): Promise<TrafficAlert[]> {
+    const rows = await this.db
+      .select({
+        ruleId: alertRule.id,
+        name: alertRule.name,
+        kind: alertRule.kind,
+        target: alertRule.target,
+        startedAt: alertEvent.startedAt,
+        value: alertEvent.value
+      })
+      .from(alertEvent)
+      .innerJoin(alertRule, eq(alertRule.id, alertEvent.ruleId))
+      .where(and(eq(alertEvent.projectId, projectId), isNull(alertEvent.resolvedAt)))
+      .orderBy(desc(alertEvent.startedAt));
+    return rows.map((row) => ({ ...row, startedAt: row.startedAt.toISOString() }));
   }
 
   async edge(

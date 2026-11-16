@@ -9,7 +9,8 @@ const summaryAt = (now: Date): TrafficSummary => ({
   edges: [],
   callees: [],
   services: [],
-  aliases: []
+  aliases: [],
+  alerts: []
 });
 
 describe('createSummaryCache', () => {

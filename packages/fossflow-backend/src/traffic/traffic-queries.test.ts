@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest';
 import { DB, type Database } from '../database/database.module.js';
-import { project, trafficAlias, trafficFailure, trafficHour, trafficMinute } from '../database/schema.js';
+import { alertEvent, alertRule, project, trafficAlias, trafficFailure, trafficHour, trafficMinute } from '../database/schema.js';
 import { startTestApp, type TestApp } from '../test/app.js';
 import { emptyHistogram, percentileMs } from './histogram.js';
 import { TrafficQueries } from './traffic-queries.js';
@@ -42,6 +42,7 @@ describe('traffic queries', () => {
     await db.delete(trafficHour);
     await db.delete(trafficFailure);
     await db.delete(trafficAlias);
+    await db.delete(alertRule);
   });
 
   const minuteRow = (
@@ -277,5 +278,58 @@ describe('traffic queries', () => {
       const detail = await queries.edge(PROJECT, [pair, billing], '1h', NOW);
       assert.equal(detail.totals.calls, 7);
     });
+  });
+
+  it('lists the open alerts of the project, newest first, and no resolved or foreign ones', async () => {
+    const rule = (id: string, projectId: string, name: string): typeof alertRule.$inferInsert => ({
+      id,
+      projectId,
+      name,
+      kind: 'slow',
+      target: { type: 'box', identity: 'service:web' },
+      threshold: 500,
+      windowMinutes: 5
+    });
+    await db.insert(alertRule).values([
+      rule('r-old', PROJECT, 'Old'),
+      rule('r-new', PROJECT, 'New'),
+      rule('r-done', PROJECT, 'Done'),
+      rule('r-other', OTHER, 'Other')
+    ]);
+    const event = (ruleId: string, projectId: string, start: Date, resolvedAt: Date | null, value: number) => ({
+      ruleId,
+      projectId,
+      startedAt: start,
+      resolvedAt,
+      lastNotifiedAt: start,
+      value
+    });
+    await db.insert(alertEvent).values([
+      event('r-old', PROJECT, at(10), null, 700),
+      event('r-new', PROJECT, at(11), null, 900),
+      event('r-done', PROJECT, at(9), at(9, 30), 600),
+      event('r-other', OTHER, at(11), null, 800)
+    ]);
+
+    const { alerts } = await queries.summary(PROJECT, NOW);
+    assert.deepEqual(alerts, [
+      {
+        ruleId: 'r-new',
+        name: 'New',
+        kind: 'slow',
+        target: { type: 'box', identity: 'service:web' },
+        startedAt: at(11).toISOString(),
+        value: 900
+      },
+      {
+        ruleId: 'r-old',
+        name: 'Old',
+        kind: 'slow',
+        target: { type: 'box', identity: 'service:web' },
+        startedAt: at(10).toISOString(),
+        value: 700
+      }
+    ]);
+    assert.deepEqual((await queries.summary('nobody', NOW)).alerts, []);
   });
 });

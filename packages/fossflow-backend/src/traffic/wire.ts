@@ -38,6 +38,20 @@ export interface TrafficAlias {
   service: string;
 }
 
+export type AlertTarget =
+  | { type: 'arrow'; from: string; to: string }
+  | { type: 'box'; identity: string };
+
+/** An open alert of the landscape's project. */
+export interface TrafficAlert {
+  ruleId: string;
+  name: string;
+  kind: 'failing' | 'slow' | 'silent';
+  target: AlertTarget;
+  startedAt: string;
+  value: number | null;
+}
+
 export interface TrafficSummary {
   generatedAt: string;
   windowMinutes: number;
@@ -45,6 +59,8 @@ export interface TrafficSummary {
   callees: ({ callee: string } & TrafficStats)[];
   services: ({ service: string } & TrafficStats)[];
   aliases: TrafficAlias[];
+  /** Open alerts, newest first. */
+  alerts: TrafficAlert[];
 }
 
 export type TrafficRange = '1h' | '24h' | '7d';

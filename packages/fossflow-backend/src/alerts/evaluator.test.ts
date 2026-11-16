@@ -5,6 +5,8 @@ import { DB, type Database } from '../database/database.module.js';
 import { alertEvent, alertRule, ingestGap, meta, project, trafficMinute } from '../database/schema.js';
 import { startTestApp, type TestApp } from '../test/app.js';
 import { emptyHistogram } from '../traffic/histogram.js';
+import { POST_JSON } from '../connectors/outbound.js';
+import { DELIVERY_SLEEP } from './deliveries.js';
 import { DELIVERIES, type Deliveries } from './deliveries.token.js';
 import { AlertEvaluator } from './evaluator.js';
 import { IngestHeartbeat } from './heartbeat.js';
@@ -20,6 +22,8 @@ describe('alert evaluator against real Postgres', () => {
   let db: Database;
   let evaluator: AlertEvaluator;
   let heartbeat: IngestHeartbeat;
+  let real: TestApp;
+  let stubPosts: Array<{ url: string; body: Record<string, unknown> }> = [];
   const sent: Array<[string, string]> = [];
   const deliveries: Deliveries = {
     notify: async (eventId, state) => {
@@ -29,6 +33,16 @@ describe('alert evaluator against real Postgres', () => {
 
   beforeAll(async () => {
     t = await startTestApp({}, [{ provide: DELIVERIES, useValue: deliveries }]);
+    real = await startTestApp({}, [
+      {
+        provide: POST_JSON,
+        useValue: async (url: URL, body: unknown) => {
+          stubPosts.push({ url: url.toString(), body: body as Record<string, unknown> });
+          return { ok: true, status: 200, retryAfterSeconds: null, error: null };
+        }
+      },
+      { provide: DELIVERY_SLEEP, useValue: async () => undefined }
+    ]);
     db = t.app.get<Database>(DB);
     evaluator = t.app.get(AlertEvaluator);
     heartbeat = t.app.get(IngestHeartbeat);
@@ -36,6 +50,7 @@ describe('alert evaluator against real Postgres', () => {
   });
   afterAll(async () => {
     await t.close();
+    await real.close();
   });
   beforeEach(async () => {
     sent.length = 0;
@@ -151,5 +166,48 @@ describe('alert evaluator against real Postgres', () => {
     assert.equal(gaps.length, 1);
     assert.equal(gaps[0]?.from.getTime(), stale.getTime());
     assert.equal(gaps[0]?.to.getTime(), now.getTime());
+  });
+
+  it('delivers a firing alert to a webhook, end to end', async () => {
+    const posts: Array<{ url: string; body: Record<string, unknown> }> = [];
+    const owner = real.browser();
+    await owner.post('/api/setup/owner', { name: 'Olivia', email: 'owner@example.com', password: 'Owner-pass-1' });
+    const projectId = (await owner.post('/api/projects', { name: 'Infrastructure' })).body.id;
+    const channel = (
+      await owner.post(`/api/projects/${projectId}/credentials`, {
+        name: 'Pager',
+        type: 'webhook',
+        settings: { url: 'https://hooks.example.com/pager' }
+      })
+    ).body.id;
+    posts.length = 0;
+    const realDb = real.app.get<Database>(DB);
+    await realDb.insert(alertRule).values({
+      id: 'rule-e2e',
+      projectId,
+      name: 'Web to Magicline',
+      kind: 'failing',
+      target: { type: 'arrow', from: 'service:web', to: 'host:api.magicline.com' },
+      threshold: 5,
+      windowMinutes: 1,
+      minCalls: 10,
+      channelIds: [channel]
+    });
+    await realDb.insert(trafficMinute).values({ ...traffic(T0, 100, 50), projectId });
+
+    const pending: Array<Promise<void>> = [];
+    const original = real.app.get<Deliveries>(DELIVERIES).notify.bind(real.app.get<Deliveries>(DELIVERIES));
+    real.app.get<Deliveries>(DELIVERIES).notify = (eventId, state) => {
+      const promise = original(eventId, state);
+      pending.push(promise);
+      return promise;
+    };
+    stubPosts = posts;
+    await real.app.get(AlertEvaluator).tick(T0);
+    await Promise.all(pending);
+
+    assert.equal(posts.length, 1);
+    assert.equal(posts[0]?.body.state, 'firing');
+    assert.equal((posts[0]?.body.rule as { name: string }).name, 'Web to Magicline');
   });
 });
