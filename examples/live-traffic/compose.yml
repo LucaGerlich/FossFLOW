@@ -1,0 +1,80 @@
+# FossFLOW live-traffic demo: a small shop that really calls an outside API and a database,
+# and exports its OpenTelemetry traces to your FossFLOW.
+# Walkthrough: docs/TRAFFIC.md#try-it-with-the-demo
+#
+#   FOSSFLOW_INGEST_KEY=ffi_... docker compose -f examples/live-traffic/compose.yml up --build
+#   docker compose -f examples/live-traffic/compose.yml down -v
+#
+# FOSSFLOW_INGEST_KEY (required): create one in FossFLOW under Monitoring → Connect a service.
+# FOSSFLOW_OTLP_ENDPOINT (optional): defaults to a FossFLOW on this machine's port 80.
+
+services:
+  demo-db:
+    image: postgres:18-alpine
+    environment:
+      # Demo only. The database is never published to the host.
+      POSTGRES_USER: demo
+      POSTGRES_PASSWORD: demo
+      POSTGRES_DB: demo
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U demo -d demo']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  members-api:
+    image: node:24-alpine
+    command: ['node', '/app/members-api.mjs']
+    volumes:
+      - ./members-api.mjs:/app/members-api.mjs:ro
+    ports:
+      - '127.0.0.1:4010:4010'
+
+  shop:
+    build: ./shop
+    depends_on:
+      demo-db:
+        condition: service_healthy
+      members-api:
+        condition: service_started
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    environment:
+      OTEL_SERVICE_NAME: demo-shop
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${FOSSFLOW_OTLP_ENDPOINT:-http://host.docker.internal/api/otlp}
+      OTEL_EXPORTER_OTLP_HEADERS: x-fossflow-key=${FOSSFLOW_INGEST_KEY:?Create a key in FossFLOW under Monitoring → Connect a service}
+      OTEL_BSP_SCHEDULE_DELAY: '1000'
+      OTEL_TRACES_SAMPLER: always_on
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
+      NODE_OPTIONS: --require @opentelemetry/auto-instrumentations-node/register
+      DATABASE_URL: postgres://demo:demo@demo-db:5432/demo
+
+  web:
+    build: ./web
+    depends_on:
+      - shop
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    environment:
+      OTEL_SERVICE_NAME: demo-web
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${FOSSFLOW_OTLP_ENDPOINT:-http://host.docker.internal/api/otlp}
+      OTEL_EXPORTER_OTLP_HEADERS: x-fossflow-key=${FOSSFLOW_INGEST_KEY:?Create a key in FossFLOW under Monitoring → Connect a service}
+      OTEL_BSP_SCHEDULE_DELAY: '1000'
+      OTEL_TRACES_SAMPLER: always_on
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
+      NEXT_OTEL_FETCH_DISABLED: '1'
+      DATABASE_URL: postgres://demo:demo@demo-db:5432/demo
+
+  load:
+    image: node:24-alpine
+    command: ['node', '/app/load.mjs']
+    volumes:
+      - ./load.mjs:/app/load.mjs:ro
+    depends_on:
+      - web
