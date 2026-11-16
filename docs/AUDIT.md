@@ -6,6 +6,105 @@ Newest entries first.
 
 ---
 
+## 2026-11-16 — Live traffic (phase 2a), milestone 3: alerts
+
+- **What:**
+  - **Plan:** `docs/superpowers/plans/2026-11-13-live-traffic-m3-alerts.md` (section 6 of the phase 2a design, plus the alert parts of section 5).
+  - **Channels are credentials** of a new kind:
+    - The connector registry now has `source` connectors (Beszel) and `channel` connectors: email, Slack, Microsoft Teams and a generic webhook.
+    - "Save and test" on a channel sends a test message and reports `Test message sent` or `Not delivered (<status>)`.
+    - Email is offered only when SMTP is configured.
+    - A channel can't be attached to a landscape as a data source, and live data never opens one.
+  - **Outbound sends** (`src/connectors/outbound.ts`): HTTPS only, no redirects, a 10 s timeout, and the status taken from the headers without reading the body. Slack and Teams refuse private, loopback and link-local addresses, checked when the connection is made (a `lookup` hook, and IP literals checked up front). Slack must be `hooks.slack.com/services/…`; Teams must end with `.api.powerplatform.com`, since the old `logic.azure.com` Workflows URLs stopped working on 30 November 2025.
+  - **Rules** (`src/alerts/`):
+    - Rules are failing (failed % ≥ X), slow (p95 ≥ T ms) or silent (no calls for N minutes, up to 48 h), each over N minutes with a minimum number of calls (default 10).
+    - A rule targets an arrow (`from` → `to`) or a box (one identity), with leading `*.` wildcards. On the `to` side, a `service:` identity also matches the hosts that service is reached by.
+    - Limits: 100 rules per project, 10 channels per rule.
+    - Permissions: new project scopes `alertRule:create|update|delete` for admins and editors; viewers read rules and alerts with `project:read`.
+    - Routes: `GET`/`POST /api/projects/:id/alert-rules`, `PATCH`/`DELETE /api/alert-rules/:id`, and `GET /api/projects/:id/alerts?state=active|resolved&before=&limit=`.
+  - **Evaluation every minute:**
+    - It reads `traffic_minute` (and `traffic_hour` for older silent checks) with a fixed number of queries per project.
+    - An alert starts once, sends a reminder every 4 hours while firing, and resolves after 3 clear minutes. A window with too few calls changes nothing, so flapping can't send a message every minute.
+    - An "ingest alive" heartbeat is written every minute. FossFLOW downtime of more than 5 minutes is recorded as a gap, and a silent rule waits N minutes after the gap instead of firing on restart.
+    - A silent rule starts only after its target has carried traffic (`armedAt`, kept on the rule).
+  - **Deliveries:**
+    - 3 attempts, waiting 2 s and then 8 s; `Retry-After` on 429 is honoured up to 60 s; other 4xx are not retried.
+    - The status or a fixed category is recorded per channel on the alert (the last 50), never a response body.
+    - A missing channel is recorded and skipped.
+    - Messages, with a link to Monitoring:
+      - `Failing · {name} · {pct}% of {calls} calls failed in the last {N} min (threshold {X}%)`, with matching Slow and Silent lines;
+      - `Still …` reminders;
+      - `Resolved · {name} · {kind} for {duration}`.
+  - **Map:** firing alerts arrive with the summary. Failing and silent turn arrows and boxes red, slow turns them amber with a `… · p95 … · slow` pill, and slow shows only when a slow rule exists. Arrow and box cards get **Alert me when…** for people who may create rules.
+  - **App:**
+    - Credentials are grouped into **Data sources** and **Alert channels**.
+    - **Monitoring → Alerts** shows active alerts with delivery problems, then rules (state, enable switch, edit, delete), then history paged with "Show more".
+    - A rule form on its own route is prefilled from the map and returns to the map after saving.
+- **Why:** Milestone 3 of phase 2a. The team hears by email or chat when an arrow or box fails, slows down or goes quiet: one message when it starts, one when it clears, and a reminder while it lasts, without spam and without false alarms after FossFLOW itself restarts.
+- **Security:**
+  - **SSRF:**
+    - Slack and Teams sends can't reach internal addresses, checked at connect time and for IP literals, never following redirects.
+    - No sender reaches link-local addresses such as `169.254.169.254`, the generic webhook included. Responses are closed as soon as the status arrives, and SMTP and channel tests time out (10 s and 15 s).
+    - **Accepted risk:** the generic webhook may target other internal HTTPS endpoints, as the design says. This is the same outbound-request risk as Beszel URLs: only editors create channels, and only a status or category is shown. An editor can therefore probe internal HTTPS endpoints through the status and timing of the test message.
+  - **Access:**
+    - Every new route is project-scoped. Outsiders get 404, and viewers get 403 on writes.
+    - A rule can only list channel credentials of its own project, checked on create and edit, and again when sending.
+  - **No secrets or member data in logs or messages:**
+    - Channel URLs are secret: never returned and never logged.
+    - Messages carry only the rule name and numbers, never operations, statuses or member data.
+    - Mail failures log the error name only; before this milestone, the mailer logged the subject and the SMTP error text.
+  - **Reviews:**
+    - Every task was reviewed for spec and quality. Fix rounds covered mailer logging, IP-literal URLs, rule edits un-arming silent rules, and one definition of host aliases shared by the summary and alerts.
+    - Automated security scans flagged the webhook design (accepted), the channel lookup without a project check, and a rule form that could drop all channels while the channel list loaded (both fixed in the fix wave).
+    - The whole branch was reviewed with a security lens. Its fix wave covered:
+      - rules left uneditable after a channel was deleted (the id is now removed with the channel);
+      - SMTP timeouts;
+      - a retargeted rule leaving its alert stuck open;
+      - a failed start-up losing the downtime gap;
+      - open webhook sockets;
+      - unbounded history (resolved alerts are kept 90 days);
+      - control characters in rule names;
+      - link-local targets.
+- **Verified:**
+  - **Server:** 405 tests in 40 files pass (112 new), and lint and build are clean. Coverage is 90.7 % of statements in `src/alerts` and 95.3 % in `src/connectors`. Covered: SSRF refusals (private and link-local addresses, IP literals, redirects); message copy and payload fixtures for every channel; channel access rules for each role; rule validation and limits; the measure and evaluator state machine (start, reminder, resolve after 3 clear minutes, flapping, aliases, silent after a gap, never-armed rules); a failed start-up retried; deliveries with retries, missing and foreign channels, and the 50-record cap; and history pruning.
+  - **Lib:** 372 tests in 49 suites pass (17 new): alert mapping to arrows and boxes with precedence, amber and red overlays and pills, and the "Alert me when…" requests. Type check and build are clean.
+  - **App:** builds; `tsc` shows the same 7 existing errors.
+  - **Real walkthrough** (throwaway database, Mailpit, a local HTTPS webhook trusted through `NODE_EXTRA_CA_CERTS`, the instrumented Node sample and a fake API):
+    - **Channels:** the webhook and email test messages arrived; a Slack channel with a non-Slack URL was refused.
+    - **Failing:**
+      - "Alert me when…" on the arrow card opened a prefilled form and returned to the map.
+      - Breaking the API sent `Failing · Sample service → Members API · 40.4% of 47 calls failed in the last 2 min (threshold 2%)` by webhook and email 46 s later, with the arrow red.
+      - Healing it sent `Resolved · … · failing for 6 min` about 5½ minutes later.
+    - **Slow:** a slow rule turned the arrow amber.
+    - **Delivery problems:** a dead webhook showed `not delivered (network)` after 3 attempts in Monitoring. Disabling the rule closed its alert without a message.
+    - **Silent across a restart:** the backend was down for 6.5 minutes with a 5-minute silent rule armed. The gap was recorded, and the silent message came exactly 5 minutes after the restart, not before.
+    - **Viewer:** sees alerts, rules and history, with no edit controls and no "Alert me when…".
+    - **Regressions:** local mode makes no alert requests, and the live-data picker lists sources only.
+  - **Docker** (real `compose.yml`, SMTP to Mailpit on the host): a failing rule fired from inside the container and its email arrived. Everything was removed afterwards.
+  - Your dev database and your processes on ports 3000 and 3001 were never touched.
+- **Not done / later:**
+  - **Milestone 4:** `docs/PLATFORM.md` (Monitoring, ingest keys, alerts, retention), `docs/TRAFFIC.md`, `.env.example` (SMTP for alerts), and the documented webhook JSON.
+  - Real Slack and Teams deliveries: these are verified with payload fixtures and URL rules only, because no test webhooks were available.
+  - After FossFLOW downtime, a silent message says "no calls for N min" counted from the restart, because FossFLOW can't know about calls while it was down.
+  - **Wording:** the credentials empty state and the live-data picker still talk as if all credentials were data sources. Rule kind badges are coloured like a state even when the rule is OK.
+  - A slow or failing alert on an arrow with no recent traffic gets a coloured line but no pill. An alerted arrow without 24 h of traffic can't be clicked open.
+  - **Scale:**
+    - Each tick measures projects one after another and reads 60 minutes of minute rows and 8 days of hour rows per project.
+    - Notifications run without a concurrency cap and re-measure for their call count.
+    - This is fine for a self-hosted install, but large installs may need a cap or a pre-aggregation.
+  - **Behaviour worth knowing:**
+    - A failing or slow alert doesn't resolve while traffic stays below the rule's minimum calls; disable the rule for a decommissioned service.
+    - A rule that fails for one minute every four still sends a start and a resolve per cycle.
+    - Downtime of 5 minutes or less isn't a gap.
+    - A database outage without a restart records no gap.
+    - Deliveries in flight at shutdown are not resent.
+  - **Limits:**
+    - The number of alert channels per project isn't capped, so an editor can send test emails to many addresses (rate-limited to 20 tests a minute).
+    - The Teams allowlist doesn't include government or China clouds.
+    - The evaluator assumes a single server instance.
+
+---
+
 ## 2026-11-13 — Live traffic (phase 2a), milestone 2: live map
 
 - **What:**
