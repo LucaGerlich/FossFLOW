@@ -6,10 +6,10 @@ import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest';
 import type { AppConfig } from '../config/config.js';
 import { DB, type Database } from '../database/database.module.js';
 import * as schema from '../database/schema.js';
-import { ingestGap, project, trafficFailure, trafficHour, trafficMinute } from '../database/schema.js';
+import { alertEvent, alertRule, ingestGap, project, trafficFailure, trafficHour, trafficMinute } from '../database/schema.js';
 import { startTestApp, type TestApp } from '../test/app.js';
 import { emptyHistogram } from './histogram.js';
-import { TrafficMaintenance } from './maintenance.js';
+import { ALERT_HISTORY_DAYS, TrafficMaintenance } from './maintenance.js';
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
@@ -188,6 +188,33 @@ describe('traffic maintenance', () => {
     const gaps = await db.select().from(ingestGap);
     assert.equal(gaps.length, 1);
     assert.equal(gaps[0]?.to.getTime(), at - 2 * DAY);
+  });
+
+  it('prunes resolved alert history after 90 days and never an open event', async () => {
+    await db.delete(alertRule);
+    await db.insert(alertRule).values({
+      id: 'history-rule',
+      projectId: PROJECT,
+      name: 'History',
+      kind: 'silent',
+      target: { type: 'box', identity: 'service:web' },
+      windowMinutes: 30
+    });
+    const at = NOW.getTime();
+    const event = (startDays: number, resolvedDays: number | null) => ({
+      ruleId: 'history-rule',
+      projectId: PROJECT,
+      startedAt: new Date(at - startDays * DAY),
+      resolvedAt: resolvedDays === null ? null : new Date(at - resolvedDays * DAY),
+      lastNotifiedAt: new Date(at - startDays * DAY),
+      value: startDays
+    });
+    assert.equal(ALERT_HISTORY_DAYS, 90);
+    await db.insert(alertEvent).values([event(92, 91), event(90, 89), event(200, null)]);
+    await maintenance.prune(NOW);
+    const kept = (await db.select().from(alertEvent)).map((row) => row.value ?? 0).sort((a, b) => a - b);
+    assert.deepEqual(kept, [90, 200]);
+    await db.delete(alertRule);
   });
 
   it('honours the env settings', async () => {

@@ -168,6 +168,41 @@ describe('alert evaluator against real Postgres', () => {
     assert.equal(gaps[0]?.to.getTime(), now.getTime());
   });
 
+  it('keeps the gap when recording the start fails at boot, and records it on the next tick', async () => {
+    const stale = new Date(Date.now() - HOUR);
+    await db.insert(meta).values({ key: 'ingest.alive', value: { at: stale.toISOString() } });
+    let failures = 1;
+    const flaky = {
+      recordStart: async (now: Date) => {
+        if (failures-- > 0) throw new Error('database unavailable');
+        await heartbeat.recordStart(now);
+      },
+      beat: (now: Date) => heartbeat.beat(now)
+    } as unknown as IngestHeartbeat;
+    const booting = new AlertEvaluator(db, flaky, deliveries);
+
+    const bootFrom = Date.now();
+    await booting.onApplicationBootstrap();
+    const bootTo = Date.now();
+    booting.beforeApplicationShutdown();
+
+    const [row] = await db.select().from(meta).where(eq(meta.key, 'ingest.alive'));
+    assert.deepEqual(row?.value, { at: stale.toISOString() });
+    assert.equal((await db.select().from(ingestGap)).length, 0);
+
+    const later = new Date(bootTo + 2 * MINUTE);
+    await booting.tick(later);
+    const gaps = await db.select().from(ingestGap);
+    assert.equal(gaps.length, 1);
+    assert.equal(gaps[0]?.from.getTime(), stale.getTime());
+    assert.ok(gaps[0] && gaps[0].to.getTime() >= bootFrom && gaps[0].to.getTime() <= bootTo);
+    const [beat] = await db.select().from(meta).where(eq(meta.key, 'ingest.alive'));
+    assert.deepEqual(beat?.value, { at: later.toISOString() });
+
+    await booting.tick(after(later, MINUTE));
+    assert.equal((await db.select().from(ingestGap)).length, 1);
+  });
+
   it('delivers a firing alert to a webhook, end to end', async () => {
     const posts: Array<{ url: string; body: Record<string, unknown> }> = [];
     const owner = real.browser();

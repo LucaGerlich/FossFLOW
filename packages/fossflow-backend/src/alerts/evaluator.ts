@@ -35,6 +35,9 @@ type State = 'firing' | 'reminder' | 'resolved';
 export class AlertEvaluator implements OnApplicationBootstrap, BeforeApplicationShutdown {
   private timer: NodeJS.Timeout | undefined;
   private running = false;
+  /** False while the start of this run has not been recorded; ticks keep trying and do not beat meanwhile. */
+  private startRecorded = true;
+  private bootedAt = new Date();
 
   constructor(
     @Inject(DB) private readonly db: Database,
@@ -43,13 +46,10 @@ export class AlertEvaluator implements OnApplicationBootstrap, BeforeApplication
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
-    const now = new Date();
-    try {
-      await this.heartbeat.recordStart(now);
-      await this.heartbeat.beat(now);
-    } catch (error) {
-      logger.warn(`Recording the ingest start failed (${describeError(error)})`);
-    }
+    this.bootedAt = new Date();
+    this.startRecorded = false;
+    await this.recordStart();
+    if (this.startRecorded) await this.beat(this.bootedAt);
     this.timer = setInterval(() => void this.run(), EVALUATE_MS);
     this.timer.unref();
   }
@@ -59,14 +59,29 @@ export class AlertEvaluator implements OnApplicationBootstrap, BeforeApplication
     this.timer = undefined;
   }
 
-  /** One evaluation of every enabled rule; returns the ids of the rules that changed state. */
-  async tick(now: Date = new Date()): Promise<TickResult> {
-    const result: TickResult = { started: [], reminded: [], resolved: [] };
+  private async recordStart(): Promise<void> {
+    try {
+      await this.heartbeat.recordStart(this.bootedAt);
+      this.startRecorded = true;
+    } catch (error) {
+      logger.warn(`Recording the ingest start failed, will retry (${describeError(error)})`);
+    }
+  }
+
+  private async beat(now: Date): Promise<void> {
     try {
       await this.heartbeat.beat(now);
     } catch (error) {
       logger.warn(`Writing the heartbeat failed (${describeError(error)})`);
     }
+  }
+
+  /** One evaluation of every enabled rule; returns the ids of the rules that changed state. */
+  async tick(now: Date = new Date()): Promise<TickResult> {
+    const result: TickResult = { started: [], reminded: [], resolved: [] };
+    if (!this.startRecorded) await this.recordStart();
+    // Beating before the start is recorded would overwrite the heartbeat the gap is measured from.
+    if (this.startRecorded) await this.beat(now);
 
     const rules = await this.db.select().from(alertRule).where(eq(alertRule.enabled, true));
     if (rules.length === 0) return result;

@@ -5,10 +5,10 @@ import {
   Logger,
   type OnApplicationBootstrap
 } from '@nestjs/common';
-import { desc, lt, sql } from 'drizzle-orm';
+import { and, desc, isNotNull, lt, sql } from 'drizzle-orm';
 import { APP_CONFIG, type AppConfig } from '../config/config.js';
 import { DB, type Database } from '../database/database.module.js';
-import { ingestGap, trafficHour } from '../database/schema.js';
+import { alertEvent, ingestGap, trafficHour } from '../database/schema.js';
 import { describeError } from './errors.js';
 
 const logger = new Logger('TrafficMaintenance');
@@ -18,6 +18,8 @@ const HOUR_MS = 3_600_000;
 const DAY_MS = 86_400_000;
 const MAX_FAILURES_PER_ARROW = 500;
 const GAP_DAYS = 3;
+/** Resolved alerts are kept this long; open ones are never pruned. */
+export const ALERT_HISTORY_DAYS = 90;
 
 const hourStart = (ms: number): number => Math.floor(ms / HOUR_MS) * HOUR_MS;
 
@@ -87,6 +89,9 @@ export class TrafficMaintenance implements OnApplicationBootstrap, BeforeApplica
     await this.db.execute(sql`delete from traffic_hour where hour < ${before(hoursDays)}::timestamptz`);
     await this.db.execute(sql`delete from traffic_failure where at < ${before(failuresDays)}::timestamptz`);
     await this.db.delete(ingestGap).where(lt(ingestGap.to, before(GAP_DAYS)));
+    await this.db
+      .delete(alertEvent)
+      .where(and(isNotNull(alertEvent.resolvedAt), lt(alertEvent.resolvedAt, before(ALERT_HISTORY_DAYS))));
     await this.db.execute(sql`
       delete from traffic_failure where id in (
         select id from (
