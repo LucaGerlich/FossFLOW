@@ -414,6 +414,7 @@ Change the retention with `TRAFFIC_MINUTES_DAYS`, `TRAFFIC_HOURS_DAYS` and `TRAF
 | Numbers are lower than reality | Sampling in an SDK or a Collector drops spans. | Keep `OTEL_TRACES_SAMPLER=always_on` and remove tail sampling for FossFLOW. |
 | **Slow** never shows | Slow exists only through a slow rule. | Create one with **Alert me when…**. |
 | Spans are missing | The service's clock is off by more than 1 hour, and FossFLOW drops spans older than that. | Fix the clock. |
+| `docker compose … down` (or `logs`) says `FOSSFLOW_INGEST_KEY` is missing a value | The demo's compose file checks the variable on every command, not only `up`. | Export it again in that shell (any value works for `down`), then repeat the command. |
 | A silent alert fires after downtime | After more than 5 minutes of downtime a silent rule counts from the restart. | Wait one window. This is expected. |
 
 **Behind your own TLS proxy** (Caddy, Traefik, nginx):
