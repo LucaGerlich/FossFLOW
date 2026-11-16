@@ -33,6 +33,7 @@ services:
 
   shop:
     build: ./shop
+    restart: on-failure
     depends_on:
       demo-db:
         condition: service_healthy
@@ -55,6 +56,7 @@ services:
 
   web:
     build: ./web
+    restart: on-failure
     depends_on:
       - shop
     extra_hosts:
