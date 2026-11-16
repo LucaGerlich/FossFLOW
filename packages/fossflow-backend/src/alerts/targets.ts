@@ -17,6 +17,15 @@ export const alertTargetSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('box'), identity: identityPattern })
 ]);
 
+export type AlertTargetInput = z.infer<typeof alertTargetSchema>;
+
+/** Field-by-field equality; jsonb does not keep key order, so never compare serialised targets. */
+export function sameTarget(a: AlertTargetInput, b: AlertTargetInput): boolean {
+  if (a.type === 'arrow' && b.type === 'arrow') return a.from === b.from && a.to === b.to;
+  if (a.type === 'box' && b.type === 'box') return a.identity === b.identity;
+  return false;
+}
+
 const WILDCARD = ':*.';
 
 /** An exact match always counts; `T:*.REST` matches `T:X.REST` for a non-empty `X`. */

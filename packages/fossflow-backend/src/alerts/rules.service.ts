@@ -6,6 +6,7 @@ import { findConnector } from '../connectors/registry.js';
 import { DB, type Database } from '../database/database.module.js';
 import { alertEvent, alertRule, credential } from '../database/schema.js';
 import { MAX_RULES_PER_PROJECT, type RuleInput, type RulePatch, ruleInputSchema } from './rule-input.js';
+import { sameTarget } from './targets.js';
 import type { AlertEventView, AlertRuleView, DeliveryRecord } from './types.js';
 
 type RuleRow = typeof alertRule.$inferSelect;
@@ -101,8 +102,7 @@ export class RulesService {
       threshold: patch.threshold !== undefined ? patch.threshold : kind === 'silent' ? null : row.threshold
     });
     const channelIds = await this.checkChannels(row.projectId, merged.channelIds);
-    const retargeted =
-      JSON.stringify(merged.target) !== JSON.stringify(row.target) || merged.kind !== row.kind;
+    const retargeted = !sameTarget(merged.target, row.target) || merged.kind !== row.kind;
     const [saved] = await this.db.transaction(async (tx) => {
       if (!merged.enabled) await this.closeOpen(tx, id);
       return tx

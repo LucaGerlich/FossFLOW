@@ -131,6 +131,30 @@ describe('alert rules and history against real Postgres', () => {
     assert.equal((await mia.browser.delete(`/api/alert-rules/${id}`)).status, 404);
   });
 
+  it('keeps a silent rule armed on edits that keep its target, and re-arms it when the target changes', async () => {
+    const created = await mia.browser.post(
+      rules(),
+      silent({ name: 'Armed arrow', target: { type: 'arrow', from: 'service:web', to: 'host:api.example.com' } })
+    );
+    const id = created.body.id as string;
+    const armedAt = new Date(Date.now() - 600_000);
+    await db.update(alertRule).set({ armedAt }).where(eq(alertRule.id, id));
+
+    const renamed = await mia.browser.patch(`/api/alert-rules/${id}`, { name: 'Renamed' });
+    assert.equal(renamed.status, 200);
+    assert.equal(renamed.body.state, 'ok');
+    const [kept] = await db.select().from(alertRule).where(eq(alertRule.id, id));
+    assert.equal(kept?.armedAt?.getTime(), armedAt.getTime());
+
+    const moved = await mia.browser.patch(`/api/alert-rules/${id}`, {
+      target: { type: 'arrow', from: 'service:web', to: 'host:other.example.com' }
+    });
+    assert.equal(moved.status, 200);
+    assert.equal(moved.body.state, 'waiting');
+    const [reset] = await db.select().from(alertRule).where(eq(alertRule.id, id));
+    assert.equal(reset?.armedAt, null);
+  });
+
   it('keeps viewers read-only and outsiders out', async () => {
     const [existing] = (await owner.get(rules())).body as { id: string }[];
     assert.ok(existing);
