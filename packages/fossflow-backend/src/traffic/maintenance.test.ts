@@ -6,7 +6,7 @@ import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest';
 import type { AppConfig } from '../config/config.js';
 import { DB, type Database } from '../database/database.module.js';
 import * as schema from '../database/schema.js';
-import { project, trafficFailure, trafficHour, trafficMinute } from '../database/schema.js';
+import { ingestGap, project, trafficFailure, trafficHour, trafficMinute } from '../database/schema.js';
 import { startTestApp, type TestApp } from '../test/app.js';
 import { emptyHistogram } from './histogram.js';
 import { TrafficMaintenance } from './maintenance.js';
@@ -175,6 +175,19 @@ describe('traffic maintenance', () => {
     assert.ok(!failures.some((row) => row.operation === 'old' || row.operation === 'oldest'));
     assert.ok(failures.some((row) => row.callee === 'db'));
     assert.equal(failures.filter((row) => row.callee === 'api').length, 500);
+  });
+
+  it('prunes ingest gaps older than 3 days', async () => {
+    await db.delete(ingestGap);
+    const at = NOW.getTime();
+    await db.insert(ingestGap).values([
+      { from: new Date(at - 4 * DAY - HOUR), to: new Date(at - 4 * DAY) },
+      { from: new Date(at - 2 * DAY - HOUR), to: new Date(at - 2 * DAY) }
+    ]);
+    await maintenance.prune(NOW);
+    const gaps = await db.select().from(ingestGap);
+    assert.equal(gaps.length, 1);
+    assert.equal(gaps[0]?.to.getTime(), at - 2 * DAY);
   });
 
   it('honours the env settings', async () => {

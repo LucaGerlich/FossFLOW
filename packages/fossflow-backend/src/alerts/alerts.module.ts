@@ -1,12 +1,18 @@
 import { Global, Module } from '@nestjs/common';
+import { DELIVERIES, type Deliveries } from './deliveries.token.js';
+import { AlertEvaluator } from './evaluator.js';
+import { IngestHeartbeat } from './heartbeat.js';
 import { RulesController } from './rules.controller.js';
 import { RulesService } from './rules.service.js';
 
-/** Alert rules and their history; the evaluator and senders join in later tasks. */
+/** Until the senders exist, nothing is delivered. */
+const noDeliveries: Deliveries = { notify: async () => undefined };
+
+/** Alert rules and their history, and the evaluator that moves them between ok and firing. */
 @Global()
 @Module({
   controllers: [RulesController],
-  providers: [RulesService],
+  providers: [RulesService, IngestHeartbeat, AlertEvaluator, { provide: DELIVERIES, useValue: noDeliveries }],
   exports: [RulesService]
 })
 export class AlertsModule {}
