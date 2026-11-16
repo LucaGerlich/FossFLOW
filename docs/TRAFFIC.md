@@ -339,6 +339,8 @@ The units depend on the kind:
 | `slow` | p95 in milliseconds | milliseconds |
 | `silent` | minutes since the last call | the window in minutes |
 
+On a `resolved` message, `value` is the last value measured while the alert was firing, and `threshold` and the units are as for the kind. On a `test` message, `value` is `null`.
+
 A firing alert:
 
 ```json
