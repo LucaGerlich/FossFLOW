@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { asc, count, eq } from 'drizzle-orm';
+import { and, asc, count, eq, sql } from 'drizzle-orm';
 import { ZodError } from 'zod';
 import { MASTER_KEY } from '../auth/auth.module.js';
 import type { AlertMessage } from '../connectors/channels/message.js';
@@ -16,7 +16,7 @@ import { findConnector } from '../connectors/registry.js';
 import { APP_CONFIG, type AppConfig } from '../config/config.js';
 import { type Cipher, createCipher } from '../crypto/cipher.js';
 import { DB, type Database } from '../database/database.module.js';
-import { credential, landscapeSource, project } from '../database/schema.js';
+import { alertRule, credential, landscapeSource, project } from '../database/schema.js';
 import { LiveSourceError } from '../live/source-error.js';
 import { MAILER, type Mailer } from '../mail/mailer.js';
 
@@ -50,7 +50,8 @@ export interface TestResult {
 
 const TEST_HISTORY = { cpu: [], memory: [], disk: [] };
 /** A connection test answers within this, however many requests it needs. */
-const TEST_DEADLINE_MS = 15_000;
+export const TEST_DEADLINE_MS = Symbol('TEST_DEADLINE_MS');
+export const DEFAULT_TEST_DEADLINE_MS = 15_000;
 
 @Injectable()
 export class CredentialsService {
@@ -61,7 +62,8 @@ export class CredentialsService {
     @Inject(MASTER_KEY) masterKey: Buffer,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Inject(MAILER) private readonly mailer: Mailer,
-    @Inject(POST_JSON) private readonly post: typeof postJson
+    @Inject(POST_JSON) private readonly post: typeof postJson,
+    @Inject(TEST_DEADLINE_MS) private readonly deadlineMs: number
   ) {
     this.cipher = createCipher(masterKey);
   }
@@ -171,8 +173,18 @@ export class CredentialsService {
     return { test: await this.testSettings(connector, settings, row.projectId) };
   }
 
+  /** Deleting a channel also takes it off the alert rules of its project, so they stay editable. */
   async remove(id: string): Promise<void> {
-    await this.db.delete(credential).where(eq(credential.id, id));
+    await this.db.transaction(async (tx) => {
+      const [row] = await tx.select({ projectId: credential.projectId }).from(credential).where(eq(credential.id, id));
+      if (row) {
+        await tx
+          .update(alertRule)
+          .set({ channelIds: sql`array_remove(${alertRule.channelIds}, ${id})` })
+          .where(and(eq(alertRule.projectId, row.projectId), sql`${id} = any(${alertRule.channelIds})`));
+      }
+      await tx.delete(credential).where(eq(credential.id, id));
+    });
   }
 
   async test(id: string): Promise<TestResult> {
@@ -182,12 +194,15 @@ export class CredentialsService {
   }
 
   /** Decrypted settings, for the live source manager only. */
-  async settingsFor(id: string): Promise<{ connector: Connector; settings: unknown; name: string }> {
+  async settingsFor(
+    id: string
+  ): Promise<{ connector: Connector; settings: unknown; name: string; projectId: string }> {
     const row = await this.row(id);
     return {
       connector: this.connector(row.type),
       settings: this.cipher.decrypt(row.data),
-      name: row.name
+      name: row.name,
+      projectId: row.projectId
     };
   }
 
@@ -222,13 +237,22 @@ export class CredentialsService {
       durationMinutes: null,
       url: `${this.config.publicUrl}/projects/${projectId}/monitoring`
     };
+    let timer: NodeJS.Timeout | undefined;
+    const deadline = new Promise<TestResult>((resolve) => {
+      timer = setTimeout(() => resolve({ ok: false, message: 'Not delivered (timeout)' }), this.deadlineMs);
+    });
     try {
-      const result = await connector.send(settings, message, { postJson: this.post, mailer: this.mailer });
+      // ponytail: a send that misses the deadline still runs out its own timeouts in the background.
+      const sending = connector.send(settings, message, { postJson: this.post, mailer: this.mailer });
+      const result = await Promise.race([sending, deadline]);
+      if ('message' in result) return result;
       if (result.ok) return { ok: true, message: 'Test message sent' };
       return { ok: false, message: `Not delivered (${result.status ?? result.error ?? 'network'})` };
     } catch (error) {
       // Settings that no longer validate count as missing; anything else as a network problem.
       return { ok: false, message: `Not delivered (${error instanceof ZodError ? 'missing' : 'network'})` };
+    } finally {
+      clearTimeout(timer);
     }
   }
 
@@ -236,7 +260,7 @@ export class CredentialsService {
   private async testSource(connector: SourceConnector, settings: unknown): Promise<TestResult> {
     let timer: NodeJS.Timeout | undefined;
     const deadline = new Promise<never>((_, reject) => {
-      timer = setTimeout(() => reject(new LiveSourceError('No answer within 15 seconds')), TEST_DEADLINE_MS);
+      timer = setTimeout(() => reject(new LiveSourceError('No answer within 15 seconds')), this.deadlineMs);
     });
     try {
       // ponytail: the requests behind a missed deadline still run out their own 10 s timeouts.

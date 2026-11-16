@@ -15,6 +15,8 @@ export interface Mailer {
 
 const logger = new Logger('Mail');
 
+const SMTP_TIMEOUT_MS = 10_000;
+
 export function createMailer(smtp: SmtpConfig | null): Mailer {
   if (!smtp) {
     return {
@@ -29,7 +31,11 @@ export function createMailer(smtp: SmtpConfig | null): Mailer {
     host: smtp.host,
     port: smtp.port,
     secure: smtp.secure,
-    auth: smtp.user ? { user: smtp.user, pass: smtp.password } : undefined
+    auth: smtp.user ? { user: smtp.user, pass: smtp.password } : undefined,
+    // nodemailer waits minutes by default; an unreachable server must not pin a delivery.
+    connectionTimeout: SMTP_TIMEOUT_MS,
+    greetingTimeout: SMTP_TIMEOUT_MS,
+    socketTimeout: SMTP_TIMEOUT_MS
   });
 
   const send = async (to: string, subject: string, text: string) => {

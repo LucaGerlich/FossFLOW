@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest';
 import { POST_JSON, type PostResult } from '../connectors/outbound.js';
+import { TEST_DEADLINE_MS } from './credentials.service.js';
 import { type Browser, startTestApp, type TestApp } from '../test/app.js';
 import { joinAs, type Person } from '../test/people.js';
 
@@ -24,13 +25,19 @@ describe('alert channels as credentials', () => {
   const calls: Call[] = [];
   let answer: PostResult = { ok: true, status: 200, retryAfterSeconds: null, error: null };
 
+  let never: Promise<never> | null = null;
+
   const postJson = async (url: URL, body: unknown, options: { allowPrivate: boolean }) => {
+    if (never) return never;
     calls.push({ url: url.toString(), body: body as Call['body'], allowPrivate: options.allowPrivate });
     return answer;
   };
 
   beforeAll(async () => {
-    t = await startTestApp({}, [{ provide: POST_JSON, useValue: postJson }]);
+    t = await startTestApp({}, [
+      { provide: POST_JSON, useValue: postJson },
+      { provide: TEST_DEADLINE_MS, useValue: 200 }
+    ]);
     owner = t.browser();
     await owner.post('/api/setup/owner', { name: 'Olivia', email: 'owner@example.com', password: 'Owner-pass-1' });
     mia = await joinAs(t, owner, 'Mia');
@@ -113,6 +120,23 @@ describe('alert channels as credentials', () => {
     answer = { ok: false, status: null, retryAfterSeconds: null, error: 'timeout' };
     const retried = await mia.browser.post(`/api/credentials/${created.body.id}/test`);
     assert.deepEqual(retried.body, { ok: false, message: 'Not delivered (timeout)' });
+  });
+
+  it('reports a timeout when the channel never answers', async () => {
+    const created = await mia.browser.post(`/api/projects/${team}/credentials`, {
+      name: 'Silent hook',
+      type: 'slack',
+      settings: { url: 'https://hooks.slack.com/services/T0/B0/silent' }
+    });
+    assert.equal(created.status, 201);
+    assert.deepEqual(created.body.test, { ok: true, message: 'Test message sent' });
+    never = new Promise<never>(() => {});
+    const started = Date.now();
+    const retried = await mia.browser.post(`/api/credentials/${created.body.id}/test`);
+    never = null;
+    assert.equal(retried.status, 200);
+    assert.deepEqual(retried.body, { ok: false, message: 'Not delivered (timeout)' });
+    assert.ok(Date.now() - started < 3000);
   });
 
   it('rejects settings that do not fit the channel', async () => {

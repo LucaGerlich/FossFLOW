@@ -3,7 +3,14 @@ import { alertTargetSchema } from './targets.js';
 
 export const MAX_RULES_PER_PROJECT = 100;
 
-const name = z.string().trim().min(1, 'Name is required').max(100, 'Name is too long');
+const name = z
+  .string()
+  .trim()
+  .min(1, 'Name is required')
+  .max(100, 'Name is too long')
+  // Names reach email subjects and chat text, so no line breaks or other control characters.
+  // eslint-disable-next-line no-control-regex
+  .regex(/^[^\u0000-\u001f]*$/, 'Name must not contain control characters');
 const kind = z.enum(['failing', 'slow', 'silent']);
 const threshold = z.number().nullable();
 const windowMinutes = z.number().int('Window must be a whole number of minutes');

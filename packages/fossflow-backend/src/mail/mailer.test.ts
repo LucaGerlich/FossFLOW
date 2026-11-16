@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import { afterEach, describe, it, vi } from 'vitest';
 
 const sendMail = vi.fn();
+const createTransport = vi.fn((_options: Record<string, unknown>) => ({ sendMail }));
 vi.mock('nodemailer', () => ({
-  default: { createTransport: () => ({ sendMail }) }
+  default: { createTransport: (options: Record<string, unknown>) => createTransport(options) }
 }));
 
 const { createMailer } = await import('./mailer.js');
@@ -12,6 +13,16 @@ const { createMailer } = await import('./mailer.js');
 afterEach(() => {
   vi.restoreAllMocks();
   sendMail.mockReset();
+});
+
+describe('mailer transport', () => {
+  it('gives up on a silent SMTP server after 10 seconds', () => {
+    createMailer({ host: 'h', port: 25, secure: false, user: '', password: '', from: 'f@example.com' });
+    const options = createTransport.mock.calls.at(-1)?.[0];
+    assert.equal(options?.connectionTimeout, 10_000);
+    assert.equal(options?.greetingTimeout, 10_000);
+    assert.equal(options?.socketTimeout, 10_000);
+  });
 });
 
 describe('mailer logging', () => {

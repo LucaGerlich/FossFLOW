@@ -101,10 +101,11 @@ export class RulesService {
       // Switching to silent drops the old threshold unless the request says otherwise.
       threshold: patch.threshold !== undefined ? patch.threshold : kind === 'silent' ? null : row.threshold
     });
-    const channelIds = await this.checkChannels(row.projectId, merged.channelIds);
+    const channelIds = await this.channelsAfterEdit(row.projectId, row.channelIds, merged.channelIds);
     const retargeted = !sameTarget(merged.target, row.target) || merged.kind !== row.kind;
     const [saved] = await this.db.transaction(async (tx) => {
-      if (!merged.enabled) await this.closeOpen(tx, id);
+      // A disabled or retargeted rule has nothing to resolve any more: close its open event quietly.
+      if (!merged.enabled || retargeted) await this.closeOpen(tx, id);
       return tx
         .update(alertRule)
         .set({
@@ -180,15 +181,32 @@ export class RulesService {
     return new Map(rows.map((row) => [row.ruleId, row.startedAt]));
   }
 
-  /** Every channel must be a channel credential of this project; the error never echoes an id. */
-  private async checkChannels(projectId: string, requested: string[]): Promise<string[]> {
+  /**
+   * Newly added channels must exist; ones the rule already had that are gone
+   * (deleted, or never cleaned up) are dropped so the rule stays editable.
+   */
+  private async channelsAfterEdit(projectId: string, stored: string[], requested: string[]): Promise<string[]> {
     const ids = [...new Set(requested)];
-    if (ids.length === 0) return ids;
+    const had = new Set(stored);
+    await this.checkChannels(projectId, ids.filter((id) => !had.has(id)));
+    const live = await this.validChannels(projectId, ids.filter((id) => had.has(id)));
+    return ids.filter((id) => !had.has(id) || live.has(id));
+  }
+
+  /** The ids among `ids` that are channel credentials of this project. */
+  private async validChannels(projectId: string, ids: string[]): Promise<Set<string>> {
+    if (ids.length === 0) return new Set();
     const rows = await this.db
       .select({ id: credential.id, type: credential.type })
       .from(credential)
       .where(and(eq(credential.projectId, projectId), inArray(credential.id, ids)));
-    const valid = new Set(rows.filter((row) => findConnector(row.type)?.kind === 'channel').map((row) => row.id));
+    return new Set(rows.filter((row) => findConnector(row.type)?.kind === 'channel').map((row) => row.id));
+  }
+
+  /** Every channel must be a channel credential of this project; the error never echoes an id. */
+  private async checkChannels(projectId: string, requested: string[]): Promise<string[]> {
+    const ids = [...new Set(requested)];
+    const valid = await this.validChannels(projectId, ids);
     if (ids.some((id) => !valid.has(id))) {
       throw new BadRequestException({
         error: 'Every channel must be a channel credential of this project',
