@@ -114,7 +114,10 @@ export function AlertRuleForm({ project, existing, prefill, returnTo }: AlertRul
     ) {
       return t('platform.alerts.errors.minCalls', { min: MIN_CALLS_RANGE[0], max: MIN_CALLS_RANGE[1] });
     }
-    const known = channelIds.filter((id) => channels.some((channel) => channel.id === id));
+    // Only a loaded list can say a channel is gone; until then every selection is kept.
+    const known = credentials.isSuccess
+      ? channelIds.filter((id) => channels.some((channel) => channel.id === id))
+      : channelIds;
     if (known.length > MAX_CHANNELS) return t('platform.alerts.errors.channels', { max: MAX_CHANNELS });
     return {
       name: trimmed,
@@ -244,9 +247,7 @@ export function AlertRuleForm({ project, existing, prefill, returnTo }: AlertRul
         <legend className="field__label">{t('platform.alerts.form.channels')}</legend>
         {credentials.isPending ? (
           <span className="field__hint">{t('platform.loading')}</span>
-        ) : credentials.isError ? (
-          <span className="field__hint">{t('platform.errors.generic')}</span>
-        ) : channels.length ? (
+        ) : credentials.isError ? null : channels.length ? (
           channels.map((channel) => (
             <label className="choice" key={channel.id}>
               <input
@@ -270,13 +271,14 @@ export function AlertRuleForm({ project, existing, prefill, returnTo }: AlertRul
         <span>{t('platform.alerts.form.enabled')}</span>
       </label>
 
+      <FormError message={credentials.isError ? t('platform.errors.generic') : null} />
       <FormError message={showProblem ? problem : null} />
       <FormError message={save.error} />
       <div className="panel__actions">
         <button className="btn" type="button" onClick={() => navigate(returnTo, { replace: true })}>
           {t('platform.users.cancel')}
         </button>
-        <button className="btn btn--primary" type="submit" disabled={save.busy}>
+        <button className="btn btn--primary" type="submit" disabled={save.busy || !credentials.isSuccess}>
           {existing ? t('platform.alerts.form.save') : t('platform.alerts.form.create')}
         </button>
       </div>
