@@ -3,17 +3,29 @@ import { BadRequestException, Inject, Injectable, NotFoundException } from '@nes
 import { asc, count, eq } from 'drizzle-orm';
 import { ZodError } from 'zod';
 import { MASTER_KEY } from '../auth/auth.module.js';
-import { type Connector, publicSettings } from '../connectors/connector.js';
+import type { AlertMessage } from '../connectors/channels/message.js';
+import {
+  type ChannelConnector,
+  type Connector,
+  type ConnectorKind,
+  publicSettings,
+  type SourceConnector
+} from '../connectors/connector.js';
+import { POST_JSON, type postJson } from '../connectors/outbound.js';
 import { findConnector } from '../connectors/registry.js';
+import { APP_CONFIG, type AppConfig } from '../config/config.js';
 import { type Cipher, createCipher } from '../crypto/cipher.js';
 import { DB, type Database } from '../database/database.module.js';
-import { credential, landscapeSource } from '../database/schema.js';
+import { credential, landscapeSource, project } from '../database/schema.js';
 import { LiveSourceError } from '../live/source-error.js';
+import { MAILER, type Mailer } from '../mail/mailer.js';
 
 export interface CredentialSummary {
   id: string;
   name: string;
   type: string;
+  /** Whether this feeds live data or receives alerts. */
+  kind: ConnectorKind;
   updatedAt: Date;
   /** How many landscapes show this credential's live data. */
   usedBy: number;
@@ -46,13 +58,16 @@ export class CredentialsService {
 
   constructor(
     @Inject(DB) private readonly db: Database,
-    @Inject(MASTER_KEY) masterKey: Buffer
+    @Inject(MASTER_KEY) masterKey: Buffer,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
+    @Inject(MAILER) private readonly mailer: Mailer,
+    @Inject(POST_JSON) private readonly post: typeof postJson
   ) {
     this.cipher = createCipher(masterKey);
   }
 
-  list(projectId: string): Promise<CredentialSummary[]> {
-    return this.db
+  async list(projectId: string): Promise<CredentialSummary[]> {
+    const rows = await this.db
       .select({
         id: credential.id,
         name: credential.name,
@@ -65,6 +80,7 @@ export class CredentialsService {
       .where(eq(credential.projectId, projectId))
       .groupBy(credential.id)
       .orderBy(asc(credential.name));
+    return rows.map((row) => ({ ...row, kind: findConnector(row.type)?.kind ?? 'source' }));
   }
 
   async get(id: string): Promise<CredentialDetail> {
@@ -87,6 +103,9 @@ export class CredentialsService {
     input: { name: string; type: string; settings: unknown }
   ): Promise<{ id: string; test: TestResult }> {
     const { connector, settings, data } = this.seal(input.type, input.settings);
+    if (connector.id === 'email' && !this.mailer.enabled) {
+      throw new BadRequestException({ error: 'Email needs SMTP to be configured' });
+    }
     const id = randomUUID();
     await this.db.insert(credential).values({
       id,
@@ -97,7 +116,7 @@ export class CredentialsService {
       createdBy: authorId,
       updatedBy: authorId
     });
-    return { id, test: await this.testSettings(connector, settings) };
+    return { id, test: await this.testSettings(connector, settings, projectId) };
   }
 
   /** Validates settings for a connector and encrypts them for the `data` column. */
@@ -149,7 +168,7 @@ export class CredentialsService {
         updatedAt: new Date()
       })
       .where(eq(credential.id, id));
-    return { test: await this.testSettings(connector, settings) };
+    return { test: await this.testSettings(connector, settings, row.projectId) };
   }
 
   async remove(id: string): Promise<void> {
@@ -159,7 +178,7 @@ export class CredentialsService {
   async test(id: string): Promise<TestResult> {
     const row = await this.row(id);
     const connector = this.connector(row.type);
-    return this.testSettings(connector, this.cipher.decrypt(row.data));
+    return this.testSettings(connector, this.cipher.decrypt(row.data), row.projectId);
   }
 
   /** Decrypted settings, for the live source manager only. */
@@ -172,8 +191,49 @@ export class CredentialsService {
     };
   }
 
-  /** One real read through the connector, so a typo shows up right away. */
-  private async testSettings(connector: Connector, settings: unknown): Promise<TestResult> {
+  /** One real read or send, so a typo shows up right away. */
+  private testSettings(connector: Connector, settings: unknown, projectId: string): Promise<TestResult> {
+    return connector.kind === 'channel'
+      ? this.testChannel(connector, settings, projectId)
+      : this.testSource(connector, settings);
+  }
+
+  /** Sends a test message; delivery problems come back as a result, never an error. */
+  private async testChannel(
+    connector: ChannelConnector,
+    settings: unknown,
+    projectId: string
+  ): Promise<TestResult> {
+    const [row] = await this.db.select({ name: project.name }).from(project).where(eq(project.id, projectId));
+    const name = row?.name ?? '';
+    const message: AlertMessage = {
+      state: 'test',
+      kind: null,
+      ruleId: null,
+      ruleName: name,
+      projectName: name,
+      target: null,
+      value: null,
+      threshold: null,
+      windowMinutes: null,
+      calls: null,
+      sinceMinutes: null,
+      startedAt: null,
+      durationMinutes: null,
+      url: `${this.config.publicUrl}/projects/${projectId}/monitoring`
+    };
+    try {
+      const result = await connector.send(settings, message, { postJson: this.post, mailer: this.mailer });
+      if (result.ok) return { ok: true, message: 'Test message sent' };
+      return { ok: false, message: `Not delivered (${result.status ?? result.error ?? 'network'})` };
+    } catch (error) {
+      // Settings that no longer validate count as missing; anything else as a network problem.
+      return { ok: false, message: `Not delivered (${error instanceof ZodError ? 'missing' : 'network'})` };
+    }
+  }
+
+  /** One real read through the connector. */
+  private async testSource(connector: SourceConnector, settings: unknown): Promise<TestResult> {
     let timer: NodeJS.Timeout | undefined;
     const deadline = new Promise<never>((_, reject) => {
       timer = setTimeout(() => reject(new LiveSourceError('No answer within 15 seconds')), TEST_DEADLINE_MS);

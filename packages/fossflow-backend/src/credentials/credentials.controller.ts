@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Header, HttpCode, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Header, HttpCode, Inject, Param, Patch, Post } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { z } from 'zod';
 import type { AuthSession } from '../auth/auth.js';
@@ -6,6 +6,7 @@ import { CurrentSession } from '../auth/guards.js';
 import { parseBody } from '../common/validation.js';
 import { connectorInfos } from '../connectors/registry.js';
 import { LiveSourcesService } from '../live/live-sources.service.js';
+import { MAILER, type Mailer } from '../mail/mailer.js';
 import { RequireProjectScope } from '../projects/project-access.js';
 import { CredentialsService } from './credentials.service.js';
 
@@ -23,13 +24,14 @@ const OUTBOUND_LIMIT = { default: { limit: 20, ttl: 60_000 } };
 export class CredentialsController {
   constructor(
     private readonly credentials: CredentialsService,
-    private readonly sources: LiveSourcesService
+    private readonly sources: LiveSourcesService,
+    @Inject(MAILER) private readonly mailer: Mailer
   ) {}
 
-  /** The kinds of live sources and their credential forms. */
+  /** The kinds of live sources and alert channels, with their credential forms. */
   @Get('connectors')
   connectors() {
-    return connectorInfos();
+    return connectorInfos({ smtpEnabled: this.mailer.enabled });
   }
 
   @Get('projects/:id/credentials')

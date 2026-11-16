@@ -172,3 +172,6 @@ export function parseHttpsUrl(value: string): URL | null {
     return null;
   }
 }
+
+/** Injection token for the HTTPS poster, so tests can stand in for the network. */
+export const POST_JSON = Symbol('POST_JSON');

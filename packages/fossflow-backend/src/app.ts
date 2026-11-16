@@ -23,6 +23,12 @@ export async function createApp(
       logger: process.env.NODE_ENV === 'test' ? false : undefined
     }
   );
+  configureApp(app);
+  return app;
+}
+
+/** Wiring shared by the real app and test apps built from a testing module. */
+export function configureApp(app: NestExpressApplication): void {
   // nginx on the same host is the only proxy; trust its X-Forwarded-For.
   app.set('trust proxy', 'loopback');
 
@@ -42,5 +48,4 @@ export async function createApp(
 
   app.setGlobalPrefix('api');
   app.enableShutdownHooks();
-  return app;
 }

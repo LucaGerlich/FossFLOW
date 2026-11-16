@@ -141,9 +141,10 @@ describe('credentials and live sources against real Postgres', () => {
   it('lists the connectors with their credential forms', async () => {
     const response = record(await vic.browser.get('/api/connectors'));
     assert.equal(response.status, 200);
-    const beszel = (response.body as { id: string; fields: { name: string; secret: boolean }[] }[]).find(
+    const beszel = (response.body as { id: string; kind: string; fields: { name: string; secret: boolean }[] }[]).find(
       (connector) => connector.id === 'beszel'
     );
+    assert.equal(beszel?.kind, 'source');
     assert.deepEqual(
       beszel?.fields.map((field) => [field.name, field.secret]),
       [['url', false], ['email', false], ['password', true]]
@@ -238,7 +239,7 @@ describe('credentials and live sources against real Postgres', () => {
   it('lets viewers see names only, and hides other projects', async () => {
     const list = record(await vic.browser.get(`/api/projects/${team}/credentials`));
     assert.equal(list.status, 200);
-    assert.deepEqual(Object.keys(list.body[0]).sort(), ['id', 'name', 'type', 'updatedAt', 'usedBy']);
+    assert.deepEqual(Object.keys(list.body[0]).sort(), ['id', 'kind', 'name', 'type', 'updatedAt', 'usedBy']);
 
     const id = teamCredential;
     assert.equal((await vic.browser.get(`/api/credentials/${id}`)).status, 403);
