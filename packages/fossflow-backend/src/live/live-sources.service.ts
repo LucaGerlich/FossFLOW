@@ -120,6 +120,7 @@ export class LiveSourcesService implements OnApplicationBootstrap, OnApplication
 
       try {
         const { connector, settings, name } = await this.credentials.settingsFor(row.id);
+        if (connector.kind !== 'source') continue; // Channels deliver alerts, they have no live data.
         const hub = createLiveHub({
           source: { id: row.id, type: connector.id, name },
           client: connector.open(settings),

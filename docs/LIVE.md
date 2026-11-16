@@ -2,6 +2,8 @@
 
 FossFLOW works as a plain diagramming tool with no backend at all. If your team already runs [Beszel](https://github.com/henrygd/beszel), a landscape can also show **every server, the Docker containers running on it, and the server's vitals**, live, with nothing new installed on your servers.
 
+For API calls and database queries between systems, see [TRAFFIC.md](TRAFFIC.md).
+
 Live data needs [platform mode](PLATFORM.md): the Docker setup with Postgres and sign-in. It isn't available in local mode.
 
 - **Automatic discovery.** New servers appear on their own plate, with their containers on it. New containers take the next free slot. Nothing you arrange by hand is ever moved or deleted, and your notes and connections stay attached across redeploys.

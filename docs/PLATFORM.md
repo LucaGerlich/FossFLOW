@@ -8,6 +8,7 @@ This guide covers running FossFLOW as a small multi-user platform: people sign i
 - [Projects and the personal space](#projects-and-the-personal-space)
 - [Landscapes](#landscapes)
 - [Credentials and live data](#credentials-and-live-data)
+- [Monitoring: live traffic and alerts](#monitoring-live-traffic-and-alerts)
 - [Settings](#settings)
 - [Email](#email-optional)
 - [Backups and the encryption key](#backups-and-the-encryption-key)
@@ -27,6 +28,7 @@ FossFLOW runs in one of two modes. The app picks the mode itself by asking `/api
 | Where diagrams live | In your browser's localStorage. They stay across sessions, but only in that browser. You can also export and import JSON files. | In Postgres, per project. |
 | Teams and sharing | No. | Projects, roles and invitations. |
 | Live data | No. | Yes. |
+| Live traffic and alerts | No. | Yes. |
 
 In this guide, a **landscape** is one diagram. A **project** is a shared space that holds landscapes and credentials.
 
@@ -95,9 +97,9 @@ Rules for changing roles:
 
 | Role | What it can do in the project |
 |---|---|
-| Admin | Everything: rename or delete the project, manage its members, create, edit, delete and move landscapes, manage credentials. |
-| Editor | See the project; create, edit and delete landscapes; create, edit, delete and use credentials. Can't move landscapes, rename or delete the project, or change members. |
-| Viewer | See the project and its landscapes. See credential names, nothing else. Can't edit, and can't use credentials. |
+| Admin | Everything: rename or delete the project, manage its members, create, edit, delete and move landscapes, manage credentials, create and revoke ingest keys, create, edit and delete alert rules. |
+| Editor | See the project; create, edit and delete landscapes; create, edit, delete and use credentials; create and revoke ingest keys; create, edit and delete alert rules. Can't move landscapes, rename or delete the project, or change members. |
+| Viewer | See the project and its landscapes. See credential names, nothing else. See the ingest key list, alert rules and alerts, and change nothing. Can't edit, and can't use credentials. |
 
 The owner of a personal space has the same rights as an Editor, plus moving landscapes out. A personal space can't be renamed, deleted or shared.
 
@@ -121,16 +123,27 @@ Deleting a project deletes everything in it. This can't be undone.
 
 ## Credentials and live data
 
-A **credential** is a login for a live source, such as a Beszel hub. Credentials belong to a project. Add them in the project's **Credentials** tab:
+A **credential** is a login for a live data source, such as a Beszel hub, or an alert channel, such as a webhook. Credentials belong to a project. Add them in the project's **Credentials** tab:
 
-1. Choose the kind of source. The form comes from the connector.
+1. Choose the kind of source or channel. The form comes from the connector.
 2. Fill in the fields and click **Save and test**. FossFLOW saves it and then checks the connection.
 
 Secrets are encrypted with AES-256-GCM and never sent back to the browser. When you edit a credential, leave a secret empty to keep it. If you change the URL or email, you must type the password again. Viewers see credential names only.
 
-To show live data in a landscape, open it and use the **Live data** menu in the editor bar. It lists the project's credentials; tick the ones that feed this landscape. You need edit rights on the landscape and the right to use credentials. The server polls each credential that at least one landscape uses, every `LIVE_POLL_SECONDS` seconds (default 30).
+To show live data in a landscape, open it and use the **Live data** menu in the editor bar. It lists the project's data sources only (alert channels don't appear there); tick the ones that feed this landscape. You need edit rights on the landscape and the right to use credentials. The server polls each credential that at least one landscape uses, every `LIVE_POLL_SECONDS` seconds (default 30).
 
-Beszel is the first connector. Setup, the read-only user it needs, and troubleshooting are in [LIVE.md](LIVE.md). More connectors are planned: see [Adding a connector](#adding-a-connector).
+Beszel is the first connector. Setup, the read-only user it needs, and troubleshooting are in [LIVE.md](LIVE.md). Alert channels (email, Slack, Teams and webhook) are credentials too: see [TRAFFIC.md](TRAFFIC.md#alerts). More connectors are planned: see [Adding a connector](#adding-a-connector).
+
+## Monitoring: live traffic and alerts
+
+A project's **Monitoring** tab has two parts, **Services** and **Alerts**. Services is where you create ingest keys and see which services are sending data. Alerts holds the rules and the alerts they raised.
+
+- **Ingest keys.** A service sends OpenTelemetry traces with a key (`ffi_…`). The full key is shown once, when you create it. FossFLOW stores only its SHA-256 hash, so a lost key can't be shown again: revoke it and create a new one.
+- **Where data appears.** Calls show up as moving dots on the arrows of a landscape, and as the colour of boxes and arrows, once you attach services, databases and hosts to them.
+- **Setup.** [Connect a service](TRAFFIC.md#connect-a-service) shows the endpoint and code for Node.js, Next.js, Docker and a Collector. [Try it with the demo](TRAFFIC.md#try-it-with-the-demo) runs a small instrumented stack next to FossFLOW.
+- **Alerts.** Rules for failing, slow and silent arrows send messages to channels. See [Alerts](TRAFFIC.md#alerts).
+
+Traffic needs platform mode. It isn't available in local mode.
 
 ## Settings
 
@@ -163,6 +176,8 @@ SMTP_FROM=FossFLOW <fossflow@example.com>
 
 `SMTP_FROM` is required when `SMTP_HOST` is set. Use `SMTP_SECURE=true` for implicit TLS (port 465) and `false` for STARTTLS (port 587). Then restart: `docker compose up -d`.
 
+The same SMTP settings send email alerts. The email channel is offered only when SMTP is set.
+
 ## Backups and the encryption key
 
 Back up two things, together:
@@ -194,6 +209,17 @@ docker compose up -d
 ```
 
 Load the dump before the first start of the app against that database, so setup doesn't create a second Owner.
+
+Traffic data lives in Postgres too, so the dump includes it. For a smaller dump, skip the traffic tables' rows:
+
+```bash
+docker compose exec db pg_dump -U fossflow fossflow \
+  --exclude-table-data=traffic_minute \
+  --exclude-table-data=traffic_hour \
+  --exclude-table-data=traffic_failure > backup.sql
+```
+
+You lose the traffic history, not the keys, rules or landscapes.
 
 ## Upgrading from the file-based version
 
@@ -230,6 +256,9 @@ Set these in `.env`. `compose.yml` passes them to the container.
 | `HTTP_AUTH_USER` | no | empty | Optional Basic Auth in front of the app. Set both user and password to enable. |
 | `HTTP_AUTH_PASSWORD` | no | empty | See above. |
 | `LIVE_POLL_SECONDS` | no | `30` | How often each live source is polled. 10 to 3600. |
+| `TRAFFIC_MINUTES_DAYS` | no | `7` | Days to keep per-minute traffic. 2 to 90. |
+| `TRAFFIC_HOURS_DAYS` | no | `90` | Days to keep per-hour traffic. 1 to 3650. |
+| `TRAFFIC_FAILURES_DAYS` | no | `7` | Days to keep recent failures. 1 to 90. |
 | `PUID` | no | `1000` | User id the server runs as. Owns `./data`. |
 | `PGID` | no | `1000` | Group id the server runs as. |
 | `BESZEL_URL`, `BESZEL_EMAIL`, `BESZEL_PASSWORD` | no | empty | Legacy. Read once on first start and moved into a "Beszel" credential. Then remove them. |
@@ -242,11 +271,15 @@ If `DATABASE_URL` is not set, the container serves only the local editor: no sig
 
 - **Put TLS in front.** FossFLOW speaks plain HTTP on its port. Run a reverse proxy such as Caddy, Traefik or nginx in front of it, and set `FOSSFLOW_URL` to the `https://` address people use.
 - **Origin check.** Sign-in and all writes are only accepted from the origin in `FOSSFLOW_URL` (a CSRF check). If sign-in fails with the right password, check that you opened the exact address in `FOSSFLOW_URL`.
-- **Basic Auth is an optional extra.** `HTTP_AUTH_USER` and `HTTP_AUTH_PASSWORD` add a browser password prompt in front of everything, including the sign-in page. It doesn't replace sign-in.
-- **Rate limits.** Requests are limited per client (120 a minute overall), sign-in has its own limit, and credential writes and connection tests are limited to 20 a minute.
+- **Basic Auth is an optional extra.** `HTTP_AUTH_USER` and `HTTP_AUTH_PASSWORD` add a browser password prompt in front of everything except `/api/otlp/` (services authenticate there with their ingest key). It doesn't replace sign-in.
+- **Rate limits.** Requests are limited per client (120 a minute overall, not counting `/api/otlp/`), sign-in has its own limit, and credential writes and connection tests are limited to 20 a minute.
+- **Rate limits on `/api/otlp/`.** Each ingest key may send 1200 requests a minute. A request without a valid key is refused after at most one hash lookup, without decoding its body, but FossFLOW doesn't cap how many such requests arrive, and the container's nginx still receives each body (up to 16 MiB) first. If `/api/otlp/` is reachable from the internet, rate-limit that path per client IP in your TLS proxy. Only the proxy sees the real client addresses; behind it, every request reaches FossFLOW from the proxy's own address.
 - **Secrets at rest.** Credential secrets are encrypted with AES-256-GCM and never returned to the browser. Keep the encryption key safe: see [Backups](#backups-and-the-encryption-key).
 - **Only nginx is published.** The API listens on `127.0.0.1` inside the container. Don't publish port 3001 (`compose.dev.yml` does, for development only).
 - **Accepted risk: outbound requests.** "Save and test" and the live pollers make the server call a URL that an editor typed into a credential. Only http and https are allowed, there are no credentials in the URL, redirects aren't followed, and requests time out. Private and internal addresses are not blocked, because internal hubs are the normal case for a self-hosted tool. So an editor can make the server connect to any address they type, and can probe internal ports from the error codes. Only give people edit rights in projects you trust them in. An allowlist setting is a possible later addition.
+- **Ingest keys.** `/api/otlp/` skips Basic Auth by design, because services can't answer a browser prompt, and is authenticated by the ingest key instead. Each key is limited to 1200 requests a minute and 16 MiB a request. Keys are stored as SHA-256 hashes.
+- **What is never stored.** FossFLOW keeps counts, durations and failure summaries, not payloads or secrets. The full list is in [What FossFLOW records](TRAFFIC.md#what-fossflow-records).
+- **Accepted risk: alert webhooks.** The risk above extends to alerts. A webhook channel may reach internal HTTPS addresses, as Beszel URLs can. Slack and Teams channels can't: they only accept the vendor's own hosts. Nothing reaches link-local addresses.
 
 The full record of security decisions is in [AUDIT.md](AUDIT.md).
 
@@ -312,3 +345,5 @@ export const exampleConnector = defineConnector({
 ```
 
 Then add it to the `CONNECTORS` list in `registry.ts`. `beszel.ts` is a complete example.
+
+An alert channel is a connector too. Its file exports a `ChannelDefinition` (fields, a settings schema and a `send` function), and `registry.ts` wraps it with `defineChannel`, which sets `kind: 'channel'`. `channels/email.ts` and `channels/webhook.ts` are examples.

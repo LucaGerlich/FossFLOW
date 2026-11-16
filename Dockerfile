@@ -46,6 +46,7 @@ COPY --from=server-deps /app/packages/fossflow-backend/node_modules /app/package
 COPY --from=build /app/packages/fossflow-backend/package.json /app/packages/fossflow-backend/package.json
 COPY --from=build /app/packages/fossflow-backend/dist /app/packages/fossflow-backend/dist
 COPY --from=build /app/packages/fossflow-backend/drizzle /app/packages/fossflow-backend/drizzle
+COPY --from=build /app/packages/fossflow-backend/proto /app/packages/fossflow-backend/proto
 
 # npm isn't needed at runtime: remove it, and the packages it bundles
 RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx

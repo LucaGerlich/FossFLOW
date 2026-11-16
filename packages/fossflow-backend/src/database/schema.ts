@@ -1,5 +1,8 @@
 import { sql } from 'drizzle-orm';
 import {
+  bigint,
+  boolean,
+  doublePrecision,
   index,
   integer,
   jsonb,
@@ -9,6 +12,8 @@ import {
   timestamp,
   uniqueIndex
 } from 'drizzle-orm/pg-core';
+import type { AlertTarget } from '../connectors/channels/message.js';
+import type { DeliveryRecord } from '../alerts/types.js';
 import { user } from './auth-schema.js';
 
 export * from './auth-schema.js';
@@ -140,4 +145,190 @@ export const landscapeSource = pgTable(
     primaryKey({ columns: [table.landscapeId, table.credentialId] }),
     index('landscape_source_credential_idx').on(table.credentialId)
   ]
+);
+
+/**
+ * A key a service uses to send traces to a project. Only a hash of the key is
+ * stored; `prefix` is the first characters, shown so people can tell keys apart.
+ */
+export const ingestKey = pgTable(
+  'ingest_key',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => project.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    keyHash: text('key_hash').notNull().unique(),
+    prefix: text('prefix').notNull(),
+    createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    lastUsedAt: timestamp('last_used_at', { withTimezone: true })
+  },
+  (table) => [index('ingest_key_project_idx').on(table.projectId)]
+);
+
+/** The service names seen on each ingest key. */
+export const ingestService = pgTable(
+  'ingest_service',
+  {
+    keyId: text('key_id')
+      .notNull()
+      .references(() => ingestKey.id, { onDelete: 'cascade' }),
+    serviceName: text('service_name').notNull(),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull()
+  },
+  (table) => [primaryKey({ columns: [table.keyId, table.serviceName] })]
+);
+
+const trafficKind = (name: string) => text(name, { enum: ['call', 'incoming'] }).notNull();
+
+/** Call counts per minute; `caller` is '' for traffic entering a service. */
+export const trafficMinute = pgTable(
+  'traffic_minute',
+  {
+    projectId: text('project_id')
+      .notNull()
+      .references(() => project.id, { onDelete: 'cascade' }),
+    kind: trafficKind('kind'),
+    caller: text('caller').notNull(),
+    callee: text('callee').notNull(),
+    operation: text('operation').notNull(),
+    minute: timestamp('minute', { withTimezone: true }).notNull(),
+    calls: integer('calls').notNull(),
+    failures: integer('failures').notNull(),
+    durationSumMs: doublePrecision('duration_sum_ms').notNull(),
+    histogram: integer('histogram').array().notNull()
+  },
+  (table) => [
+    primaryKey({
+      columns: [table.projectId, table.kind, table.caller, table.callee, table.operation, table.minute]
+    }),
+    index('traffic_minute_project_minute_idx').on(table.projectId, table.minute),
+    index('traffic_minute_minute_idx').on(table.minute)
+  ]
+);
+
+/** The same counts rolled up per hour, kept longer. */
+export const trafficHour = pgTable(
+  'traffic_hour',
+  {
+    projectId: text('project_id')
+      .notNull()
+      .references(() => project.id, { onDelete: 'cascade' }),
+    kind: trafficKind('kind'),
+    caller: text('caller').notNull(),
+    callee: text('callee').notNull(),
+    operation: text('operation').notNull(),
+    hour: timestamp('hour', { withTimezone: true }).notNull(),
+    calls: integer('calls').notNull(),
+    failures: integer('failures').notNull(),
+    durationSumMs: doublePrecision('duration_sum_ms').notNull(),
+    histogram: integer('histogram').array().notNull()
+  },
+  (table) => [
+    primaryKey({
+      columns: [table.projectId, table.kind, table.caller, table.callee, table.operation, table.hour]
+    }),
+    index('traffic_hour_project_hour_idx').on(table.projectId, table.hour),
+    index('traffic_hour_hour_idx').on(table.hour)
+  ]
+);
+
+/** Individual failed calls, kept briefly for troubleshooting. */
+export const trafficFailure = pgTable(
+  'traffic_failure',
+  {
+    id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => project.id, { onDelete: 'cascade' }),
+    kind: trafficKind('kind'),
+    caller: text('caller').notNull(),
+    callee: text('callee').notNull(),
+    operation: text('operation').notNull(),
+    at: timestamp('at', { withTimezone: true }).notNull(),
+    durationMs: doublePrecision('duration_ms').notNull(),
+    status: text('status').notNull()
+  },
+  (table) => [
+    index('traffic_failure_edge_idx').on(table.projectId, table.caller, table.callee, table.at),
+    index('traffic_failure_at_idx').on(table.at)
+  ]
+);
+
+/** Which service a host name (as seen in client spans) belongs to. */
+export const trafficAlias = pgTable(
+  'traffic_alias',
+  {
+    projectId: text('project_id')
+      .notNull()
+      .references(() => project.id, { onDelete: 'cascade' }),
+    host: text('host').notNull(),
+    service: text('service').notNull(),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull()
+  },
+  (table) => [primaryKey({ columns: [table.projectId, table.host, table.service] })]
+);
+
+/** A rule a project sets on a traffic arrow or box; evaluated every minute. */
+export const alertRule = pgTable(
+  'alert_rule',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => project.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    kind: text('kind', { enum: ['failing', 'slow', 'silent'] }).notNull(),
+    target: jsonb('target').$type<AlertTarget>().notNull(),
+    /** Failed percent or p95 milliseconds; null for silent rules. */
+    threshold: doublePrecision('threshold'),
+    windowMinutes: integer('window_minutes').notNull(),
+    minCalls: integer('min_calls').notNull().default(10),
+    channelIds: text('channel_ids').array().notNull().default(sql`'{}'::text[]`),
+    enabled: boolean('enabled').notNull().default(true),
+    /** A silent rule is armed once its target has been seen; until then it waits. */
+    armedAt: timestamp('armed_at', { withTimezone: true }),
+    createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [index('alert_rule_project_idx').on(table.projectId)]
+);
+
+/** One stretch of a rule firing; `resolvedAt` is null while it is open. */
+export const alertEvent = pgTable(
+  'alert_event',
+  {
+    id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    ruleId: text('rule_id')
+      .notNull()
+      .references(() => alertRule.id, { onDelete: 'cascade' }),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => project.id, { onDelete: 'cascade' }),
+    startedAt: timestamp('started_at', { withTimezone: true }).notNull(),
+    resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+    /** When the condition last stopped holding; it resolves after 3 clear minutes. */
+    clearSince: timestamp('clear_since', { withTimezone: true }),
+    lastNotifiedAt: timestamp('last_notified_at', { withTimezone: true }).notNull(),
+    value: doublePrecision('value'),
+    deliveries: jsonb('deliveries').$type<DeliveryRecord[]>().notNull().default(sql`'[]'::jsonb`)
+  },
+  (table) => [
+    index('alert_event_project_idx').on(table.projectId, table.resolvedAt),
+    index('alert_event_rule_idx').on(table.ruleId, table.resolvedAt)
+  ]
+);
+
+/** Stretches where ingest was down, so silence during them is not blamed on a service. */
+export const ingestGap = pgTable(
+  'ingest_gap',
+  {
+    id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    from: timestamp('from', { withTimezone: true }).notNull(),
+    to: timestamp('to', { withTimezone: true }).notNull()
+  },
+  (table) => [index('ingest_gap_to_idx').on(table.to)]
 );

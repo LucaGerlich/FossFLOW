@@ -13,6 +13,7 @@ import {
 import { and, eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { parseBody } from '../common/validation.js';
+import { findConnector } from '../connectors/registry.js';
 import { DB, type Database } from '../database/database.module.js';
 import { credential, landscape, landscapeSource } from '../database/schema.js';
 import { CurrentProject, type ProjectAccessInfo, RequireProjectScope } from '../projects/project-access.js';
@@ -64,11 +65,14 @@ export class LiveController {
       }
       if (ids.length > 0) {
         const found = await tx
-          .select({ id: credential.id })
+          .select({ id: credential.id, type: credential.type })
           .from(credential)
           .where(and(inArray(credential.id, ids), eq(credential.projectId, access.projectId)));
         if (found.length !== ids.length) {
           throw new BadRequestException({ error: 'Use credentials from this landscape’s project' });
+        }
+        if (found.some((row) => findConnector(row.type)?.kind === 'channel')) {
+          throw new BadRequestException({ error: 'Only data sources can be attached to a landscape' });
         }
       }
       await tx.delete(landscapeSource).where(eq(landscapeSource.landscapeId, landscapeId));

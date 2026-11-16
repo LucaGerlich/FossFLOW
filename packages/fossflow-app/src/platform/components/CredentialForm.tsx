@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../api';
 import {
+  type ConnectorField,
   type ConnectorInfo,
   type CredentialDetail,
   credentialsKey,
@@ -39,6 +40,8 @@ export function CredentialForm({ projectId, connector, existing, onClose }: Cred
   );
   const [secretsSet, setSecretsSet] = useState(existing?.secretsSet ?? []);
   const [result, setResult] = useState<TestResult | null>(null);
+  const hintFor = (field: ConnectorField) =>
+    connector.id === 'email' && field.name === 'to' ? t('platform.credentials.emailHint') : field.help;
 
   const save = useSubmit(async () => {
     setResult(null);
@@ -96,7 +99,7 @@ export function CredentialForm({ projectId, connector, existing, onClose }: Cred
                 setValues((current) => ({ ...current, [field.name]: event.target.value }))
               }
             />
-            {field.help && <span className="field__hint">{field.help}</span>}
+            {hintFor(field) && <span className="field__hint">{hintFor(field)}</span>}
           </label>
         );
       })}

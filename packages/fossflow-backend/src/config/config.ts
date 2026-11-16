@@ -28,6 +28,8 @@ export interface AppConfig {
   livePollSeconds: number;
   /** BESZEL_* from before credentials existed; moved into a credential once, then unused. */
   live: LiveConfigResult;
+  /** How many days of each traffic resolution are kept. */
+  traffic: { minutesDays: number; hoursDays: number; failuresDays: number };
 }
 
 const optional = z
@@ -54,7 +56,10 @@ const envSchema = z.object({
   SMTP_USER: optional,
   SMTP_PASSWORD: optional,
   SMTP_FROM: optional,
-  LIVE_POLL_SECONDS: z.coerce.number().int().min(10).max(3600).default(30)
+  LIVE_POLL_SECONDS: z.coerce.number().int().min(10).max(3600).default(30),
+  TRAFFIC_MINUTES_DAYS: z.coerce.number().int().min(2).max(90).default(7),
+  TRAFFIC_HOURS_DAYS: z.coerce.number().int().min(1).max(3650).default(90),
+  TRAFFIC_FAILURES_DAYS: z.coerce.number().int().min(1).max(90).default(7)
 });
 
 export class ConfigError extends Error {
@@ -98,6 +103,11 @@ export function loadConfig(env: NodeJS.ProcessEnv): AppConfig {
           }
         : null,
     livePollSeconds: data.LIVE_POLL_SECONDS,
-    live: readLiveConfig(env)
+    live: readLiveConfig(env),
+    traffic: {
+      minutesDays: data.TRAFFIC_MINUTES_DAYS,
+      hoursDays: data.TRAFFIC_HOURS_DAYS,
+      failuresDays: data.TRAFFIC_FAILURES_DAYS
+    }
   };
 }

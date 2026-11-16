@@ -6,6 +6,7 @@ import { useModelItem } from 'src/hooks/useModelItem';
 import { useModelStore } from 'src/stores/modelStore';
 import { DeleteButton } from '../../components/DeleteButton';
 import { Section } from '../../components/Section';
+import { TrafficIdentities } from 'src/traffic/TrafficIdentities';
 
 export type NodeUpdates = {
   model: Partial<ModelItem>;
@@ -95,6 +96,12 @@ export const NodeSettings = ({
           }}
         />
       </Section>
+      <TrafficIdentities
+        ids={modelItem.traffic?.ids ?? []}
+        onChange={(ids) =>
+          onModelItemUpdated({ traffic: ids ? { ids } : undefined })
+        }
+      />
       {modelItem.name && (
         <Section title="Label height">
           <Slider

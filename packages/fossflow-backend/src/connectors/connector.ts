@@ -1,5 +1,10 @@
 import type { z } from 'zod';
 import type { SourceClient } from '../live/hub.js';
+import type { AlertMessage } from './channels/message.js';
+import type { ChannelDeps, SendResult } from './channels/types.js';
+
+/** A source feeds live data into landscapes; a channel receives alerts. */
+export type ConnectorKind = 'source' | 'channel';
 
 /** One input on a credential form; the app builds the form from these. */
 export interface ConnectorField {
@@ -18,30 +23,59 @@ export interface ConnectorInfo {
   id: string;
   name: string;
   description: string;
+  kind: ConnectorKind;
   fields: readonly ConnectorField[];
 }
 
-/** A kind of live source (Beszel today; Portainer, Prometheus, … later). */
-export interface Connector extends ConnectorInfo {
+interface ConnectorBase extends ConnectorInfo {
   /** Checks settings and returns them normalised; throws a ZodError on bad input. */
   validate(settings: unknown): Record<string, unknown>;
+}
+
+/** A kind of live source (Beszel today; Portainer, Prometheus, … later). */
+export interface SourceConnector extends ConnectorBase {
+  kind: 'source';
   /** Opens a client for validated settings. */
   open(settings: unknown): SourceClient;
 }
+
+/** A kind of alert destination (email, Slack, Teams, webhook). */
+export interface ChannelConnector extends ConnectorBase {
+  kind: 'channel';
+  /** Sends one message; throws a ZodError when the stored settings are invalid. */
+  send(settings: unknown, message: AlertMessage, deps: ChannelDeps): Promise<SendResult>;
+}
+
+export type Connector = SourceConnector | ChannelConnector;
 
 /**
  * Builds a connector from a settings schema, so `validate` and `open` share
  * one parse and connectors stay type-safe without exposing their config type.
  */
 export function defineConnector<Settings extends Record<string, unknown>>(definition: {
-  info: ConnectorInfo;
+  info: Omit<ConnectorInfo, 'kind'>;
   schema: z.ZodType<Settings>;
   connect: (settings: Settings) => SourceClient;
-}): Connector {
+}): SourceConnector {
   return {
     ...definition.info,
+    kind: 'source',
     validate: (settings) => definition.schema.parse(settings),
     open: (settings) => definition.connect(definition.schema.parse(settings))
+  };
+}
+
+/** Builds an alert channel from a settings schema and its send function. */
+export function defineChannel<Settings extends Record<string, unknown>>(definition: {
+  info: Omit<ConnectorInfo, 'kind'>;
+  schema: z.ZodType<Settings>;
+  send: ChannelConnector['send'];
+}): ChannelConnector {
+  return {
+    ...definition.info,
+    kind: 'channel',
+    validate: (settings) => definition.schema.parse(settings),
+    send: definition.send
   };
 }
 

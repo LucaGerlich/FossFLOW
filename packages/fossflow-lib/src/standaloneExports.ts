@@ -7,6 +7,7 @@ export * from 'src/schemas';
 export type { IsoflowProps, InitialData } from 'src/types';
 export * from 'src/types/model';
 export * from 'src/live';
+export * from 'src/traffic';
 
 // Export i18n locales
 export { default as enUS } from 'src/i18n/en-US';

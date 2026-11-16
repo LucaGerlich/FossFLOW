@@ -33,7 +33,7 @@ services:
       - FOSSFLOW_URL=${FOSSFLOW_URL:?Set FOSSFLOW_URL in .env}
       # Optional. Unset: a key is generated in ./data/config. Back up either one.
       - FOSSFLOW_ENCRYPTION_KEY=${FOSSFLOW_ENCRYPTION_KEY:-}
-      # Optional mail for invitations and password resets; without it, admins copy links.
+      # Optional mail for invitations, password resets and email alerts; without it, admins copy links.
       - SMTP_HOST=${SMTP_HOST:-}
       - SMTP_PORT=${SMTP_PORT:-465}
       - SMTP_SECURE=${SMTP_SECURE:-}
@@ -44,6 +44,10 @@ services:
       - HTTP_AUTH_USER=${HTTP_AUTH_USER:-}
       - HTTP_AUTH_PASSWORD=${HTTP_AUTH_PASSWORD:-}
       - LIVE_POLL_SECONDS=${LIVE_POLL_SECONDS:-30}
+      # How many days live traffic is kept (minutes, hours, recent failures).
+      - TRAFFIC_MINUTES_DAYS=${TRAFFIC_MINUTES_DAYS:-7}
+      - TRAFFIC_HOURS_DAYS=${TRAFFIC_HOURS_DAYS:-90}
+      - TRAFFIC_FAILURES_DAYS=${TRAFFIC_FAILURES_DAYS:-7}
       # Legacy: read once on first start and moved into a "Beszel" credential.
       - BESZEL_URL=${BESZEL_URL:-}
       - BESZEL_EMAIL=${BESZEL_EMAIL:-}

@@ -24,6 +24,7 @@ import { ConnectorRerouteTooltip } from '../ConnectorRerouteTooltip/ConnectorRer
 import { ImportHintTooltip } from '../ImportHintTooltip/ImportHintTooltip';
 import { LassoHintTooltip } from '../LassoHintTooltip/LassoHintTooltip';
 import { LazyLoadingWelcomeNotification } from '../LazyLoadingWelcomeNotification/LazyLoadingWelcomeNotification';
+import { SeenTray } from 'src/traffic/SeenTray';
 import { CoordsUtils, getTilePosition } from 'src/utils';
 
 const ToolsEnum = {
@@ -31,7 +32,8 @@ const ToolsEnum = {
   ZOOM_CONTROLS: 'ZOOM_CONTROLS',
   TOOL_MENU: 'TOOL_MENU',
   ITEM_CONTROLS: 'ITEM_CONTROLS',
-  VIEW_TITLE: 'VIEW_TITLE'
+  VIEW_TITLE: 'VIEW_TITLE',
+  SEEN_TRAY: 'SEEN_TRAY'
 } as const;
 
 interface EditorModeMapping {
@@ -44,7 +46,8 @@ const EDITOR_MODE_MAPPING: EditorModeMapping = {
     'ZOOM_CONTROLS',
     'TOOL_MENU',
     'MAIN_MENU',
-    'VIEW_TITLE'
+    'VIEW_TITLE',
+    'SEEN_TRAY'
   ],
   [EditorModeEnum.EXPLORABLE_READONLY]: ['ZOOM_CONTROLS', 'VIEW_TITLE'],
   [EditorModeEnum.NON_INTERACTIVE]: []
@@ -165,6 +168,21 @@ export const UiOverlay = () => {
             }}
           >
             <ZoomControls />
+          </Box>
+        )}
+
+        {availableTools.includes('SEEN_TRAY') && (
+          <Box
+            sx={{
+              position: 'absolute',
+              transform: 'translate(-100%, -100%)'
+            }}
+            style={{
+              left: rendererSize.width - appPadding.x,
+              top: rendererSize.height - appPadding.y
+            }}
+          >
+            <SeenTray />
           </Box>
         )}
 

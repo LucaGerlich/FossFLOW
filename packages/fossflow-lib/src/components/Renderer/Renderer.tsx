@@ -15,6 +15,8 @@ import { TransformControlsManager } from 'src/components/TransformControlsManage
 import { Lasso } from 'src/components/Lasso/Lasso';
 import { FreehandLasso } from 'src/components/FreehandLasso/FreehandLasso';
 import { LiveLayer } from 'src/live/LiveLayer';
+import { TrafficLayer } from 'src/traffic/TrafficLayer';
+import { TrafficOverlay } from 'src/traffic/TrafficOverlay';
 import { useScene } from 'src/hooks/useScene';
 import { RendererProps } from 'src/types/rendererProps';
 
@@ -84,6 +86,9 @@ export const Renderer = ({ showGrid, backgroundColor }: RendererProps) => {
         <Connectors connectors={connectors} />
       </SceneLayer>
       <SceneLayer>
+        <TrafficLayer />
+      </SceneLayer>
+      <SceneLayer>
         <TextBoxes textBoxes={textBoxes} />
       </SceneLayer>
       <SceneLayer>
@@ -110,6 +115,9 @@ export const Renderer = ({ showGrid, backgroundColor }: RendererProps) => {
       </SceneLayer>
       <SceneLayer>
         <LiveLayer nodes={items} />
+      </SceneLayer>
+      <SceneLayer>
+        <TrafficOverlay nodes={items} />
       </SceneLayer>
       <SceneLayer>
         <TransformControlsManager />

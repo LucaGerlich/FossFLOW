@@ -13,6 +13,22 @@ describe('loadConfig', () => {
     assert.equal(config.live.ok, false);
   });
 
+  it('defaults traffic retention and rejects out-of-range values', () => {
+    assert.deepEqual(loadConfig({ DATABASE_URL }).traffic, {
+      minutesDays: 7,
+      hoursDays: 90,
+      failuresDays: 7
+    });
+    assert.throws(
+      () => loadConfig({ DATABASE_URL, TRAFFIC_MINUTES_DAYS: '1' }),
+      (error: unknown) => {
+        assert.ok(error instanceof ConfigError);
+        assert.match(error.message, /TRAFFIC_MINUTES_DAYS/);
+        return true;
+      }
+    );
+  });
+
   it('reads host and port', () => {
     const config = loadConfig({
       DATABASE_URL,

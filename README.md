@@ -37,6 +37,8 @@ In platform mode (the Docker setup below), a landscape can show the servers and 
 
 Setup and troubleshooting: **[docs/LIVE.md](docs/LIVE.md)**.
 
+A landscape can also show **live traffic** between systems: services send OpenTelemetry traces, and calls move along the arrows as dots. Alert rules tell your team by email, Slack, Teams or webhook when an arrow fails, slows down or goes quiet. See **[docs/TRAFFIC.md](docs/TRAFFIC.md)**, or run the [demo](docs/TRAFFIC.md#try-it-with-the-demo).
+
 ## 🐳 Quick Deploy with Docker
 
 The Docker setup runs FossFLOW as a small platform: a sign-in, Postgres, and projects that teams share.
@@ -164,6 +166,7 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guid
 
 - [docs/PLATFORM.md](docs/PLATFORM.md) - Self-hosting guide: install, roles, backups, configuration
 - [docs/LIVE.md](docs/LIVE.md) - Live data from Beszel
+- [docs/TRAFFIC.md](docs/TRAFFIC.md) - Live traffic and alerts
 - [FOSSFLOW_ENCYCLOPEDIA.md](FOSSFLOW_ENCYCLOPEDIA.md) - Comprehensive guide to the codebase
 - [CONTRIBUTING.md](CONTRIBUTING.md) - Contributing guidelines
 

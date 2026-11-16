@@ -6,6 +6,336 @@ Newest entries first.
 
 ---
 
+## 2026-11-16 — Live traffic (phase 2a), milestone 4: docs and walkthrough
+
+- **What:**
+  - **Plan:** `docs/superpowers/plans/2026-11-16-live-traffic-m4-docs.md` (the "Docs and walkthrough" milestone of the phase 2a design). This completes phase 2a.
+  - **`docs/TRAFFIC.md`** (new), the guide for teams:
+    - what FossFLOW records and never stores;
+    - a five-minute demo, then connecting Node.js (CommonJS and ES modules), Next.js, Docker, other languages (links only) and an OpenTelemetry Collector;
+    - putting traffic on the map, alerts and channels, and the webhook JSON with units per kind;
+    - retention and limits, and troubleshooting, including for your own TLS proxy.
+  - **A drift test** (`src/ingest/setup-docs.test.ts`) fails when a setup block line is missing from its own section of the guide, or when a webhook body key has no row in the "Webhook JSON" table.
+  - **The demo** (`examples/live-traffic/`, excluded from the image):
+    - a fake members API with `ok`, `failing` and `slow` modes;
+    - a Node.js service and a Next.js 16.4.6 app, set up with exactly the settings the Monitoring tab shows;
+    - Postgres, and an uninstrumented load generator that pauses every 40 calls.
+
+    The user exports the ingest key once and runs `up` and `down` in that shell.
+  - **`docs/PLATFORM.md`:**
+    - a Monitoring section, and ingest key and alert rule rights in the roles table;
+    - credentials are data sources or alert channels;
+    - email alerts need SMTP;
+    - a backup tip for leaving out traffic tables;
+    - the three `TRAFFIC_*_DAYS` variables;
+    - security notes on ingest keys, what is never stored, and alert webhooks.
+  - **Config:** `compose.yml` now passes `TRAFFIC_MINUTES_DAYS`, `TRAFFIC_HOURS_DAYS` and `TRAFFIC_FAILURES_DAYS` to the container; before this, setting them in `.env` had no effect. `.env.example` lists them.
+  - **Docs links:** `README.md` and `docs/LIVE.md` point to the new guide.
+  - **App:** leftovers from milestone 3's walkthrough.
+    - The credentials empty state and the live-data picker now account for alert channels.
+    - Alert kind badges are coloured only while an alert is firing.
+- **Why:** Milestone 4 of phase 2a. A team can connect a service, put its traffic on the map and set up alerts from the docs alone, and the demo lets anyone see live traffic and an alert within minutes.
+- **Security:**
+  - **No secrets:**
+    - The docs use only placeholders (`ffi_REPLACE_ME`, `https://fossflow.example.com`).
+    - The demo's database password `demo` is marked demo-only, and the database is not published.
+    - The demo publishes one port, on `127.0.0.1` only.
+  - **Corrected in the docs** (found by the final review):
+    - `/api/otlp/` skips Basic Auth and the general rate limit.
+    - FossFLOW refuses requests there without a valid key cheaply, but doesn't cap how many arrive. The guides say to rate-limit that path per client IP in the TLS proxy if it is reachable from the internet.
+  - **Reviews:**
+    - Every task was reviewed for spec and quality, and docs were checked fact by fact against the code.
+    - The walkthrough found one gap: no troubleshooting row for the demo's `down` asking for the key. It was fixed and re-reviewed.
+    - The final review served as the security review. It found two wrong facts: old spans are clamped to one hour, not dropped (that came from the plan), and the rate-limit and Basic Auth wording. It also suggested tighter drift checks and small doc fixes. All of these were fixed in one wave and re-reviewed.
+- **Verified:**
+  - **Server:** 407 tests in 41 files pass (2 new), and lint and build are clean. The drift test was shown failing for a line removed from one section and for a removed webhook row.
+  - **Lib:** 372 tests pass, and the build is clean. **App:** builds; `tsc` shows the same 7 existing errors.
+  - **Demo on its own:**
+    - Against a stub receiver, the production Next.js build and the Node.js service exported only to `/api/otlp/v1/traces`, with the key header and protobuf.
+    - The modes behaved as documented: 15 of 20 calls failed in `failing` mode, and a call took 1.96 s in `slow` mode.
+  - **Docker walkthrough, following the docs as a new user would.** It used the real `compose.yml` in a throwaway project on port 8088, with Mailpit and a local HTTPS webhook.
+    - **Setup:** `.env` from `.env.example`, then owner setup in the browser.
+    - **Connecting:** a key created under Monitoring → Connect a service; the demo then started with the guide's commands. The key listed `demo-shop` and `demo-web` within 20 s.
+    - **The map:**
+      - The tray listed exactly the guide's four identities. After **Place**, "Calls without an arrow" listed exactly the guide's four calls, the Next.js → shop call matched through its host alias.
+      - **Draw arrow** saved, and dots ran with the load generator's quiet gaps.
+      - The arrow's numbers showed `GET /members/{id}`. No stored operation contains a number, `@`, `email` or a query string.
+    - **Channels:** the email and webhook test messages arrived, and the webhook body matched the guide's `test` example.
+    - **A failing rule:**
+      - It fired 54 s after the API broke.
+      - Healing it sent `Resolved · Shop → Members API · failing for 10 min` by email and webhook 4 min 46 s later, and the webhook's `value` was the last value while firing.
+      - Breaking it again sent `Failing · Shop → Members API · 20.8% of 72 calls failed in the last 2 min (threshold 5%)` 47 s later.
+    - **Badges and wording:** badges were neutral while OK and coloured while firing, and the new credentials wording showed.
+    - **Viewer:** reads only. Writes get 403, and Monitoring and the editor show no edit controls.
+    - **The demo's `down`:** fails without the key, as the troubleshooting row says, and works with it.
+    - **Local mode:** the static build only asks `/api/platform/status` and shows no traffic tray.
+  - Your dev database and your processes on ports 3000 and 3001 were never touched. The existing `fossflow:local` and Mailpit images were left alone, and everything the walkthrough created was removed.
+- **Not done / later:**
+  - **Not checked live:**
+    - Real Slack and Teams deliveries still have no live check, because no test webhooks were available.
+    - In the walkthrough, the arrow card was checked through its data endpoint and the rule was made in Monitoring. Clicking the arrow and **Alert me when…** were checked in milestones 2 and 3.
+  - **Decided against: an in-app limit on `/api/otlp/` requests without a valid key.**
+    - They are already refused after at most one hash lookup, without a database query or decoding.
+    - The costly part, receiving up to 16 MiB, happens in the container's nginx before the app sees the request.
+    - Behind a TLS proxy, every client reaches FossFLOW from the proxy's address, so a per-IP limit there would lump real services in with an attacker.
+    - The docs now say to rate-limit that path per client IP in the TLS proxy.
+    - *Cost:* flood protection on `/api/otlp/` depends on the operator's proxy.
+  - **Demo:** it has no lockfiles, so a broken upstream release can break its build until the pins move.
+  - **Translations:** the translated READMEs don't mention live traffic.
+  - Milestone 3's behaviour notes and scale notes still apply.
+
+---
+
+## 2026-11-16 — Live traffic (phase 2a), milestone 3: alerts
+
+- **What:**
+  - **Plan:** `docs/superpowers/plans/2026-11-13-live-traffic-m3-alerts.md` (section 6 of the phase 2a design, plus the alert parts of section 5).
+  - **Channels are credentials** of a new kind:
+    - The connector registry now has `source` connectors (Beszel) and `channel` connectors: email, Slack, Microsoft Teams and a generic webhook.
+    - "Save and test" on a channel sends a test message and reports `Test message sent` or `Not delivered (<status>)`.
+    - Email is offered only when SMTP is configured.
+    - A channel can't be attached to a landscape as a data source, and live data never opens one.
+  - **Outbound sends** (`src/connectors/outbound.ts`): HTTPS only, no redirects, a 10 s timeout, and the status taken from the headers without reading the body. Slack and Teams refuse private, loopback and link-local addresses, checked when the connection is made (a `lookup` hook, and IP literals checked up front). Slack must be `hooks.slack.com/services/…`; Teams must end with `.api.powerplatform.com`, since the old `logic.azure.com` Workflows URLs stopped working on 30 November 2025.
+  - **Rules** (`src/alerts/`):
+    - Rules are failing (failed % ≥ X), slow (p95 ≥ T ms) or silent (no calls for N minutes, up to 48 h), each over N minutes with a minimum number of calls (default 10).
+    - A rule targets an arrow (`from` → `to`) or a box (one identity), with leading `*.` wildcards. On the `to` side, a `service:` identity also matches the hosts that service is reached by.
+    - Limits: 100 rules per project, 10 channels per rule.
+    - Permissions: new project scopes `alertRule:create|update|delete` for admins and editors; viewers read rules and alerts with `project:read`.
+    - Routes: `GET`/`POST /api/projects/:id/alert-rules`, `PATCH`/`DELETE /api/alert-rules/:id`, and `GET /api/projects/:id/alerts?state=active|resolved&before=&limit=`.
+  - **Evaluation every minute:**
+    - It reads `traffic_minute` (and `traffic_hour` for older silent checks) with a fixed number of queries per project.
+    - An alert starts once, sends a reminder every 4 hours while firing, and resolves after 3 clear minutes. A window with too few calls changes nothing, so flapping can't send a message every minute.
+    - An "ingest alive" heartbeat is written every minute. FossFLOW downtime of more than 5 minutes is recorded as a gap, and a silent rule waits N minutes after the gap instead of firing on restart.
+    - A silent rule starts only after its target has carried traffic (`armedAt`, kept on the rule).
+  - **Deliveries:**
+    - 3 attempts, waiting 2 s and then 8 s; `Retry-After` on 429 is honoured up to 60 s; other 4xx are not retried.
+    - The status or a fixed category is recorded per channel on the alert (the last 50), never a response body.
+    - A missing channel is recorded and skipped.
+    - Messages, with a link to Monitoring:
+      - `Failing · {name} · {pct}% of {calls} calls failed in the last {N} min (threshold {X}%)`, with matching Slow and Silent lines;
+      - `Still …` reminders;
+      - `Resolved · {name} · {kind} for {duration}`.
+  - **Map:** firing alerts arrive with the summary. Failing and silent turn arrows and boxes red, slow turns them amber with a `… · p95 … · slow` pill, and slow shows only when a slow rule exists. Arrow and box cards get **Alert me when…** for people who may create rules.
+  - **App:**
+    - Credentials are grouped into **Data sources** and **Alert channels**.
+    - **Monitoring → Alerts** shows active alerts with delivery problems, then rules (state, enable switch, edit, delete), then history paged with "Show more".
+    - A rule form on its own route is prefilled from the map and returns to the map after saving.
+- **Why:** Milestone 3 of phase 2a. The team hears by email or chat when an arrow or box fails, slows down or goes quiet: one message when it starts, one when it clears, and a reminder while it lasts, without spam and without false alarms after FossFLOW itself restarts.
+- **Security:**
+  - **SSRF:**
+    - Slack and Teams sends can't reach internal addresses, checked at connect time and for IP literals, never following redirects.
+    - No sender reaches link-local addresses such as `169.254.169.254`, the generic webhook included. Responses are closed as soon as the status arrives, and SMTP and channel tests time out (10 s and 15 s).
+    - **Accepted risk:** the generic webhook may target other internal HTTPS endpoints, as the design says. This is the same outbound-request risk as Beszel URLs: only editors create channels, and only a status or category is shown. An editor can therefore probe internal HTTPS endpoints through the status and timing of the test message.
+  - **Access:**
+    - Every new route is project-scoped. Outsiders get 404, and viewers get 403 on writes.
+    - A rule can only list channel credentials of its own project, checked on create and edit, and again when sending.
+  - **No secrets or member data in logs or messages:**
+    - Channel URLs are secret: never returned and never logged.
+    - Messages carry only the rule name and numbers, never operations, statuses or member data.
+    - Mail failures log the error name only; before this milestone, the mailer logged the subject and the SMTP error text.
+  - **Reviews:**
+    - Every task was reviewed for spec and quality. Fix rounds covered mailer logging, IP-literal URLs, rule edits un-arming silent rules, and one definition of host aliases shared by the summary and alerts.
+    - Automated security scans flagged the webhook design (accepted), the channel lookup without a project check, and a rule form that could drop all channels while the channel list loaded (both fixed in the fix wave).
+    - The whole branch was reviewed with a security lens. Its fix wave covered:
+      - rules left uneditable after a channel was deleted (the id is now removed with the channel);
+      - SMTP timeouts;
+      - a retargeted rule leaving its alert stuck open;
+      - a failed start-up losing the downtime gap;
+      - open webhook sockets;
+      - unbounded history (resolved alerts are kept 90 days);
+      - control characters in rule names;
+      - link-local targets.
+- **Verified:**
+  - **Server:** 405 tests in 40 files pass (112 new), and lint and build are clean. Coverage is 90.7 % of statements in `src/alerts` and 95.3 % in `src/connectors`. Covered: SSRF refusals (private and link-local addresses, IP literals, redirects); message copy and payload fixtures for every channel; channel access rules for each role; rule validation and limits; the measure and evaluator state machine (start, reminder, resolve after 3 clear minutes, flapping, aliases, silent after a gap, never-armed rules); a failed start-up retried; deliveries with retries, missing and foreign channels, and the 50-record cap; and history pruning.
+  - **Lib:** 372 tests in 49 suites pass (17 new): alert mapping to arrows and boxes with precedence, amber and red overlays and pills, and the "Alert me when…" requests. Type check and build are clean.
+  - **App:** builds; `tsc` shows the same 7 existing errors.
+  - **Real walkthrough** (throwaway database, Mailpit, a local HTTPS webhook trusted through `NODE_EXTRA_CA_CERTS`, the instrumented Node sample and a fake API):
+    - **Channels:** the webhook and email test messages arrived; a Slack channel with a non-Slack URL was refused.
+    - **Failing:**
+      - "Alert me when…" on the arrow card opened a prefilled form and returned to the map.
+      - Breaking the API sent `Failing · Sample service → Members API · 40.4% of 47 calls failed in the last 2 min (threshold 2%)` by webhook and email 46 s later, with the arrow red.
+      - Healing it sent `Resolved · … · failing for 6 min` about 5½ minutes later.
+    - **Slow:** a slow rule turned the arrow amber.
+    - **Delivery problems:** a dead webhook showed `not delivered (network)` after 3 attempts in Monitoring. Disabling the rule closed its alert without a message.
+    - **Silent across a restart:** the backend was down for 6.5 minutes with a 5-minute silent rule armed. The gap was recorded, and the silent message came exactly 5 minutes after the restart, not before.
+    - **Viewer:** sees alerts, rules and history, with no edit controls and no "Alert me when…".
+    - **Regressions:** local mode makes no alert requests, and the live-data picker lists sources only.
+  - **Docker** (real `compose.yml`, SMTP to Mailpit on the host): a failing rule fired from inside the container and its email arrived. Everything was removed afterwards.
+  - Your dev database and your processes on ports 3000 and 3001 were never touched.
+- **Not done / later:**
+  - **Milestone 4:** `docs/PLATFORM.md` (Monitoring, ingest keys, alerts, retention), `docs/TRAFFIC.md`, `.env.example` (SMTP for alerts), and the documented webhook JSON.
+  - Real Slack and Teams deliveries: these are verified with payload fixtures and URL rules only, because no test webhooks were available.
+  - After FossFLOW downtime, a silent message says "no calls for N min" counted from the restart, because FossFLOW can't know about calls while it was down.
+  - **Wording:** the credentials empty state and the live-data picker still talk as if all credentials were data sources. Rule kind badges are coloured like a state even when the rule is OK.
+  - A slow or failing alert on an arrow with no recent traffic gets a coloured line but no pill. An alerted arrow without 24 h of traffic can't be clicked open.
+  - **Scale:**
+    - Each tick measures projects one after another and reads 60 minutes of minute rows and 8 days of hour rows per project.
+    - Notifications run without a concurrency cap and re-measure for their call count.
+    - This is fine for a self-hosted install, but large installs may need a cap or a pre-aggregation.
+  - **Behaviour worth knowing:**
+    - A failing or slow alert doesn't resolve while traffic stays below the rule's minimum calls; disable the rule for a decommissioned service.
+    - A rule that fails for one minute every four still sends a start and a resolve per cycle.
+    - Downtime of 5 minutes or less isn't a gap.
+    - A database outage without a restart records no gap.
+    - Deliveries in flight at shutdown are not resent.
+  - **Limits:**
+    - The number of alert channels per project isn't capped, so an editor can send test emails to many addresses (rate-limited to 20 tests a minute).
+    - The Teams allowlist doesn't include government or China clouds.
+    - The evaluator assumes a single server instance.
+
+---
+
+## 2026-11-13 — Live traffic (phase 2a), milestone 2: live map
+
+- **What:**
+  - **Plan:** `docs/superpowers/plans/2026-11-13-live-traffic-m2-live-map.md` (section 5 of the phase 2a design).
+  - **Server (`src/traffic/`):**
+    - `TrafficHub` takes every OTLP batch right after it is counted and fans its calls out to open streams of the same project. It thins busy arrows to 20 dots a second, and a project to 400. Each dot carries a weight, and the weights add up to the real call count. Publishing can never fail or double-count ingest: it has its own error handling.
+    - `GET /api/landscapes/:id/traffic/stream`: Server-Sent Events (`retry: 2000`, a heartbeat every 25 s, `X-Accel-Buffering: no`). Limits:
+      - at most 10 open streams per user;
+      - each stream ends after 10 minutes, and the browser reconnects, which re-checks access;
+      - a client that stops reading is cut off at 1 MiB and its connection destroyed;
+      - a client that leaves during the access check holds no slot.
+    - `GET …/traffic/summary`: the last 5 minutes per caller → callee pair, per callee and per service (calls/min, % failed, median and p95 from the duration histogram). It includes every pair seen in 24 h and the unambiguous host aliases. It is computed at most once per project every 5 s, however many people watch.
+    - `GET …/traffic/edge?caller=&callee=&range=1h|24h|7d`: series, totals, the 10 busiest operations and the 20 newest failures, for 1–20 pairs. Older hours come from `traffic_hour`, the last two from `traffic_minute`, so no hour is counted twice.
+    - All three need `landscape:read` and only ever read the landscape's own project.
+  - **Lib (`src/traffic/`):**
+    - Boxes get an optional `traffic: { ids }` binding (up to 20 identities like `service:sync`, `host:*.magicline.com`, `db:server/name`). It round-trips through export and import, and local mode ignores it.
+    - The matcher resolves identities to boxes: hand-bound before learned aliases before wildcards, then model order. An arrow carries the calls between its two end boxes, in both directions; with several arrows between the same boxes, the first one gets the dots.
+    - A dot scheduler on the server's clock (offset from the stream's `sentAt`) plays each call one lag after it happened. The lag is 2–15 s. Travel time is the call duration clamped to 0.8–4 s, and late calls play at once. A hidden tab drops the queue.
+    - `TrafficLayer` moves the dots in one `requestAnimationFrame` loop, with no React render per dot.
+    - **Trouble:** at least 5 % and at least 5 failures in 5 minutes turns the arrow red, with a pill such as `24/min · 91 ms · 12.5% failed`. The box gets one line, such as `12.5% of calls from Sample service fail`. Healthy arrows stay quiet.
+    - **Arrow card:** stats, the series for 1h, 24h or 7d (failing bars red), the busiest calls, recent failures, and `1 dot ≈ N calls`. The **box card** shows incoming numbers for a service and "seen by callers" for others, plus its identities. Editors open cards by selecting; viewers open them by clicking an arrow or box.
+    - **Box settings** get a **Live traffic** section: identity chips, suggestions from what was seen, and validation.
+    - **"Seen, not on the map" tray** (editors): **Place** adds a box for an unknown system, as one undo step. **Draw arrow** connects two placed boxes that talk without an arrow.
+    - A new `traffic` locale namespace in all 12 lib locales.
+  - **App:** the landscape editor polls the summary every 15 s and opens the stream once there was traffic in 24 h. It closes the stream while the tab is hidden and backs off from 2 s to 2 min after refusals. A `Traffic · live` / `Traffic · connecting` badge sits next to the live-data badge.
+- **Why:** Milestone 2 of phase 2a. The landscape map now shows real calls as they happen, with nothing moving when nothing is sent. Real numbers sit on every arrow and box, and the map can be completed from what the services report.
+- **Security:**
+  - **Access:** every route is landscape-scoped. Outsiders get 404 and signed-out users 401, both tested, and a removed member is refused on reconnect.
+  - **SQL:** identities from the query string reach SQL only as bound parameters. `range` is an enum, and pairs and identity lengths are capped. Errors never echo values.
+  - **No new data leaves the server:** dots carry identities, timing, a failed flag and a weight. Summaries and cards carry only what milestone 1 already scrubbed (identities, operations, statuses, numbers).
+  - **Untrusted names:** a service name with `*` is turned into `_` at ingest, and the tray never offers an identity the model schema would reject. A name chosen by a key holder therefore can't make a landscape unloadable.
+  - **Reviews:**
+    - Each task was reviewed for spec and quality, with a fix round where needed (stream slot leak, feed identity, single-step undo).
+    - The real-app walkthrough found three bugs, each fixed and re-reviewed: hand-bound identities losing to learned aliases, the tray chip wrapping, and arrow selection never opening the card.
+    - The whole branch was reviewed with a security lens. Its fix wave covered unvalidated Place, more than 20 pairs per arrow, the slow-reader cut-off, the summary cost, ingest isolation from the live view, and Escape while typing.
+  - **Accepted risks:**
+    - An already-open stream keeps delivering for up to 10 minutes after the member is removed or signed out. Access is checked on connect and on each reconnect.
+    - Anyone who can read one landscape of a project sees the traffic of the whole project, which is the project's data model.
+    - Hub fairness: with more than 20 saturated arrows in a project, the 400 dots a second go to the arrows seen first. The numbers stay complete.
+    - The summary cache and the hub live in one process, which is the single-process design.
+    - Each open tab holds one HTTP connection to the server while visible.
+- **Verified:**
+  - **Server:** 293 tests in 30 files pass (47 new), lint and build are clean, and `src/traffic` is at 95.5 % statement coverage (the new hub, stream, queries, cache and controller files are between 91 % and 100 %). Covered end to end: a real OpenTelemetry export reaching a stream subscriber, viewer/outsider/signed-out access, the 10-stream cap, a removed member refused on reconnect, the summary numbers and the no-double-count hour boundary.
+  - **Lib:** 355 tests in 48 suites pass (112 new): matching table, scheduler timing (a browser 5 minutes ahead, lag and travel clamps, hidden tab), geometry, stats and the failing rule, the pill text, cards with their loader and ranges, identity editing, the tray and single-step undo with the real stores. Type check and build are clean.
+  - **App:** builds; `tsc` shows the same 7 existing errors.
+  - **Real walkthrough** (throwaway database; backend, app, a fake members API and an instrumented Node sample using the unchanged setup block):
+    - The summary is scrubbed: `/members/1000?email=…` arrives only as identities and `GET /members/{id}`.
+    - Dots run during bursts, nothing moves in the 20 s pauses, and dots travel along their arrow and vanish on arrival.
+    - The tray lists the unplaced database. Place adds the box and one undo removes it; Draw arrow connects it, and the landscape saves the bindings and arrows.
+    - A failing API turns its arrow red with the pill and the box status line.
+    - As editor: the arrow card opens on selection, and identity chips can be added (a wildcard), refused (`ftp:x`) and removed.
+    - As viewer: `Read only`, no tray; arrow and box cards open on click, the 24h range loads, Escape closes.
+    - The static build (local mode) makes no traffic requests.
+  - **Docker** (real `compose.yml` in a throwaway project): through nginx, `retry: 2000` arrived after 26 ms and a dot 8 ms after an OTLP POST, so nothing buffers. The logs are clean, and everything was removed afterwards.
+  - Your dev database and your processes on ports 3000 and 3001 were never touched.
+- **Not done / later:**
+  - **Milestone 3:** alerts, "slow" trouble, "Alert me when…", and alerts in the summary. **Milestone 4:** `docs/PLATFORM.md`, `docs/TRAFFIC.md`, `.env.example`, and a Docker walkthrough with Beszel and traffic on the same box (not checked in the browser here).
+  - Fair sharing of the per-project dot budget across saturated arrows.
+  - Per-dot validation of stream messages in the app, and isolating listeners from each other.
+  - Per-box trouble and per-pair routes cached in the provider for large landscapes. Fewer allocations in the per-frame path.
+  - The arrow card keeps its last good data on a transient error; "As seen by" shows box names instead of identities.
+  - App translations of the two badge strings beyond English.
+  - A box placed from the tray can land on an existing arrow.
+  - Smaller test gaps from the task reviews: the hub cap part-way through an arrow, an hour row exactly at the roll-up cut, feed resubscribe and unmount cleanup, and stream cross-project isolation end to end.
+
+---
+
+## 2026-11-13 — Live traffic (phase 2a), milestone 1: ingest
+
+- **What:**
+  - **Design and plan:**
+    - `docs/superpowers/specs/2026-11-13-live-traffic-alerts-design.md` covers phase 2a: live traffic, monitoring and alerts.
+    - `docs/superpowers/plans/2026-11-13-live-traffic-m1-ingest.md` is this milestone's plan.
+  - **Ingest keys (Monitoring → Services):**
+    - Project scopes `ingestKey:create|read|delete`. Editors and admins hold all three; viewers see the list only.
+    - `GET`/`POST /api/projects/:id/ingest-keys` and `DELETE /api/ingest-keys/:id`.
+    - A key is `ffi_` plus 32 random bytes, shown once. Only its SHA-256 hash and a 12-character prefix are stored.
+    - Creating a key returns setup blocks for Node.js (CommonJS), Node.js (ES modules) and Next.js, with the key, the endpoint and `OTEL_SERVICE_NAME` filled in.
+    - At most 50 keys per project.
+    - The list shows the services seen with each key and when data last arrived.
+  - **OTLP/HTTP endpoint `POST /api/otlp/v1/traces`:**
+    - Accepts protobuf (`protobufjs` with vendored `opentelemetry-proto` v1.11.1 in `packages/fossflow-backend/proto/`) and JSON, with optional gzip.
+    - Mounted on Express before the JSON parser, so the key is checked before any of the body is read.
+    - Keys are checked against an in-memory index of hashes. Creating or deleting a key updates the index immediately, and it is reloaded every 30 s.
+    - Limits: 16 MiB after decompression (413), 1200 requests per minute per key (429 with `Retry-After`). Bad payloads answer 400, other content types 415, unknown keys 401. `/v1/metrics` and `/v1/logs` answer 404.
+    - nginx: `location /api/otlp/` with `auth_basic off` and `client_max_body_size 16m`.
+  - **Spans to calls (`src/ingest/spans.ts`, `scrub.ts`):**
+    - Client spans with HTTP or database attributes become calls (caller → callee, operation). Server spans count as incoming requests. Old and new semantic-convention names are both accepted.
+    - Database spans count only when they carry a query or operation attribute. Connection spans like `pg.connect` are skipped.
+    - Timing is anchored on the server's clock, so a skewed service clock can't misplace calls.
+    - Host aliases are recorded for services that receive requests.
+  - **Storage (`src/traffic/`):**
+    - Calls are counted per minute in memory (calls, failures, duration sum and a 22-bucket duration histogram) and written to Postgres every 5 s.
+    - Tables: `traffic_minute`, `traffic_hour`, `traffic_failure`, `traffic_alias`, `ingest_service` and `ingest_key`.
+    - Migrations 0005–0007. SQL helpers `int_array_add`/`int_array_sum`; `traffic_failure.id` is a bigint.
+    - A job every 10 minutes rolls minutes into hours (UTC hours, safe to repeat, catches up after downtime) and deletes old data.
+    - Retention: `TRAFFIC_MINUTES_DAYS` (7, at least 2), `TRAFFIC_HOURS_DAYS` (90), `TRAFFIC_FAILURES_DAYS` (7), and at most 500 failures per arrow.
+- **Why:** Phase 2a turns the landscape map live. Services report the calls they make, as with Sentry or GlitchTip but over OpenTelemetry, so the map can show real traffic and alerts can fire in milestones 2 and 3. This milestone receives, cleans and stores the data.
+- **Security:**
+  - **No member data is stored:**
+    - Query strings, fragments and URL user info are dropped.
+    - Path segments that look like IDs become `{id}`: numbers, UUIDs, hex strings, long tokens, anything with `@`, 5 or more digits in a row, and percent-encoded or multiply-encoded variants. Matrix parameters (`;jsessionid=…`) are cut off.
+    - SQL text is never read into anything stored.
+    - Database operations, query summaries and collection and database names are only kept when they have a safe shape, with ID-like words replaced.
+    - Failures keep only a 3-digit HTTP status or a short `error.type`, never exception messages.
+    - Control characters are stripped, and every stored string is cut to 300 UTF-8 bytes.
+    - Logs carry error names and SQLSTATE codes only, never driver messages or payload content.
+  - **Keys:** only hashes are stored. The raw key exists in the create response and in the app's panel until Done; it never enters the query cache, browser storage or a URL. Revoking takes effect immediately.
+  - **Resource bounds:**
+    - Per-key shares under project ceilings: pairs 1000 per key and 2000 per project per day; host aliases 500 and 1000; new minute buckets 20 000 and 40 000 per flush window.
+    - At most 200 operations per caller → callee pair (the rest count as `other`) and 100 service names per key.
+    - Failed calls buffered per flush: at most 100 per arrow.
+    - A leaked key can't take more than its share or starve the project after it is revoked.
+    - One bad row never drops the rest of a flush: chunks that fail on a data, constraint or size error are retried row by row.
+  - **Reviews:** every task was reviewed for spec and quality, then the whole branch was reviewed with a security lens, and an automated security scan ran after every commit. Seven rounds of fixes came out of them (scrubbing gaps, memory bounds, per-key budgets, robustness of writes). Every ruling is recorded in this milestone's SDD ledger and summarised in the PR.
+  - **Accepted risks:**
+    - The `{id}` rules can't recognise plain names in paths or name-like tenant databases (`/users/jane`, `tenant_acme`).
+    - Keys of a deleted project keep authenticating for up to 30 s; nothing is stored in that time.
+    - Calls are lost if Postgres is down during a flush.
+    - Concurrent key creation can overshoot the 50-key cap slightly.
+    - There is no limit on concurrent decodes per key holder.
+    - The single-process design (in-memory aggregation and key index) is as specified.
+- **Verified:**
+  - **Server:** 246 tests pass (115 new), and the build and type check are clean. New code coverage is 94.9 % of statements; `maintenance.ts` is at 66 % because its 10-minute timer wrapper is untested, while its roll-up and prune logic is fully covered.
+  - **End-to-end tests** with the real OpenTelemetry exporters (`@opentelemetry/sdk-trace` 3.1.1, OTLP exporters 0.301.2) over HTTP: protobuf with gzip and JSON, endpoint and header taken from the setup block, nothing personal stored, every error code.
+  - **Lib:** 243 tests. **App:** builds; `tsc` shows the same 7 existing errors.
+  - **Real apps:** all three setup blocks were pasted unchanged into a CommonJS Express app, an ES-module Express app and a Next.js 16.4.6 app, each calling `example.com` and Postgres.
+    - All three report through the dev proxy, and the key lists the three service names.
+    - Calls are stored as `GET /` and templated routes, with the IDs and emails in query strings dropped.
+    - Next.js fetches are not doubled.
+    - After the connection-span fix, 3 requests give exactly 3 database calls.
+    - A revoked key is refused immediately.
+  - **Browser, on a throwaway database:**
+    - The Monitoring tab: an invalid name is refused with a readable error; key creation, all three setup tabs, and Done removing the key from the page.
+    - The list shows "last data" and "seen as" within 15 s.
+    - A viewer sees the list without Connect or Revoke, and Revoke with its confirmation works.
+  - **Docker** (real `compose.yml` in a throwaway project, Basic Auth on):
+    - `/api` still asks for Basic Auth; `/api/otlp` answers with the backend's own 401.
+    - A real export through nginx is stored scrubbed. A 12 MB body passes nginx and a 17 MB body gets nginx's 413.
+    - The logs contain no personal data or keys, and the server runs as `node`.
+    - Everything was removed afterwards; your dev database was never touched.
+- **Not done / later:**
+  - **Milestone 2:** the live map (dots, the arrow and box panels, the "seen, not on the map" tray, the SSE stream). **Milestone 3:** alerts. **Milestone 4:** `docs/PLATFORM.md`, `docs/TRAFFIC.md` and `.env.example`.
+  - Accessibility polish on the setup blocks: unique labels for the Copy buttons and arrow keys between the tabs.
+  - The inactive setup tabs look like disabled buttons.
+  - Tests for the maintenance timer and for chunks over 1000 rows.
+  - An atomic 50-key cap.
+  - `fossflow-lib` still depends on `zod` 3.25, which is in the range of advisory GHSA-mrhx-c7xc-m3w5 (memory use on oversized collections). The server uses `zod` 4.6.7 and isn't affected.
+
+---
+
 ## 2026-11-10 — Platform phase 1, milestone 6: settings, deployment and docs
 
 - **What:**

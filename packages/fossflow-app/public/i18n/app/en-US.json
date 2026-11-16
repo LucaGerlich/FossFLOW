@@ -57,6 +57,8 @@
     "live": {
         "label": "Live",
         "unavailable": "Live data unavailable",
+        "trafficLive": "Traffic · live",
+        "trafficConnecting": "Traffic · connecting",
         "servers_one": "{{count}} server",
         "servers_other": "{{count}} servers",
         "noServers": "no servers",
@@ -176,7 +178,8 @@
             "delete": "Delete project",
             "deleteHint": "Deletes the project and everything in it. This can’t be undone.",
             "deleteConfirm": "Delete “{{name}}”",
-            "credentials": "Credentials"
+            "credentials": "Credentials",
+            "monitoring": "Monitoring"
         },
         "landscapes": {
             "untitled": "Untitled landscape",
@@ -209,7 +212,12 @@
         },
         "credentials": {
             "add": "Add {{connector}} credential",
-            "type": "Kind of source",
+            "type": "Kind of credential",
+            "sources": "Data sources",
+            "sourcesHint": "Logins for live data, such as a Beszel hub.",
+            "channels": "Alert channels",
+            "channelsHint": "Where alerts are delivered: email, Slack, Teams or a webhook.",
+            "emailHint": "Separate addresses with commas",
             "new": "New {{connector}} credential",
             "edit": "Edit {{connector}} credential",
             "editButton": "Edit",
@@ -226,14 +234,46 @@
             "deleteUsed_one": "{{count}} landscape shows live data from this credential and will stop. Delete it anyway?",
             "deleteUsed_other": "{{count}} landscapes show live data from this credential and will stop. Delete it anyway?",
             "empty": "No credentials yet",
-            "emptyHint": "Credentials are logins for live sources, such as a Beszel hub. Landscapes in this project can then show live status."
+            "emptyHint": "Credentials are logins for live data sources, such as a Beszel hub, and alert channels such as email, Slack, Teams or a webhook."
+        },
+        "monitoring": {
+            "services": "Services",
+            "servicesHint": "Each service that sends traffic to this project gets its own key. Connect one to see it here.",
+            "connect": "Connect a service",
+            "serviceName": "Service name",
+            "serviceNameHint": "Becomes OTEL_SERVICE_NAME in the setup below, for example member-app.",
+            "create": "Create key",
+            "createdTitle": "Connect {{name}}",
+            "keyLabel": "Ingest key",
+            "keyHint": "Copy it now. It won’t be shown again.",
+            "copy": "Copy",
+            "copied": "Copied",
+            "done": "Done",
+            "setupTitle": "Setup",
+            "block": {
+                "node-cjs": "Node.js (CommonJS)",
+                "node-esm": "Node.js (ES modules)",
+                "nextjs": "Next.js"
+            },
+            "stepInstall": "Install",
+            "stepEnv": "Environment variables",
+            "stepFile": "File {{file}}",
+            "createdBy": "created by {{name}}",
+            "lastData": "last data {{date}}",
+            "noData": "no data received yet",
+            "seenAs": "Seen as: {{services}}",
+            "revoke": "Revoke",
+            "revokeHint": "Services using this key stop sending data. Traffic already received stays.",
+            "revokeConfirm": "Revoke “{{name}}”",
+            "empty": "No services connected yet",
+            "emptyHint": "Connect a service to start receiving traffic from your running apps."
         },
         "sources": {
             "button": "Live data",
             "buttonCount_one": "Live data · {{count}}",
             "buttonCount_other": "Live data · {{count}}",
             "hint": "Show live status from these credentials, then bind nodes to servers and containers.",
-            "none": "This project has no credentials yet.",
+            "none": "This project has no data sources yet.",
             "manage": "Manage credentials"
         },
         "settings": {
@@ -246,6 +286,88 @@
             "currentPassword": "Current password",
             "changePassword": "Change password",
             "passwordChanged": "Password changed. Your other devices are signed out."
+        },
+        "alerts": {
+            "title": "Alerts",
+            "hint": "Get told when traffic between your services fails, slows down or goes quiet.",
+            "active": "Active alerts",
+            "rules": "Rules",
+            "history": "History",
+            "historyEmpty": "No resolved alerts yet.",
+            "showMore": "Show more",
+            "newRule": "New alert rule",
+            "newTitle": "New alert rule",
+            "editTitle": "Edit alert rule",
+            "empty": "No alert rules yet",
+            "emptyHint": "Open a landscape, click an arrow or a box and choose “Alert me when…”, or create a rule here.",
+            "edit": "Edit",
+            "delete": "Delete",
+            "deleteHint": "The rule and its alert history are removed.",
+            "deleteConfirm": "Delete “{{name}}”",
+            "enabled": "Enabled",
+            "back": "Back",
+            "notFound": "This alert rule no longer exists.",
+            "notAllowed": "You don’t have access to this alert rule.",
+            "kind": {
+                "failing": "Failing",
+                "slow": "Slow",
+                "silent": "Silent"
+            },
+            "state": {
+                "ok": "OK",
+                "firing": "Firing",
+                "waiting": "Waiting for first call",
+                "off": "Off"
+            },
+            "since": "since {{date}}",
+            "fromTo": "{{start}} to {{end}}",
+            "valueFailing": "{{value}}% failed",
+            "valueSlow": "p95 {{value}} ms",
+            "valueSilent": "silent for {{value}} min",
+            "notDelivered": "{{channel}}: not delivered ({{reason}})",
+            "deletedChannel": "A deleted channel",
+            "unknownReason": "unknown",
+            "form": {
+                "name": "Name",
+                "kind": "Alert when calls are",
+                "kindHint": {
+                    "failing": "the share of failed calls reaches the threshold.",
+                    "slow": "the p95 duration reaches the threshold.",
+                    "silent": "no call arrives for the whole window."
+                },
+                "target": "Watch",
+                "targetType": {
+                    "arrow": "An arrow (calls from one place to another)",
+                    "box": "A box (all calls into it)"
+                },
+                "from": "From",
+                "to": "To",
+                "identity": "Box",
+                "targetHint": "Use service:name, host:name or db:name. A leading *. matches any prefix.",
+                "threshold": {
+                    "failing": "Failed calls (%)",
+                    "slow": "p95 duration (ms)"
+                },
+                "window": "Over the last (minutes)",
+                "windowSilent": "Silent for (minutes)",
+                "windowRange": "Between {{min}} and {{max}} minutes.",
+                "minCalls": "Minimum calls",
+                "minCallsHint": "Ignore windows with fewer calls than this.",
+                "channels": "Send to",
+                "noChannels": "This project has no alert channels yet.",
+                "addChannel": "Add one under Credentials.",
+                "enabled": "Enabled",
+                "create": "Create rule",
+                "save": "Save rule"
+            },
+            "errors": {
+                "name": "Enter a name of up to 100 characters.",
+                "target": "Enter service:, host: or db: followed by a name for each side of the target.",
+                "threshold": "The threshold must be between {{min}} and {{max}}.",
+                "window": "The window must be a whole number between {{min}} and {{max}} minutes.",
+                "minCalls": "Minimum calls must be a whole number between {{min}} and {{max}}.",
+                "channels": "Pick at most {{max}} channels."
+            }
         }
     }
 }

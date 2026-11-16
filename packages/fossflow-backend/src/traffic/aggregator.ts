@@ -1,0 +1,485 @@
+import {
+  type BeforeApplicationShutdown,
+  Inject,
+  Injectable,
+  Logger,
+  type OnApplicationBootstrap
+} from '@nestjs/common';
+import { eq, sql } from 'drizzle-orm';
+import { DB, type Database } from '../database/database.module.js';
+import { ingestKey, ingestService, trafficAlias, trafficFailure, trafficMinute } from '../database/schema.js';
+import type { IngestKeyRef } from '../ingest/ingest-keys.service.js';
+import type { TrafficBatch, TrafficEvent } from '../ingest/spans.js';
+import { describeError, sqlstateOf } from './errors.js';
+import { bucketOf, emptyHistogram } from './histogram.js';
+
+const logger = new Logger('Traffic');
+
+export const FLUSH_MS = 5000;
+const MINUTE_MS = 60_000;
+const DAY_MS = 86_400_000;
+const CHUNK = 1000;
+const MAX_FAILURES_PER_ARROW = 100;
+const MAX_OPERATIONS_PER_PAIR = 200;
+const MAX_PAIRS_PER_KEY = 1000;
+const MAX_PAIRS_PER_PROJECT = 2000;
+export const MAX_MINUTE_BUCKETS_PER_FLUSH = 20_000;
+export const MAX_MINUTE_BUCKETS_PER_PROJECT = 40_000;
+const MAX_SERVICES_PER_KEY = 100;
+const MAX_ALIASES_PER_KEY = 500;
+const MAX_ALIASES_PER_PROJECT = 1000;
+const THROTTLE_MS = MINUTE_MS;
+const OVERFLOW_OPERATION = 'other';
+const SEP = '\u0000';
+/** SQLSTATE classes of rejected row values: data exception, constraint violation, program limit exceeded. */
+const ROW_ERROR_CLASS = /^(22|23|54)/;
+
+type Minute = {
+  kind: TrafficEvent['kind'];
+  caller: string;
+  callee: string;
+  operation: string;
+  minute: number;
+  calls: number;
+  failures: number;
+  durationSumMs: number;
+  histogram: number[];
+};
+
+type Failure = {
+  kind: TrafficEvent['kind'];
+  caller: string;
+  callee: string;
+  operation: string;
+  at: number;
+  durationMs: number;
+  status: string;
+};
+
+type ProjectBuffer = {
+  minutes: Map<string, Minute>;
+  /** New minute buckets opened per ingest key in this flush window. */
+  bucketsByKey: Map<string, number>;
+  /** Events dropped per ingest key because its bucket budget was used up. */
+  droppedByKey: Map<string, number>;
+  /** Events dropped because the project's bucket ceiling was used up. */
+  droppedByProject: number;
+  failures: Failure[];
+  /** Failures buffered per arrow in this flush window. */
+  failureCounts: Map<string, number>;
+  aliases: Map<string, { host: string; service: string }>;
+  /** Services seen per ingest key. */
+  services: Map<string, Set<string>>;
+};
+
+const newBuffer = (): ProjectBuffer => ({
+  minutes: new Map(),
+  bucketsByKey: new Map(),
+  droppedByKey: new Map(),
+  droppedByProject: 0,
+  failures: [],
+  failureCounts: new Map(),
+  aliases: new Map(),
+  services: new Map()
+});
+
+const chunks = <T>(rows: T[]): T[][] => {
+  const parts: T[][] = [];
+  for (let i = 0; i < rows.length; i += CHUNK) parts.push(rows.slice(i, i + CHUNK));
+  return parts;
+};
+
+/**
+ * Counts calls per arrow and minute in memory and writes them to Postgres
+ * every few seconds. Memory stays bounded by capping distinct operations and
+ * service pairs, so a misbehaving sender cannot grow the tables without limit.
+ */
+@Injectable()
+export class TrafficAggregator implements OnApplicationBootstrap, BeforeApplicationShutdown {
+  private buffers = new Map<string, ProjectBuffer>();
+  private timer: NodeJS.Timeout | undefined;
+  private queue: Promise<void> = Promise.resolve();
+
+  /** Distinct operations seen per (project, caller, callee) since the last reset. */
+  private operations = new Map<string, Set<string>>();
+  private pairs = new Map<string, Set<string>>();
+  private projectPairs = new Map<string, Set<string>>();
+  private projectAliases = new Map<string, Set<string>>();
+  private warnedCaps = new Set<string>();
+  /** Distinct service names seen per ingest key, and alias rows per project, since the last reset. */
+  private serviceNames = new Map<string, Set<string>>();
+  private aliasNames = new Map<string, Set<string>>();
+  private capsResetAt = 0;
+
+  /** When each service, alias and key was last written successfully; pruned on every flush. */
+  private lastWrite = new Map<string, number>();
+
+  constructor(@Inject(DB) private readonly db: Database) {}
+
+  onApplicationBootstrap(): void {
+    this.timer = setInterval(() => void this.flush(), FLUSH_MS);
+    this.timer.unref();
+  }
+
+  /** How many throttle entries are held in memory (for tests). */
+  get throttleSize(): number {
+    return this.lastWrite.size;
+  }
+
+  async beforeApplicationShutdown(): Promise<void> {
+    if (this.timer) clearInterval(this.timer);
+    this.timer = undefined;
+    await this.flush();
+  }
+
+  add(key: IngestKeyRef, batch: TrafficBatch, now: number = Date.now()): void {
+    this.resetCaps(now);
+    const buffer = this.bufferFor(key.projectId);
+
+    for (const event of batch.events) {
+      const operation = this.admit(key, event);
+      if (operation === null) continue;
+      this.count(buffer, key.id, event, operation);
+    }
+    this.queueIdentity(key, buffer, batch, now);
+  }
+
+  /** Writes everything added so far. Flushes run one after another, never overlapping. */
+  flush(now: number = Date.now()): Promise<void> {
+    // The catch is the last resort: a rejected queue would fail every later flush.
+    this.queue = this.queue.then(() => this.write(now)).catch((error: unknown) => {
+      logger.warn(`Traffic flush failed (${describeError(error)})`);
+    });
+    return this.queue;
+  }
+
+  private bufferFor(projectId: string): ProjectBuffer {
+    let buffer = this.buffers.get(projectId);
+    if (!buffer) {
+      buffer = newBuffer();
+      this.buffers.set(projectId, buffer);
+    }
+    return buffer;
+  }
+
+  private resetCaps(now: number): void {
+    if (now < this.capsResetAt) return;
+    this.operations.clear();
+    this.pairs.clear();
+    this.projectPairs.clear();
+    this.projectAliases.clear();
+    this.warnedCaps.clear();
+    this.serviceNames.clear();
+    this.aliasNames.clear();
+    this.capsResetAt = now + DAY_MS;
+  }
+
+  /** The operation name to count under, or null when the pair is over the cap. */
+  private admit({ id: keyId, projectId }: IngestKeyRef, event: TrafficEvent): string | null {
+    const pair = `${event.caller}${SEP}${event.callee}`;
+    const admitted = this.admitShared(
+      pair,
+      { sets: this.pairs, id: keyId, max: MAX_PAIRS_PER_KEY },
+      { sets: this.projectPairs, id: projectId, max: MAX_PAIRS_PER_PROJECT },
+      'service pairs',
+      projectId
+    );
+    if (!admitted) return null;
+
+    const operationsKey = `${projectId}${SEP}${pair}`;
+    let seen = this.operations.get(operationsKey);
+    if (!seen) {
+      seen = new Set();
+      this.operations.set(operationsKey, seen);
+    }
+    if (seen.has(event.operation)) return event.operation;
+    if (seen.size >= MAX_OPERATIONS_PER_PAIR) return OVERFLOW_OPERATION;
+    seen.add(event.operation);
+    return event.operation;
+  }
+
+  private count(buffer: ProjectBuffer, keyId: string, event: TrafficEvent, operation: string): void {
+    const minute = Math.floor(event.at / MINUTE_MS) * MINUTE_MS;
+    const id = [event.kind, event.caller, event.callee, operation, minute].join(SEP);
+    let row = buffer.minutes.get(id);
+    if (!row) {
+      const opened = buffer.bucketsByKey.get(keyId) ?? 0;
+      if (opened >= MAX_MINUTE_BUCKETS_PER_FLUSH) {
+        buffer.droppedByKey.set(keyId, (buffer.droppedByKey.get(keyId) ?? 0) + 1);
+        return;
+      }
+      if (buffer.minutes.size >= MAX_MINUTE_BUCKETS_PER_PROJECT) {
+        buffer.droppedByProject += 1;
+        return;
+      }
+      buffer.bucketsByKey.set(keyId, opened + 1);
+      row = {
+        kind: event.kind,
+        caller: event.caller,
+        callee: event.callee,
+        operation,
+        minute,
+        calls: 0,
+        failures: 0,
+        durationSumMs: 0,
+        histogram: emptyHistogram()
+      };
+      buffer.minutes.set(id, row);
+    }
+    row.calls += 1;
+    row.durationSumMs += event.durationMs;
+    const bucket = bucketOf(event.durationMs);
+    row.histogram[bucket] = (row.histogram[bucket] ?? 0) + 1;
+    if (!event.failed) return;
+    row.failures += 1;
+
+    const arrow = `${event.caller}${SEP}${event.callee}`;
+    const buffered = buffer.failureCounts.get(arrow) ?? 0;
+    if (buffered >= MAX_FAILURES_PER_ARROW) return;
+    buffer.failureCounts.set(arrow, buffered + 1);
+    buffer.failures.push({
+      kind: event.kind,
+      caller: event.caller,
+      callee: event.callee,
+      operation,
+      at: event.at,
+      durationMs: event.durationMs,
+      status: event.status ?? ''
+    });
+  }
+
+  private warnOnce(id: string, message: string): void {
+    if (this.warnedCaps.has(id)) return;
+    this.warnedCaps.add(id);
+    logger.warn(message);
+  }
+
+  /** True when the row was not written in the last minute. */
+  private due(id: string, now: number): boolean {
+    const last = this.lastWrite.get(id);
+    return last === undefined || now - last >= THROTTLE_MS;
+  }
+
+  /**
+   * Admits a new item only if both its key's share and its project's ceiling have room, and counts it
+   * against both. Items the project already holds pass without counting again.
+   */
+  private admitShared(
+    item: string,
+    key: { sets: Map<string, Set<string>>; id: string; max: number },
+    project: { sets: Map<string, Set<string>>; id: string; max: number },
+    what: string,
+    projectId: string
+  ): boolean {
+    const keySet = key.sets.get(key.id) ?? new Set<string>();
+    key.sets.set(key.id, keySet);
+    const projectSet = project.sets.get(project.id) ?? new Set<string>();
+    project.sets.set(project.id, projectSet);
+    if (keySet.has(item) || projectSet.has(item)) return true;
+    if (keySet.size >= key.max) {
+      this.warnOnce(`${what}${SEP}${key.id}`, `Ingest key ${key.id} (project ${projectId}) is over ${key.max} ${what}; ignoring new ones`);
+      return false;
+    }
+    if (projectSet.size >= project.max) {
+      this.warnOnce(`${what}${SEP}project${SEP}${project.id}`, `Project ${project.id} is over ${project.max} ${what}; ignoring new ones`);
+      return false;
+    }
+    keySet.add(item);
+    projectSet.add(item);
+    return true;
+  }
+
+  /** Whether a name fits under its cap; names beyond it are ignored. */
+  private admitName(sets: Map<string, Set<string>>, scope: string, name: string, max: number): boolean {
+    let seen = sets.get(scope);
+    if (!seen) {
+      seen = new Set();
+      sets.set(scope, seen);
+    }
+    if (seen.has(name)) return true;
+    if (seen.size >= max) return false;
+    seen.add(name);
+    return true;
+  }
+
+  /**
+   * Queues services, aliases and the key's last use, each at most once a minute.
+   * The throttle is only recorded once the write succeeds, so a failed write is retried.
+   */
+  private queueIdentity(key: IngestKeyRef, buffer: ProjectBuffer, batch: TrafficBatch, now: number): void {
+    for (const service of batch.services) {
+      if (!this.admitName(this.serviceNames, key.id, service, MAX_SERVICES_PER_KEY)) {
+        this.warnOnce(`services${SEP}${key.id}`, `Ingest key ${key.id} is over ${MAX_SERVICES_PER_KEY} services; ignoring new ones`);
+        continue;
+      }
+      if (!this.due(`service${SEP}${key.id}${SEP}${service}`, now)) continue;
+      const names = buffer.services.get(key.id) ?? new Set<string>();
+      names.add(service);
+      buffer.services.set(key.id, names);
+    }
+    for (const alias of batch.aliases) {
+      const id = `${alias.host}${SEP}${alias.service}`;
+      const admitted = this.admitShared(
+        id,
+        { sets: this.aliasNames, id: key.id, max: MAX_ALIASES_PER_KEY },
+        { sets: this.projectAliases, id: key.projectId, max: MAX_ALIASES_PER_PROJECT },
+        'aliases',
+        key.projectId
+      );
+      if (!admitted) continue;
+      if (this.due(`alias${SEP}${key.projectId}${SEP}${id}`, now)) buffer.aliases.set(id, alias);
+    }
+    // An empty entry still marks the key as used.
+    if (this.due(`key${SEP}${key.id}`, now) && !buffer.services.has(key.id)) buffer.services.set(key.id, new Set());
+  }
+
+  private async write(now: number): Promise<void> {
+    for (const [id, last] of this.lastWrite) if (now - last > THROTTLE_MS) this.lastWrite.delete(id);
+    const buffers = this.buffers;
+    this.buffers = new Map();
+    for (const [projectId, buffer] of buffers) {
+      for (const [keyId, dropped] of buffer.droppedByKey) {
+        this.warnOnce(
+          `minutes${SEP}${keyId}`,
+          `Ingest key ${keyId} (project ${projectId}) filled ${MAX_MINUTE_BUCKETS_PER_FLUSH} minute buckets in one flush; dropped ${dropped} calls so far`
+        );
+      }
+      if (buffer.droppedByProject > 0) {
+        this.warnOnce(
+          `minutes${SEP}project${SEP}${projectId}`,
+          `Project ${projectId} filled ${MAX_MINUTE_BUCKETS_PER_PROJECT} minute buckets in one flush; dropped ${buffer.droppedByProject} calls so far`
+        );
+      }
+      await this.guard(projectId, 'traffic_minute', () => this.writeMinutes(projectId, buffer));
+      await this.guard(projectId, 'traffic_failure', () => this.writeFailures(projectId, buffer));
+      await this.guard(projectId, 'traffic_alias', () => this.writeAliases(projectId, buffer, now));
+      await this.writeKeys(projectId, buffer, now);
+    }
+  }
+
+  /** Runs one write; a failure is logged (never with span content) and that part dropped. */
+  private async guard(projectId: string, table: string, run: () => Promise<void>): Promise<void> {
+    try {
+      await run();
+    } catch (error) {
+      logger.warn(`Could not write ${table} for project ${projectId} (${describeError(error)})`);
+    }
+  }
+
+  /**
+   * Inserts rows in chunks. When a chunk is rejected because of a row's values, the chunk is retried
+   * row by row so one bad row costs only itself. Rows that still fail are dropped and counted in one
+   * warning per project and table. Any other failure (connection, say) propagates to `guard`.
+   */
+  private async insertResilient<T>(
+    projectId: string,
+    table: string,
+    rows: T[],
+    insert: (part: T[]) => Promise<void>,
+    written?: (row: T) => void
+  ): Promise<void> {
+    let dropped = 0;
+    let reason = '';
+    for (const part of chunks(rows)) {
+      try {
+        await insert(part);
+        if (written) part.forEach(written);
+        continue;
+      } catch (error) {
+        const code = sqlstateOf(error);
+        if (code === null || !ROW_ERROR_CLASS.test(code)) throw error;
+      }
+      for (const row of part) {
+        try {
+          await insert([row]);
+          written?.(row);
+        } catch (error) {
+          const code = sqlstateOf(error);
+          if (code === null || !ROW_ERROR_CLASS.test(code)) throw error;
+          dropped += 1;
+          reason = describeError(error);
+        }
+      }
+    }
+    if (dropped > 0) logger.warn(`Dropped ${dropped} ${table} rows for project ${projectId} (${reason})`);
+  }
+
+  private async writeMinutes(projectId: string, buffer: ProjectBuffer): Promise<void> {
+    const rows = [...buffer.minutes.values()].map((row) => ({
+      ...row,
+      projectId,
+      minute: new Date(row.minute)
+    }));
+    await this.insertResilient(projectId, 'traffic_minute', rows, async (part) => {
+      await this.db
+        .insert(trafficMinute)
+        .values(part)
+        .onConflictDoUpdate({
+          target: [
+            trafficMinute.projectId,
+            trafficMinute.kind,
+            trafficMinute.caller,
+            trafficMinute.callee,
+            trafficMinute.operation,
+            trafficMinute.minute
+          ],
+          set: {
+            calls: sql`${trafficMinute.calls} + excluded.calls`,
+            failures: sql`${trafficMinute.failures} + excluded.failures`,
+            durationSumMs: sql`${trafficMinute.durationSumMs} + excluded.duration_sum_ms`,
+            histogram: sql`int_array_add(${trafficMinute.histogram}, excluded.histogram)`
+          }
+        });
+    });
+  }
+
+  private async writeFailures(projectId: string, buffer: ProjectBuffer): Promise<void> {
+    const rows = buffer.failures.map((row) => ({ ...row, projectId, at: new Date(row.at) }));
+    await this.insertResilient(projectId, 'traffic_failure', rows, async (part) => {
+      await this.db.insert(trafficFailure).values(part);
+    });
+  }
+
+  private async writeAliases(projectId: string, buffer: ProjectBuffer, now: number): Promise<void> {
+    const rows = [...buffer.aliases.values()].map((alias) => ({ ...alias, projectId, lastSeenAt: new Date(now) }));
+    await this.insertResilient(
+      projectId,
+      'traffic_alias',
+      rows,
+      async (part) => {
+        await this.db
+          .insert(trafficAlias)
+          .values(part)
+          .onConflictDoUpdate({
+            target: [trafficAlias.projectId, trafficAlias.host, trafficAlias.service],
+            set: { lastSeenAt: new Date(now) }
+          });
+      },
+      (row) => this.lastWrite.set(`alias${SEP}${projectId}${SEP}${row.host}${SEP}${row.service}`, now)
+    );
+  }
+
+  /** Each key is written on its own, so one failing key doesn't drop the others. */
+  private async writeKeys(projectId: string, buffer: ProjectBuffer, now: number): Promise<void> {
+    for (const [keyId, names] of buffer.services) {
+      await this.guard(projectId, 'ingest_service', async () => {
+        const lastSeenAt = new Date(now);
+        const rows = [...names].map((serviceName) => ({ keyId, serviceName, lastSeenAt }));
+        await this.insertResilient(
+          projectId,
+          'ingest_service',
+          rows,
+          async (part) => {
+            await this.db
+              .insert(ingestService)
+              .values(part)
+              .onConflictDoUpdate({ target: [ingestService.keyId, ingestService.serviceName], set: { lastSeenAt } });
+          },
+          (row) => this.lastWrite.set(`service${SEP}${keyId}${SEP}${row.serviceName}`, now)
+        );
+        await this.db.update(ingestKey).set({ lastUsedAt: lastSeenAt }).where(eq(ingestKey.id, keyId));
+        this.lastWrite.set(`key${SEP}${keyId}`, now);
+      });
+    }
+  }
+}

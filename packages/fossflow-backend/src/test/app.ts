@@ -3,8 +3,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import type { StartedPostgreSqlContainer } from '@testcontainers/postgresql';
+import { Test } from '@nestjs/testing';
 import request from 'supertest';
-import { createApp } from '../app.js';
+import { configureApp } from '../app.js';
+import { AppModule } from '../app.module.js';
 import { type AppConfig, loadConfig } from '../config/config.js';
 import { startPostgres } from './postgres.js';
 
@@ -28,7 +30,16 @@ export interface Browser {
   delete: (url: string) => request.Test;
 }
 
-export async function startTestApp(env: NodeJS.ProcessEnv = {}): Promise<TestApp> {
+/** A provider a test swaps for a stand-in. */
+export interface ProviderOverride {
+  provide: string | symbol;
+  useValue: unknown;
+}
+
+export async function startTestApp(
+  env: NodeJS.ProcessEnv = {},
+  overrides: readonly ProviderOverride[] = []
+): Promise<TestApp> {
   const postgres = await startPostgres();
   const config = loadConfig({
     DATABASE_URL: postgres.getConnectionUri(),
@@ -36,7 +47,14 @@ export async function startTestApp(env: NodeJS.ProcessEnv = {}): Promise<TestApp
     FOSSFLOW_DATA_DIR: mkdtempSync(join(tmpdir(), 'fossflow-data-')),
     ...env
   });
-  const app = await createApp(config);
+  let builder = Test.createTestingModule({ imports: [AppModule.forRoot(config)] });
+  for (const { provide, useValue } of overrides) builder = builder.overrideProvider(provide).useValue(useValue);
+  const moduleRef = await builder.compile();
+  const app = moduleRef.createNestApplication<NestExpressApplication>({
+    bodyParser: false,
+    logger: false
+  });
+  configureApp(app);
   await app.init();
 
   let clients = 0;

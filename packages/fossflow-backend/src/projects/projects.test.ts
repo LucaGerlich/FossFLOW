@@ -103,7 +103,7 @@ describe('projects and project roles', () => {
     const vicView = (await vic.browser.get(`/api/projects/${projectId}`)).body;
     assert.deepEqual(
       [...vicView.scopes].sort(),
-      ['credential:read', 'landscape:read', 'project:read']
+      ['credential:read', 'ingestKey:read', 'landscape:read', 'project:read']
     );
   });
 

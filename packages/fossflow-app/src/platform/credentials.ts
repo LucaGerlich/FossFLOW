@@ -13,8 +13,12 @@ export interface ConnectorField {
   help?: string;
 }
 
+/** `source` feeds live data into landscapes; `channel` delivers alerts. */
+export type CredentialKind = 'source' | 'channel';
+
 export interface ConnectorInfo {
   id: string;
+  kind: CredentialKind;
   name: string;
   description: string;
   fields: ConnectorField[];
@@ -24,6 +28,7 @@ export interface CredentialSummary {
   id: string;
   name: string;
   type: string;
+  kind: CredentialKind;
   updatedAt: string;
   usedBy: number;
 }
