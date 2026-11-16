@@ -66,6 +66,7 @@ function harness(options: {
 }) {
   const requests: FakeRequest[] = [];
   const connected: string[] = [];
+  const responses = { destroyed: 0 };
   const deps: OutboundDeps = {
     lookup: ((hostname: string, _options: unknown, callback: (e: null, a: LookupAddress[]) => void) => {
       callback(null, options.addresses ?? [{ address: '8.8.8.8', family: 4 }]);
@@ -86,7 +87,10 @@ function harness(options: {
               Object.assign(new EventEmitter(), {
                 statusCode: options.reply.statusCode,
                 headers: options.reply.headers,
-                resume: () => {}
+                resume: () => {},
+                destroy() {
+                  responses.destroyed += 1;
+                }
               })
             );
           }
@@ -95,7 +99,7 @@ function harness(options: {
       return req;
     }) as unknown as OutboundDeps['request']
   };
-  return { deps, requests, connected };
+  return { deps, requests, connected, responses };
 }
 
 const url = new URL('https://hooks.example.com/x?secret=1');
@@ -142,6 +146,37 @@ describe('postJson', () => {
     const result = await postJson(url, {}, { allowPrivate: true }, deps);
     assert.equal(result.ok, true);
     assert.equal(connected.length, 1);
+  });
+
+  it('closes the response once the status is read', async () => {
+    const { deps, responses, requests } = harness({ reply: { statusCode: 200, headers: {} } });
+    await postJson(url, {}, { allowPrivate: false }, deps);
+    assert.equal(responses.destroyed, 1);
+    assert.equal(requests[0]?.destroyed, true);
+  });
+
+  it('refuses link-local addresses even when private ones are allowed', async () => {
+    for (const literal of [
+      'https://169.254.169.254/',
+      'https://[fe80::1]/',
+      'https://[::ffff:169.254.169.254]/',
+      'https://[::ffff:a9fe:a9fe]/'
+    ]) {
+      const { deps, requests } = harness({ reply: { statusCode: 200, headers: {} } });
+      const result = await postJson(new URL(literal), {}, { allowPrivate: true }, deps);
+      assert.equal(result.error, 'refused', literal);
+      assert.equal(requests.length, 0, literal);
+    }
+    for (const address of [
+      { address: '169.254.169.254', family: 4 },
+      { address: 'fe80::1', family: 6 },
+      { address: '::ffff:169.254.169.254', family: 6 }
+    ]) {
+      const { deps, connected } = harness({ addresses: [address], reply: { statusCode: 200, headers: {} } });
+      const result = await postJson(url, {}, { allowPrivate: true }, deps);
+      assert.equal(result.error, 'refused', address.address);
+      assert.equal(connected.length, 0, address.address);
+    }
   });
 
   it('does not follow redirects', async () => {

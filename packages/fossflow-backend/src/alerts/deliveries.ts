@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { eq, sql } from 'drizzle-orm';
 import { ZodError } from 'zod';
 import { type AlertMessage } from '../connectors/channels/message.js';
@@ -69,7 +69,7 @@ export class DeliveriesService implements Deliveries {
     const message = await this.buildMessage(row.event, row.rule, row.projectName, state);
     const at = new Date().toISOString();
     const records = await Promise.all(
-      row.rule.channelIds.map((channelId) => this.deliver(channelId, message, state, at))
+      row.rule.channelIds.map((channelId) => this.deliver(channelId, row.rule.projectId, message, state, at))
     );
     await this.append(row.event.id, records);
   }
@@ -114,6 +114,7 @@ export class DeliveriesService implements Deliveries {
 
   private async deliver(
     channelId: string,
+    projectId: string,
     message: AlertMessage,
     state: State,
     at: string
@@ -121,12 +122,20 @@ export class DeliveriesService implements Deliveries {
     const base = { at, state, channelId };
     let loaded: { connector: ChannelConnector; settings: unknown; name: string };
     try {
-      const { connector, settings, name } = await this.credentials.settingsFor(channelId);
+      const { connector, settings, name, projectId: owner } = await this.credentials.settingsFor(channelId);
+      // A channel of another project is as good as missing, and its name is not ours to show.
+      if (owner !== projectId) {
+        return { ...base, channelName: null, ok: false, status: null, error: 'missing', attempts: 0 };
+      }
       if (connector.kind !== 'channel') {
         return { ...base, channelName: name, ok: false, status: null, error: 'missing', attempts: 0 };
       }
       loaded = { connector, settings, name };
-    } catch {
+    } catch (error) {
+      // A deleted channel is expected; anything else (a database outage) should leave a trace.
+      if (!(error instanceof NotFoundException)) {
+        logger.warn(`Looking up a channel failed (${describeError(error)})`);
+      }
       return { ...base, channelName: null, ok: false, status: null, error: 'missing', attempts: 0 };
     }
     const outcome = await this.sendWithRetries(loaded.connector, loaded.settings, message);

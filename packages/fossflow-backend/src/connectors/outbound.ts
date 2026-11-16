@@ -40,6 +40,11 @@ privateRanges.addSubnet('fc00::', 7, 'ipv6');
 privateRanges.addSubnet('fe80::', 10, 'ipv6');
 privateRanges.addSubnet('ff00::', 8, 'ipv6');
 
+/** Never reachable, not even by a destination that may be private: cloud metadata lives here. */
+const linkLocalRanges = new net.BlockList();
+linkLocalRanges.addSubnet('169.254.0.0', 16, 'ipv4');
+linkLocalRanges.addSubnet('fe80::', 10, 'ipv6');
+
 /** The IPv4 part of an IPv4-mapped IPv6 address, in dotted or hex form. */
 function mappedIpv4(address: string): string | null {
   const dotted = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i.exec(address);
@@ -58,6 +63,15 @@ export function isPublicAddress(address: string, family: 4 | 6): boolean {
     if (mapped) return isPublicAddress(mapped, 4);
   }
   return !privateRanges.check(address, family === 4 ? 'ipv4' : 'ipv6');
+}
+
+/** Whether an address (or its IPv4-mapped form) is link-local. */
+export function isLinkLocalAddress(address: string, family: 4 | 6): boolean {
+  if (family === 6) {
+    const mapped = mappedIpv4(address);
+    if (mapped) return isLinkLocalAddress(mapped, 4);
+  }
+  return linkLocalRanges.check(address, family === 4 ? 'ipv4' : 'ipv6');
 }
 
 function parseRetryAfter(value: string | string[] | undefined): number | null {
@@ -88,12 +102,11 @@ export function postJson(
   // IP-literal hosts skip the DNS lookup hook, so they are checked up front.
   const literal = url.hostname.replace(/^\[|\]$/g, '');
   const literalFamily = net.isIP(literal);
-  if (
-    !options.allowPrivate &&
-    literalFamily !== 0 &&
-    !isPublicAddress(literal, literalFamily === 6 ? 6 : 4)
-  ) {
-    return Promise.resolve(fail('refused'));
+  if (literalFamily !== 0) {
+    const family = literalFamily === 6 ? 6 : 4;
+    if (isLinkLocalAddress(literal, family) || (!options.allowPrivate && !isPublicAddress(literal, family))) {
+      return Promise.resolve(fail('refused'));
+    }
   }
 
   return new Promise((resolve) => {
@@ -113,9 +126,10 @@ export function postJson(
     ) => {
       deps.lookup(hostname, { ...lookupOptions, all: true }, (error, addresses) => {
         if (error) return callback(error, []);
-        const blocked =
-          !options.allowPrivate &&
-          addresses.some((entry) => !isPublicAddress(entry.address, entry.family === 6 ? 6 : 4));
+        const blocked = addresses.some((entry) => {
+          const family = entry.family === 6 ? 6 : 4;
+          return isLinkLocalAddress(entry.address, family) || (!options.allowPrivate && !isPublicAddress(entry.address, family));
+        });
         if (blocked) {
           return callback(Object.assign(new Error('Address not allowed'), { code: REFUSED }), []);
         }
@@ -138,7 +152,6 @@ export function postJson(
         lookup: lookup as net.LookupFunction
       },
       (res: IncomingMessage) => {
-        res.resume();
         const status = res.statusCode ?? 0;
         finish({
           ok: status >= 200 && status < 300,
@@ -146,6 +159,10 @@ export function postJson(
           retryAfterSeconds: parseRetryAfter(res.headers['retry-after']),
           error: null
         });
+        // The body is never read, so a receiver that streams on must not hold the socket open.
+        res.on('error', () => {});
+        res.destroy();
+        req.destroy();
       }
     );
     const timer = setTimeout(() => {

@@ -190,6 +190,21 @@ describe('alert deliveries against real Postgres', () => {
     assert.equal(stored.find((entry) => entry.channelId === hookId)?.ok, true);
   });
 
+  it('records a channel of another project as missing and sends nothing to it', async () => {
+    const elsewhere = (await owner.post('/api/projects', { name: 'Elsewhere' })).body.id as string;
+    const [row] = await db.select().from(credential).where(eq(credential.id, slackId));
+    assert.ok(row);
+    await db.insert(credential).values({ ...row, id: 'foreign-slack', projectId: elsewhere });
+    const id = await makeEvent(['foreign-slack', hookId]);
+    await deliveries.notify(id, 'firing');
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0]?.url, HOOK_URL);
+    const stored = await recorded(id);
+    assert.equal(stored.find((entry) => entry.channelId === 'foreign-slack')?.error, 'missing');
+    assert.equal(stored.find((entry) => entry.channelId === hookId)?.ok, true);
+    await db.delete(credential).where(eq(credential.id, 'foreign-slack'));
+  });
+
   it('records a stored credential that is not a channel as missing', async () => {
     const [row] = await db.select().from(credential).where(eq(credential.id, hookId));
     assert.ok(row);
