@@ -151,8 +151,12 @@ export function useTrafficStream(
  * The map's traffic feed, or `undefined` until the first summary arrives.
  * The stream only opens once the summary shows any traffic. `subscribe` and
  * `loadEdge` keep their identity per landscape; only `feed` changes with the summary.
+ * Pass an identity-stable `requestAlert` (or none, when people can't create rules).
  */
-export function useTrafficFeed(landscapeId: string): {
+export function useTrafficFeed(
+  landscapeId: string,
+  requestAlert?: TrafficFeed['requestAlert']
+): {
   feed: TrafficFeed | undefined;
   status: TrafficStatus;
 } {
@@ -166,8 +170,8 @@ export function useTrafficFeed(landscapeId: string): {
   );
 
   const feed = useMemo<TrafficFeed | undefined>(
-    () => (summary ? { summary, subscribe, loadEdge } : undefined),
-    [summary, subscribe, loadEdge]
+    () => (summary ? { summary, subscribe, loadEdge, requestAlert } : undefined),
+    [summary, subscribe, loadEdge, requestAlert]
   );
 
   return { feed, status };

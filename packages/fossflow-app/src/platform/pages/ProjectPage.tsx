@@ -4,6 +4,7 @@ import { can, useProject } from '../projects';
 import { ProjectCredentials } from '../components/ProjectCredentials';
 import { ProjectLandscapes } from '../components/ProjectLandscapes';
 import { ProjectMonitoring } from '../components/ProjectMonitoring';
+import { AlertRulePage } from './AlertRulePage';
 import { ProjectSettings } from './ProjectSettings';
 
 const tabClass = ({ isActive }: { isActive: boolean }) => (isActive ? 'tab tab--active' : 'tab');
@@ -69,6 +70,12 @@ export function ProjectPage() {
         )}
         {showMonitoring && (
           <Route path="monitoring" element={<ProjectMonitoring key={data.id} project={data} />} />
+        )}
+        {showMonitoring && (
+          <>
+            <Route path="monitoring/alerts/new" element={<AlertRulePage project={data} />} />
+            <Route path="monitoring/alerts/:ruleId" element={<AlertRulePage project={data} />} />
+          </>
         )}
         {showSettings && <Route path="settings" element={<ProjectSettings project={data} />} />}
         <Route path="*" element={<Navigate to={base} replace />} />

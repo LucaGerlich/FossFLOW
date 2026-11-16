@@ -286,6 +286,88 @@
             "currentPassword": "Current password",
             "changePassword": "Change password",
             "passwordChanged": "Password changed. Your other devices are signed out."
+        },
+        "alerts": {
+            "title": "Alerts",
+            "hint": "Get told when traffic between your services fails, slows down or goes quiet.",
+            "active": "Active alerts",
+            "rules": "Rules",
+            "history": "History",
+            "historyEmpty": "No resolved alerts yet.",
+            "showMore": "Show more",
+            "newRule": "New alert rule",
+            "newTitle": "New alert rule",
+            "editTitle": "Edit alert rule",
+            "empty": "No alert rules yet",
+            "emptyHint": "Open a landscape, click an arrow or a box and choose “Alert me when…”, or create a rule here.",
+            "edit": "Edit",
+            "delete": "Delete",
+            "deleteHint": "The rule and its alert history are removed.",
+            "deleteConfirm": "Delete “{{name}}”",
+            "enabled": "Enabled",
+            "back": "Back",
+            "notFound": "This alert rule no longer exists.",
+            "notAllowed": "You don’t have access to this alert rule.",
+            "kind": {
+                "failing": "Failing",
+                "slow": "Slow",
+                "silent": "Silent"
+            },
+            "state": {
+                "ok": "OK",
+                "firing": "Firing",
+                "waiting": "Waiting for first call",
+                "off": "Off"
+            },
+            "since": "since {{date}}",
+            "fromTo": "{{start}} to {{end}}",
+            "valueFailing": "{{value}}% failed",
+            "valueSlow": "p95 {{value}} ms",
+            "valueSilent": "silent for {{value}} min",
+            "notDelivered": "{{channel}}: not delivered ({{reason}})",
+            "deletedChannel": "A deleted channel",
+            "unknownReason": "unknown",
+            "form": {
+                "name": "Name",
+                "kind": "Alert when calls are",
+                "kindHint": {
+                    "failing": "the share of failed calls reaches the threshold.",
+                    "slow": "the p95 duration reaches the threshold.",
+                    "silent": "no call arrives for the whole window."
+                },
+                "target": "Watch",
+                "targetType": {
+                    "arrow": "An arrow (calls from one place to another)",
+                    "box": "A box (all calls into it)"
+                },
+                "from": "From",
+                "to": "To",
+                "identity": "Box",
+                "targetHint": "Use service:name, host:name or db:name. A leading *. matches any prefix.",
+                "threshold": {
+                    "failing": "Failed calls (%)",
+                    "slow": "p95 duration (ms)"
+                },
+                "window": "Over the last (minutes)",
+                "windowSilent": "Silent for (minutes)",
+                "windowRange": "Between {{min}} and {{max}} minutes.",
+                "minCalls": "Minimum calls",
+                "minCallsHint": "Ignore windows with fewer calls than this.",
+                "channels": "Send to",
+                "noChannels": "This project has no alert channels yet.",
+                "addChannel": "Add one under Credentials.",
+                "enabled": "Enabled",
+                "create": "Create rule",
+                "save": "Save rule"
+            },
+            "errors": {
+                "name": "Enter a name of up to 100 characters.",
+                "target": "Enter service:, host: or db: followed by a name for each side of the target.",
+                "threshold": "The threshold must be between {{min}} and {{max}}.",
+                "window": "The window must be a whole number between {{min}} and {{max}} minutes.",
+                "minCalls": "Minimum calls must be a whole number between {{min}} and {{max}}.",
+                "channels": "Pick at most {{max}} channels."
+            }
         }
     }
 }

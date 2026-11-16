@@ -4,6 +4,7 @@ import { useIngestKeys } from '../monitoring';
 import { can, type ProjectDetail } from '../projects';
 import { ConnectService } from './ConnectService';
 import { IngestKeyRow } from './IngestKeyRow';
+import { ProjectAlerts } from './ProjectAlerts';
 
 /** A project's Monitoring tab: the services that send it traffic, one key each. */
 export function ProjectMonitoring({ project }: { project: ProjectDetail }) {
@@ -48,6 +49,8 @@ export function ProjectMonitoring({ project }: { project: ProjectDetail }) {
           </div>
         )
       )}
+
+      <ProjectAlerts project={project} />
     </>
   );
 }
