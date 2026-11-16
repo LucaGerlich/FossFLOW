@@ -6,6 +6,81 @@ Newest entries first.
 
 ---
 
+## 2026-11-16 — Live traffic (phase 2a), milestone 4: docs and walkthrough
+
+- **What:**
+  - **Plan:** `docs/superpowers/plans/2026-11-16-live-traffic-m4-docs.md` (the "Docs and walkthrough" milestone of the phase 2a design). This completes phase 2a.
+  - **`docs/TRAFFIC.md`** (new), the guide for teams:
+    - what FossFLOW records and never stores;
+    - a five-minute demo, then connecting Node.js (CommonJS and ES modules), Next.js, Docker, other languages (links only) and an OpenTelemetry Collector;
+    - putting traffic on the map, alerts and channels, and the webhook JSON with units per kind;
+    - retention and limits, and troubleshooting, including for your own TLS proxy.
+  - **A drift test** (`src/ingest/setup-docs.test.ts`) fails when a setup block line is missing from its own section of the guide, or when a webhook body key has no row in the "Webhook JSON" table.
+  - **The demo** (`examples/live-traffic/`, excluded from the image):
+    - a fake members API with `ok`, `failing` and `slow` modes;
+    - a Node.js service and a Next.js 16.4.6 app, set up with exactly the settings the Monitoring tab shows;
+    - Postgres, and an uninstrumented load generator that pauses every 40 calls.
+
+    The user exports the ingest key once and runs `up` and `down` in that shell.
+  - **`docs/PLATFORM.md`:**
+    - a Monitoring section, and ingest key and alert rule rights in the roles table;
+    - credentials are data sources or alert channels;
+    - email alerts need SMTP;
+    - a backup tip for leaving out traffic tables;
+    - the three `TRAFFIC_*_DAYS` variables;
+    - security notes on ingest keys, what is never stored, and alert webhooks.
+  - **Config:** `compose.yml` now passes `TRAFFIC_MINUTES_DAYS`, `TRAFFIC_HOURS_DAYS` and `TRAFFIC_FAILURES_DAYS` to the container; before this, setting them in `.env` had no effect. `.env.example` lists them.
+  - **Docs links:** `README.md` and `docs/LIVE.md` point to the new guide.
+  - **App:** leftovers from milestone 3's walkthrough.
+    - The credentials empty state and the live-data picker now account for alert channels.
+    - Alert kind badges are coloured only while an alert is firing.
+- **Why:** Milestone 4 of phase 2a. A team can connect a service, put its traffic on the map and set up alerts from the docs alone, and the demo lets anyone see live traffic and an alert within minutes.
+- **Security:**
+  - **No secrets:**
+    - The docs use only placeholders (`ffi_REPLACE_ME`, `https://fossflow.example.com`).
+    - The demo's database password `demo` is marked demo-only, and the database is not published.
+    - The demo publishes one port, on `127.0.0.1` only.
+  - **Corrected in the docs** (found by the final review):
+    - `/api/otlp/` skips Basic Auth and the general rate limit.
+    - Requests there without a valid key are not rate limited by FossFLOW, so the guide says to rate-limit that path in your proxy if it is reachable from the internet.
+  - **Reviews:**
+    - Every task was reviewed for spec and quality, and docs were checked fact by fact against the code.
+    - The walkthrough found one gap: no troubleshooting row for the demo's `down` asking for the key. It was fixed and re-reviewed.
+    - The final review served as the security review. It found two wrong facts: old spans are clamped to one hour, not dropped (that came from the plan), and the rate-limit and Basic Auth wording. It also suggested tighter drift checks and small doc fixes. All of these were fixed in one wave and re-reviewed.
+- **Verified:**
+  - **Server:** 407 tests in 41 files pass (2 new), and lint and build are clean. The drift test was shown failing for a line removed from one section and for a removed webhook row.
+  - **Lib:** 372 tests pass, and the build is clean. **App:** builds; `tsc` shows the same 7 existing errors.
+  - **Demo on its own:**
+    - Against a stub receiver, the production Next.js build and the Node.js service exported only to `/api/otlp/v1/traces`, with the key header and protobuf.
+    - The modes behaved as documented: 15 of 20 calls failed in `failing` mode, and a call took 1.96 s in `slow` mode.
+  - **Docker walkthrough, following the docs as a new user would.** It used the real `compose.yml` in a throwaway project on port 8088, with Mailpit and a local HTTPS webhook.
+    - **Setup:** `.env` from `.env.example`, then owner setup in the browser.
+    - **Connecting:** a key created under Monitoring → Connect a service; the demo then started with the guide's commands. The key listed `demo-shop` and `demo-web` within 20 s.
+    - **The map:**
+      - The tray listed exactly the guide's four identities. After **Place**, "Calls without an arrow" listed exactly the guide's four calls, the Next.js → shop call matched through its host alias.
+      - **Draw arrow** saved, and dots ran with the load generator's quiet gaps.
+      - The arrow's numbers showed `GET /members/{id}`. No stored operation contains a number, `@`, `email` or a query string.
+    - **Channels:** the email and webhook test messages arrived, and the webhook body matched the guide's `test` example.
+    - **A failing rule:**
+      - It fired 54 s after the API broke.
+      - Healing it sent `Resolved · Shop → Members API · failing for 10 min` by email and webhook 4 min 46 s later, and the webhook's `value` was the last value while firing.
+      - Breaking it again sent `Failing · Shop → Members API · 20.8% of 72 calls failed in the last 2 min (threshold 5%)` 47 s later.
+    - **Badges and wording:** badges were neutral while OK and coloured while firing, and the new credentials wording showed.
+    - **Viewer:** reads only. Writes get 403, and Monitoring and the editor show no edit controls.
+    - **The demo's `down`:** fails without the key, as the troubleshooting row says, and works with it.
+    - **Local mode:** the static build only asks `/api/platform/status` and shows no traffic tray.
+  - Your dev database and your processes on ports 3000 and 3001 were never touched. The existing `fossflow:local` and Mailpit images were left alone, and everything the walkthrough created was removed.
+- **Not done / later:**
+  - **Not checked live:**
+    - Real Slack and Teams deliveries still have no live check, because no test webhooks were available.
+    - In the walkthrough, the arrow card was checked through its data endpoint and the rule was made in Monitoring. Clicking the arrow and **Alert me when…** were checked in milestones 2 and 3.
+  - **Hardening worth doing:** rate-limit `/api/otlp/` requests that carry no valid key in FossFLOW itself, not only in the proxy.
+  - **Demo:** it has no lockfiles, so a broken upstream release can break its build until the pins move.
+  - **Translations:** the translated READMEs don't mention live traffic.
+  - Milestone 3's behaviour notes and scale notes still apply.
+
+---
+
 ## 2026-11-16 — Live traffic (phase 2a), milestone 3: alerts
 
 - **What:**
