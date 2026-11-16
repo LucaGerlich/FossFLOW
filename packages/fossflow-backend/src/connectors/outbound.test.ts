@@ -160,6 +160,23 @@ describe('postJson', () => {
     assert.equal(requests.length, 0);
   });
 
+  it('refuses private IP-literal URLs without a request', async () => {
+    for (const literal of ['https://10.0.0.5/', 'https://169.254.169.254/', 'https://[::1]/']) {
+      const { deps, requests } = harness({ reply: { statusCode: 200, headers: {} } });
+      const result = await postJson(new URL(literal), {}, { allowPrivate: false }, deps);
+      assert.equal(result.error, 'refused', literal);
+      assert.equal(requests.length, 0, literal);
+    }
+  });
+
+  it('lets public and allowed IP-literal URLs through', async () => {
+    const pub = harness({ reply: { statusCode: 200, headers: {} } });
+    assert.equal((await postJson(new URL('https://8.8.8.8/'), {}, { allowPrivate: false }, pub.deps)).ok, true);
+    const priv = harness({ reply: { statusCode: 200, headers: {} } });
+    assert.equal((await postJson(new URL('https://10.0.0.5/'), {}, { allowPrivate: true }, priv.deps)).ok, true);
+    assert.equal(priv.requests.length, 1);
+  });
+
   it('parses retry-after as seconds', async () => {
     const { deps } = harness({ reply: { statusCode: 429, headers: { 'retry-after': '30' } } });
     const result = await postJson(url, {}, { allowPrivate: false }, deps);

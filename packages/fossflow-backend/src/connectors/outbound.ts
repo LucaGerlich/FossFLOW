@@ -85,6 +85,16 @@ export function postJson(
     error
   });
   if (url.protocol !== 'https:') return Promise.resolve(fail('refused'));
+  // IP-literal hosts skip the DNS lookup hook, so they are checked up front.
+  const literal = url.hostname.replace(/^\[|\]$/g, '');
+  const literalFamily = net.isIP(literal);
+  if (
+    !options.allowPrivate &&
+    literalFamily !== 0 &&
+    !isPublicAddress(literal, literalFamily === 6 ? 6 : 4)
+  ) {
+    return Promise.resolve(fail('refused'));
+  }
 
   return new Promise((resolve) => {
     let settled = false;

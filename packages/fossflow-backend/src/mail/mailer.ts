@@ -36,10 +36,8 @@ export function createMailer(smtp: SmtpConfig | null): Mailer {
     try {
       await transport.sendMail({ from: smtp.from, to, subject, text });
     } catch (error) {
-      // The link is still returned to the admin, so log and carry on.
-      logger.warn(
-        `Could not send "${subject}": ${error instanceof Error ? error.message : String(error)}`
-      );
+      // Names only: messages can carry addresses or server responses.
+      logger.warn(`Could not send mail (${error instanceof Error ? error.name : 'unknown error'})`);
       throw error;
     }
   };
