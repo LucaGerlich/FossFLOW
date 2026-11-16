@@ -87,7 +87,10 @@ export const PROJECT_SCOPES = [
   'credential:use',
   'ingestKey:create',
   'ingestKey:read',
-  'ingestKey:delete'
+  'ingestKey:delete',
+  'alertRule:create',
+  'alertRule:update',
+  'alertRule:delete'
 ] as const;
 export type ProjectScope = (typeof PROJECT_SCOPES)[number];
 
@@ -103,7 +106,10 @@ const CONTENT_SCOPES: readonly ProjectScope[] = [
   'credential:use',
   'ingestKey:create',
   'ingestKey:read',
-  'ingestKey:delete'
+  'ingestKey:delete',
+  'alertRule:create',
+  'alertRule:update',
+  'alertRule:delete'
 ];
 
 const PROJECT_ROLE_SCOPES: Record<ProjectRole, readonly ProjectScope[]> = {

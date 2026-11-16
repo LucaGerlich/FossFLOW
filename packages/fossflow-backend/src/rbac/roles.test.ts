@@ -40,6 +40,15 @@ describe('project roles', () => {
     }
   });
 
+  it('lets editors and personal owners manage alert rules', () => {
+    for (const role of ['project:editor', 'project:personalOwner']) {
+      const granted = scopes('global:member', role);
+      for (const scope of ['alertRule:create', 'alertRule:update', 'alertRule:delete'] as const) {
+        assert.ok(granted.has(scope), `${role} ${scope}`);
+      }
+    }
+  });
+
   it('keeps viewers read-only and away from credential use', () => {
     const viewer = scopes('global:member', 'project:viewer');
     assert.deepEqual(

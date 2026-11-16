@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import {
   bigint,
+  boolean,
   doublePrecision,
   index,
   integer,
@@ -11,6 +12,8 @@ import {
   timestamp,
   uniqueIndex
 } from 'drizzle-orm/pg-core';
+import type { AlertTarget } from '../connectors/channels/message.js';
+import type { DeliveryRecord } from '../alerts/types.js';
 import { user } from './auth-schema.js';
 
 export * from './auth-schema.js';
@@ -266,4 +269,66 @@ export const trafficAlias = pgTable(
     lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull()
   },
   (table) => [primaryKey({ columns: [table.projectId, table.host, table.service] })]
+);
+
+/** A rule a project sets on a traffic arrow or box; evaluated every minute. */
+export const alertRule = pgTable(
+  'alert_rule',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => project.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    kind: text('kind', { enum: ['failing', 'slow', 'silent'] }).notNull(),
+    target: jsonb('target').$type<AlertTarget>().notNull(),
+    /** Failed percent or p95 milliseconds; null for silent rules. */
+    threshold: doublePrecision('threshold'),
+    windowMinutes: integer('window_minutes').notNull(),
+    minCalls: integer('min_calls').notNull().default(10),
+    channelIds: text('channel_ids').array().notNull().default(sql`'{}'::text[]`),
+    enabled: boolean('enabled').notNull().default(true),
+    /** A silent rule is armed once its target has been seen; until then it waits. */
+    armedAt: timestamp('armed_at', { withTimezone: true }),
+    createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [index('alert_rule_project_idx').on(table.projectId)]
+);
+
+/** One stretch of a rule firing; `resolvedAt` is null while it is open. */
+export const alertEvent = pgTable(
+  'alert_event',
+  {
+    id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    ruleId: text('rule_id')
+      .notNull()
+      .references(() => alertRule.id, { onDelete: 'cascade' }),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => project.id, { onDelete: 'cascade' }),
+    startedAt: timestamp('started_at', { withTimezone: true }).notNull(),
+    resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+    /** When the condition last stopped holding; it resolves after 3 clear minutes. */
+    clearSince: timestamp('clear_since', { withTimezone: true }),
+    lastNotifiedAt: timestamp('last_notified_at', { withTimezone: true }).notNull(),
+    value: doublePrecision('value'),
+    deliveries: jsonb('deliveries').$type<DeliveryRecord[]>().notNull().default(sql`'[]'::jsonb`)
+  },
+  (table) => [
+    index('alert_event_project_idx').on(table.projectId, table.resolvedAt),
+    index('alert_event_rule_idx').on(table.ruleId, table.resolvedAt)
+  ]
+);
+
+/** Stretches where ingest was down, so silence during them is not blamed on a service. */
+export const ingestGap = pgTable(
+  'ingest_gap',
+  {
+    id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    from: timestamp('from', { withTimezone: true }).notNull(),
+    to: timestamp('to', { withTimezone: true }).notNull()
+  },
+  (table) => [index('ingest_gap_to_idx').on(table.to)]
 );
