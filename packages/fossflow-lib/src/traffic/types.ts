@@ -43,6 +43,21 @@ export interface TrafficAlias {
   service: string;
 }
 
+export type AlertTarget =
+  | { type: 'arrow'; from: string; to: string }
+  | { type: 'box'; identity: string };
+
+/** An open alert of the landscape's project. */
+export interface TrafficAlert {
+  ruleId: string;
+  name: string;
+  kind: 'failing' | 'slow' | 'silent';
+  target: AlertTarget;
+  startedAt: string;
+  /** Silent: minutes since the last call. */
+  value: number | null;
+}
+
 export interface TrafficSummary {
   generatedAt: string;
   windowMinutes: number;
@@ -50,6 +65,8 @@ export interface TrafficSummary {
   callees: ({ callee: string } & TrafficStats)[];
   services: ({ service: string } & TrafficStats)[];
   aliases: TrafficAlias[];
+  /** Open alerts, newest first. */
+  alerts: TrafficAlert[];
 }
 
 export type TrafficRange = '1h' | '24h' | '7d';
@@ -76,6 +93,11 @@ export interface TrafficEdgeDetail {
   }[];
 }
 
+/** What the host app needs to open a rule form for a card. */
+export type AlertRequest =
+  | { type: 'arrow'; from: string[]; to: string[]; name: string }
+  | { type: 'box'; identities: string[]; name: string };
+
 export interface TrafficFeed {
   summary: TrafficSummary | undefined;
   subscribe: (listener: (message: TrafficStreamMessage) => void) => () => void;
@@ -83,4 +105,6 @@ export interface TrafficFeed {
     pairs: TrafficPair[],
     range: TrafficRange
   ) => Promise<TrafficEdgeDetail>;
+  /** Opens the host app's rule form; leave undefined when people can't create rules. */
+  requestAlert?: (request: AlertRequest) => void;
 }

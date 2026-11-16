@@ -1,5 +1,8 @@
 // Public, framework-free exports of the traffic feature (safe for the standalone bundle).
 export type {
+  AlertRequest,
+  AlertTarget,
+  TrafficAlert,
   TrafficAlias,
   TrafficDot,
   TrafficEdgeDetail,

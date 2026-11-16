@@ -54,7 +54,8 @@ const summaryOf = (
   })),
   callees: [],
   services,
-  aliases: []
+  aliases: [],
+  alerts: []
 });
 
 const stateOf = (summary: TrafficSummary): TrafficState => {
@@ -68,6 +69,7 @@ const stateOf = (summary: TrafficSummary): TrafficState => {
     feed,
     index,
     arrows: arrowTraffic(summary, index, connectors),
+    alerts: { arrows: new Map(), boxes: new Map() },
     weights: new Map()
   };
 };

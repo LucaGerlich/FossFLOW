@@ -8,6 +8,16 @@ export const formatMs = (ms: number): string => {
   return rounded < 1000 ? `${rounded} ms` : `${(ms / 1000).toFixed(1)} s`;
 };
 
+/** 35 min, or hours from 60 (2 h 5 min). */
+export const formatMinutes = (minutes: number): string => {
+  const total = Math.round(minutes);
+  if (total < 60) return `${total} min`;
+  const rest = total % 60;
+  return rest === 0
+    ? `${Math.floor(total / 60)} h`
+    : `${Math.floor(total / 60)} h ${rest} min`;
+};
+
 /** A 0-100 percentage with one decimal. */
 export const formatPct = (pct: number): string => `${pct.toFixed(1)}%`;
 

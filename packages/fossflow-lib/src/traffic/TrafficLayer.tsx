@@ -5,6 +5,7 @@ import type { Coords } from 'src/types';
 import { connectorPointsById, pointAlong } from './geometry';
 import { createRouter, type ArrowMatch } from './match';
 import { createDotScheduler, type ActiveDot } from './scheduler';
+import { arrowKind } from './alerts';
 import { isFailing } from './stats';
 import { useTraffic } from './TrafficContext';
 
@@ -37,7 +38,7 @@ export const drawFrame = (
   return positions;
 };
 
-/** Dots moving along arrows, and a red line over failing arrows. */
+/** Dots moving along arrows, and a coloured line over troubled arrows. */
 export const TrafficLayer = () => {
   const traffic = useTraffic();
   const { connectors } = useScene();
@@ -133,7 +134,16 @@ export const TrafficLayer = () => {
 
   if (!traffic) return null;
 
-  const failing = [...traffic.arrows.values()].filter(isFailing);
+  const troubled = [
+    ...new Set([...traffic.arrows.keys(), ...traffic.alerts.arrows.keys()])
+  ].flatMap((connectorId) => {
+    const arrow = traffic.arrows.get(connectorId);
+    const kind = arrowKind(
+      arrow !== undefined && isFailing(arrow),
+      traffic.alerts.arrows.get(connectorId)
+    );
+    return kind ? [{ connectorId, kind }] : [];
+  });
 
   return (
     <svg
@@ -148,15 +158,16 @@ export const TrafficLayer = () => {
         pointerEvents: 'none'
       }}
     >
-      {failing.map((arrow) => {
-        const path = points.get(arrow.connectorId);
+      {troubled.map(({ connectorId, kind }) => {
+        const path = points.get(connectorId);
         if (!path) return null;
         return (
           <polyline
-            key={arrow.connectorId}
+            key={connectorId}
+            data-trouble={kind}
             points={path.map(({ x, y }) => `${x},${y}`).join(' ')}
             fill="none"
-            stroke={LIVE_TOKENS.critical}
+            stroke={kind === 'slow' ? LIVE_TOKENS.warning : LIVE_TOKENS.critical}
             strokeWidth={2}
             strokeLinejoin="round"
             strokeLinecap="round"

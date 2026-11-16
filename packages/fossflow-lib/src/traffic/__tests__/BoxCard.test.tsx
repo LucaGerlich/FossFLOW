@@ -1,5 +1,5 @@
 import React from 'react';
-import { screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import { BoxCard } from 'src/traffic/BoxCard';
 import {
   fakeFeed,
@@ -84,5 +84,33 @@ describe('BoxCard', () => {
     for (const id of ['service:web', 'host:web.internal', 'db:srv/main']) {
       expect(screen.getByText(id)).toBeInTheDocument();
     }
+  });
+
+  describe('Alert me when…', () => {
+    const open = (requestAlert?: jest.Mock) =>
+      renderCard(
+        <BoxCard itemId="web" anchor={{ x: 0, y: 0 }} onClose={jest.fn()} />,
+        fakeFeed(summaryOf([]), undefined, requestAlert),
+        modelWith(['service:web', 'host:*.magicline.com'])
+      );
+
+    it('asks the host app for a box rule', async () => {
+      const requestAlert = jest.fn();
+      open(requestAlert);
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Alert me when…' }));
+      expect(requestAlert).toHaveBeenCalledWith({
+        type: 'box',
+        identities: ['service:web', 'host:*.magicline.com'],
+        name: 'Website'
+      });
+    });
+
+    it('shows no button without requestAlert', async () => {
+      open();
+
+      await screen.findByText('Identities');
+      expect(screen.queryByRole('button', { name: 'Alert me when…' })).toBeNull();
+    });
   });
 });

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useMemo, useRef } from 'react';
 import { useModelStore } from 'src/stores/modelStore';
 import { useScene } from 'src/hooks/useScene';
+import { alertTrouble, type AlertTrouble } from './alerts';
 import { buildTrafficIndex, type TrafficIndex } from './match';
 import { arrowTraffic, type ArrowTraffic } from './stats';
 import type { TrafficFeed } from './types';
@@ -9,6 +10,8 @@ export interface TrafficState {
   feed: TrafficFeed;
   index: TrafficIndex;
   arrows: Map<string, ArrowTraffic>;
+  /** The firing alert deciding each arrow's and box's look. */
+  alerts: AlertTrouble;
   /** Latest dot weight per connector; TrafficLayer writes it. */
   weights: Map<string, number>;
 }
@@ -38,10 +41,19 @@ export const TrafficProvider = ({ feed, children }: TrafficProviderProps) => {
         : new Map<string, ArrowTraffic>(),
     [index, summary, connectors]
   );
+  const alerts = useMemo(
+    () =>
+      index
+        ? alertTrouble(summary?.alerts ?? [], index, connectors)
+        : { arrows: new Map(), boxes: new Map() },
+    [index, summary, connectors]
+  );
   const value = useMemo(
     () =>
-      feed && index ? { feed, index, arrows, weights: weights.current } : null,
-    [feed, index, arrows]
+      feed && index
+        ? { feed, index, arrows, alerts, weights: weights.current }
+        : null,
+    [feed, index, arrows, alerts]
   );
 
   return (

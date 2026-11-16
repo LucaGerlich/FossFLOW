@@ -1,5 +1,6 @@
 import { act, fireEvent, screen } from '@testing-library/react';
 import {
+  alertOf,
   detailOf,
   fakeFeed,
   renderMap,
@@ -19,6 +20,8 @@ const edge = (failures: number, calls = 1050) => ({
     p95Ms: 400
   }
 });
+
+import { LIVE_TOKENS } from 'src/live/tokens';
 
 describe('TrafficOverlay', () => {
   it('shows a pill on a failing arrow and a status line on the box', async () => {
@@ -49,6 +52,84 @@ describe('TrafficOverlay', () => {
     await screen.findByTestId('map-ready');
     expect(container.querySelector('[data-traffic-layer]')).toBeNull();
     expect(screen.queryByText(/fail/)).toBeNull();
+  });
+
+  describe('alerts', () => {
+    const quiet = edge(0);
+
+    it('draws a slow alert on a healthy arrow amber, with a slow pill', async () => {
+      const { container } = renderMap(
+        fakeFeed(summaryOf([quiet], [], [alertOf({ kind: 'slow' })]))
+      );
+
+      expect(
+        await screen.findByText('210/min · p95 400 ms · slow')
+      ).toBeInTheDocument();
+      const stroke = container.querySelector('polyline[data-trouble]');
+      expect(stroke).toHaveAttribute('data-trouble', 'slow');
+      expect(stroke).toHaveAttribute('stroke', LIVE_TOKENS.warning);
+    });
+
+    it('draws a silent alert red on an arrow without traffic', async () => {
+      const { container } = renderMap(
+        fakeFeed(
+          summaryOf([], [], [alertOf({ kind: 'silent', value: 125 })])
+        )
+      );
+
+      expect(await screen.findByText('silent for 2 h 5 min')).toBeInTheDocument();
+      const stroke = container.querySelector('polyline[data-trouble]');
+      expect(stroke).toHaveAttribute('data-trouble', 'silent');
+      expect(stroke).toHaveAttribute('stroke', LIVE_TOKENS.critical);
+    });
+
+    it('keeps the failing pill for a failing alert', async () => {
+      const { container } = renderMap(
+        fakeFeed(summaryOf([edge(64)], [], [alertOf({ kind: 'failing' })]))
+      );
+
+      expect(
+        await screen.findByText('210/min · 95 ms · 6.1% failed')
+      ).toBeInTheDocument();
+      expect(container.querySelector('polyline[data-trouble]')).toHaveAttribute(
+        'data-trouble',
+        'failing'
+      );
+    });
+
+    it('writes a box alert under its box', async () => {
+      renderMap(
+        fakeFeed(
+          summaryOf(
+            [quiet],
+            [],
+            [
+              alertOf({
+                kind: 'slow',
+                target: { type: 'box', identity: 'service:app' }
+              }),
+              alertOf({
+                ruleId: 'r2',
+                kind: 'silent',
+                value: 35,
+                target: { type: 'box', identity: 'service:web' }
+              })
+            ]
+          )
+        )
+      );
+
+      expect(await screen.findByText('Member app: slow')).toBeInTheDocument();
+      expect(screen.getByText('Website: silent for 35 min')).toBeInTheDocument();
+    });
+
+    it('changes nothing without alerts', async () => {
+      const { container } = renderMap(fakeFeed(summaryOf([quiet])));
+
+      await screen.findByTestId('map-ready');
+      expect(container.querySelector('[data-trouble]')).toBeNull();
+      expect(screen.queryByText(/slow|silent/)).toBeNull();
+    });
   });
 
   describe('cards', () => {

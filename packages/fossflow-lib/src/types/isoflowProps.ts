@@ -223,6 +223,12 @@ export interface LocaleProps {
     pillFailed: string;
     boxFailingFrom: string;
     boxFailingIncoming: string;
+    alertMe: string;
+    pillSlow: string;
+    silentFor: string;
+    boxAlertSlow: string;
+    boxAlertSilent: string;
+    boxAlertFailing: string;
     seenBy: string;
     seenByCallers: string;
     incoming: string;

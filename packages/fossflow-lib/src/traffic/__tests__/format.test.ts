@@ -1,4 +1,4 @@
-import { fill, formatMs, formatPct, formatRate } from 'src/traffic/format';
+import { fill, formatMinutes, formatMs, formatPct, formatRate } from 'src/traffic/format';
 
 describe('traffic format', () => {
   it('formats a rate with one decimal below 10', () => {
@@ -22,5 +22,13 @@ describe('traffic format', () => {
   it('fills {placeholders} and keeps unknown ones', () => {
     expect(fill('{a}-{b}', { a: '1', b: '2' })).toBe('1-2');
     expect(fill('{a}-{c}', { a: '1' })).toBe('1-{c}');
+  });
+});
+
+describe('formatMinutes', () => {
+  it('formats minutes, then hours and minutes', () => {
+    expect(formatMinutes(35)).toBe('35 min');
+    expect(formatMinutes(125)).toBe('2 h 5 min');
+    expect(formatMinutes(120)).toBe('2 h');
   });
 });

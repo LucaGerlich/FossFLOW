@@ -4,7 +4,7 @@ import { LIVE_TOKENS } from 'src/live/tokens';
 import { useModelStore } from 'src/stores/modelStore';
 import { useTranslation } from 'src/stores/localeStore';
 import type { Coords } from 'src/types';
-import { CardFrame, captionSx, sectionSx, StatRow } from './CardFrame';
+import { AlertMeButton, CardFrame, captionSx, sectionSx, StatRow } from './CardFrame';
 import { matchesIdentity } from './match';
 import { useTraffic } from './TrafficContext';
 import type { TrafficStats, TrafficSummary } from './types';
@@ -90,6 +90,17 @@ export const BoxCard = ({ itemId, anchor, onClose }: BoxCardProps) => {
           </Box>
         ))}
       </Box>
+      {traffic.feed.requestAlert && (
+        <AlertMeButton
+          onClick={() =>
+            traffic.feed.requestAlert?.({
+              type: 'box',
+              identities: ids,
+              name: item.name
+            })
+          }
+        />
+      )}
     </CardFrame>
   );
 };

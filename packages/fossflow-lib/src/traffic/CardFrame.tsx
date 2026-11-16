@@ -169,3 +169,30 @@ export const StatRow = ({
     </Box>
   );
 };
+
+/** Asks the host app to open a rule form for the card's arrow or box. */
+export const AlertMeButton = ({ onClick }: { onClick: () => void }) => {
+  const { t } = useTranslation('traffic');
+  return (
+    <Box sx={sectionSx}>
+      <Box
+        component="button"
+        type="button"
+        onClick={onClick}
+        sx={{
+          border: `1px solid ${LIVE_TOKENS.hairline}`,
+          borderRadius: '999px',
+          background: 'none',
+          cursor: 'pointer',
+          fontFamily: LIVE_TOKENS.mono,
+          fontSize: 10,
+          px: '8px',
+          py: '1px',
+          color: LIVE_TOKENS.ink
+        }}
+      >
+        {t('alertMe')}
+      </Box>
+    </Box>
+  );
+};

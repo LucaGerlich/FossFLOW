@@ -12,6 +12,7 @@ import { TrafficLayer } from 'src/traffic/TrafficLayer';
 import { TrafficOverlay } from 'src/traffic/TrafficOverlay';
 import type { InitialData, UiStateActions } from 'src/types';
 import type {
+  TrafficAlert,
   TrafficEdgeDetail,
   TrafficFeed,
   TrafficStats,
@@ -31,7 +32,8 @@ export const stats = (overrides: Partial<TrafficStats> = {}): TrafficStats => ({
 
 export const summaryOf = (
   edges: { caller: string; callee: string; stats: Partial<TrafficStats> }[],
-  services: TrafficSummary['services'] = []
+  services: TrafficSummary['services'] = [],
+  alerts: TrafficAlert[] = []
 ): TrafficSummary => ({
   generatedAt: '2026-01-01T00:00:00Z',
   windowMinutes: 5,
@@ -43,13 +45,24 @@ export const summaryOf = (
   })),
   callees: [],
   services,
-  aliases: []
+  aliases: [],
+  alerts
 });
 
 export interface FakeFeed extends TrafficFeed {
   subscribe: jest.Mock<() => void, [(message: TrafficStreamMessage) => void]>;
   unsubscribe: jest.Mock<void, []>;
 }
+
+export const alertOf = (overrides: Partial<TrafficAlert> = {}): TrafficAlert => ({
+  ruleId: 'r1',
+  name: 'Rule',
+  kind: 'slow',
+  target: { type: 'arrow', from: 'service:web', to: 'service:app' },
+  startedAt: '2026-01-01T10:00:00Z',
+  value: 900,
+  ...overrides
+});
 
 export const detailOf = (
   overrides: Partial<TrafficEdgeDetail> = {}
@@ -65,7 +78,8 @@ export const detailOf = (
 
 export const fakeFeed = (
   summary?: TrafficSummary,
-  loadEdge: TrafficFeed['loadEdge'] = () => Promise.reject(new Error('not used'))
+  loadEdge: TrafficFeed['loadEdge'] = () => Promise.reject(new Error('not used')),
+  requestAlert?: TrafficFeed['requestAlert']
 ): FakeFeed => {
   const unsubscribe = jest.fn<void, []>();
   return {
@@ -75,7 +89,8 @@ export const fakeFeed = (
       return unsubscribe;
     }),
     unsubscribe,
-    loadEdge
+    loadEdge,
+    requestAlert
   };
 };
 

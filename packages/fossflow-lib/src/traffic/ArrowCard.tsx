@@ -2,9 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { Box } from '@mui/material';
 import { LIVE_TOKENS } from 'src/live/tokens';
 import { useTranslation } from 'src/stores/localeStore';
+import { useModelStore } from 'src/stores/modelStore';
 import type { Coords } from 'src/types';
-import { CardFrame, captionSx, sectionSx, StatRow } from './CardFrame';
+import { AlertMeButton, CardFrame, captionSx, sectionSx, StatRow } from './CardFrame';
 import { fill, formatMs } from './format';
+import { boxOf } from './match';
 import type { ArrowTraffic } from './stats';
 import { useTraffic } from './TrafficContext';
 import type {
@@ -156,6 +158,23 @@ const busiestPairs = (
   return [...pairs].sort((a, b) => callsOf(b) - callsOf(a)).slice(0, MAX_EDGE_PAIRS);
 };
 
+const callsOfPair = (
+  pair: ArrowTraffic['pairs'][number],
+  summary: TrafficSummary | undefined
+): number =>
+  summary?.edges.find(
+    (edge) => edge.caller === pair.caller && edge.callee === pair.callee
+  )?.calls ?? 0;
+
+/** The pair with the most calls; the first one on a tie. */
+const busiestPair = (
+  pairs: ArrowTraffic['pairs'],
+  summary: TrafficSummary | undefined
+): ArrowTraffic['pairs'][number] =>
+  pairs.reduce((best, pair) =>
+    callsOfPair(pair, summary) > callsOfPair(best, summary) ? pair : best
+  );
+
 interface ArrowCardProps {
   arrow: ArrowTraffic;
   /** Scene position of the arrow's path midpoint. */
@@ -198,6 +217,25 @@ export const ArrowCard = ({ arrow, anchor, title, onClose }: ArrowCardProps) => 
       clearInterval(timer);
     };
   }, [loadEdge, pairsKey, range]);
+
+  const items = useModelStore((state) => state.items);
+  const requestAlert = traffic?.feed.requestAlert;
+  const askForRule = () => {
+    if (!traffic || !requestAlert) return;
+    const pair = busiestPair(arrow.pairs, summary);
+    const boxOfIdentity = (identity: string) => {
+      const id = boxOf(traffic.index, identity);
+      return items.find((item) => item.id === id);
+    };
+    const caller = boxOfIdentity(pair.caller);
+    const callee = boxOfIdentity(pair.callee);
+    requestAlert({
+      type: 'arrow',
+      from: caller?.traffic?.ids ?? [pair.caller],
+      to: callee?.traffic?.ids ?? [pair.callee],
+      name: `${caller?.name ?? pair.caller} → ${callee?.name ?? pair.callee}`
+    });
+  };
 
   const weight = traffic?.weights.get(arrow.connectorId) ?? 1;
 
@@ -245,6 +283,7 @@ export const ArrowCard = ({ arrow, anchor, title, onClose }: ArrowCardProps) => 
           {t('loadFailed')}
         </Box>
       )}
+      {requestAlert && <AlertMeButton onClick={askForRule} />}
     </CardFrame>
   );
 };

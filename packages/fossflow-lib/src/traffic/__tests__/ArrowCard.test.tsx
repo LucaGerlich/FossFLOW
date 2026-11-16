@@ -222,4 +222,50 @@ describe('ArrowCard', () => {
     expect(second).toHaveBeenCalledWith(pairs, '1h');
     await screen.findByText('No failures');
   });
+
+  describe('Alert me when…', () => {
+    const openWith = (requestAlert?: jest.Mock) =>
+      renderCard(
+        <ArrowCard
+          arrow={{
+            ...arrow,
+            pairs: [
+              { caller: 'service:app', callee: 'service:web' },
+              { caller: 'service:web', callee: 'service:app' }
+            ]
+          }}
+          anchor={{ x: 0, y: 0 }}
+          title="Website → Member app"
+          onClose={jest.fn()}
+        />,
+        fakeFeed(
+          summaryOf([
+            { caller: 'service:app', callee: 'service:web', stats: { calls: 5 } },
+            { caller: 'service:web', callee: 'service:app', stats: { calls: 50 } }
+          ]),
+          () => Promise.resolve(detailOf()),
+          requestAlert
+        )
+      );
+
+    it('asks for a rule from the busiest direction', async () => {
+      const requestAlert = jest.fn();
+      openWith(requestAlert);
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Alert me when…' }));
+      expect(requestAlert).toHaveBeenCalledWith({
+        type: 'arrow',
+        from: ['service:web'],
+        to: ['service:app'],
+        name: 'Website → Member app'
+      });
+    });
+
+    it('shows no button without requestAlert', async () => {
+      openWith();
+
+      await screen.findByText('Website → Member app');
+      expect(screen.queryByRole('button', { name: 'Alert me when…' })).toBeNull();
+    });
+  });
 });
